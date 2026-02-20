@@ -21,7 +21,7 @@ This repo contains a cross-client analysis of outbox model implementations acros
 
 **From real-world event verification (14 algorithms, connecting to actual relays):**
 
-7. **Academic coverage ≠ real-world event recall.** Algorithms that win at assignment coverage (Greedy) don't necessarily win at actual event retrieval. At 365 days, MAB-UCB (40.8%) beats Greedy Set-Cover (16.3%) by 2.5x. The relay that *should* have the event often doesn't — due to retention policies, downtime, or access restrictions.
+7. **Academic coverage ≠ real-world event recall.** Greedy Set-Cover wins Phase 1 assignment coverage but ranks 7th of 14 at actual event retrieval (84.4% mean across 6 profiles at 7d vs 92.4% for Streaming Coverage). At 365 days, MAB-UCB (40.8%) beats Greedy (16.3%) by 2.5x. The relay that *should* have the event often doesn't — due to retention policies, downtime, or access restrictions.
 8. **Adaptive algorithms shine at longer windows.** MAB-UCB and Welshman's stochastic approach maintain recall as time windows grow, while static greedy algorithms degrade sharply.
 
 ## Algorithm Comparison
@@ -83,7 +83,9 @@ ILP, Streaming, and Spectral frequently hit the theoretical ceiling. Greedy leav
 
 *Connects to real relays and queries for real events. Answers "did you actually get the posts?" — which depends on relay uptime, retention policies, event propagation, auth requirements, etc.*
 
-Percentage of baseline events actually retrievable from selected relays. Tested on fiatjaf's follow list; events per (relay, author) pair capped at 10,000 to prevent a single prolific relay from dominating the baseline:
+Percentage of baseline events actually retrievable from selected relays. Events per (relay, author) pair capped at 10,000 to prevent a single prolific relay from dominating the baseline.
+
+**Time-window degradation (fiatjaf):**
 
 | Algorithm | 7d | 14d | 30d | 90d | 365d | 1095d |
 |-----------|:---:|:---:|:---:|:---:|:----:|:-----:|
@@ -104,10 +106,28 @@ Percentage of baseline events actually retrievable from selected relays. Tested 
 
 At short windows (7d), ILP/Bipartite/Streaming/Spectral hit 97–98%. At longer windows, MAB-UCB's adaptive exploration dominates — it discovers relays that retain historical events. Greedy degrades sharply past 14 days (16% at 1yr vs MAB's 41%).
 
+**Cross-profile validation (7d, mean event recall across 6 profiles):**
+
+| Algorithm | fiatjaf | hodlbod | Kieran | jb55 | ODELL | Derek Ross | Mean |
+|-----------|:-------:|:-------:|:------:|:----:|:-----:|:----------:|:----:|
+| Streaming Coverage | 97.5% | 93.2% | 91.8% | 92.6% | 88.1% | 90.9% | **92.4%** |
+| ILP Optimal | 98.0% | 96.8% | 90.5% | 91.6% | 87.2% | 89.8% | 92.3% |
+| Spectral Clustering | 97.5% | 94.8% | 89.7% | 93.3% | 87.0% | 89.8% | 92.0% |
+| Bipartite Matching | 98.0% | 93.1% | 90.1% | 93.1% | 86.3% | 90.1% | 91.8% |
+| MAB-UCB | 93.5% | 92.9% | 92.5% | 92.4% | 83.0% | 90.9% | 90.9% |
+| Direct Mapping | 89.9% | 85.9% | 90.9% | 85.9% | 87.6% | 87.3% | 87.9% |
+| Greedy Set-Cover | 93.5% | 87.6% | 84.8% | 81.0% | 77.2% | 82.5% | 84.4% |
+| NDK Priority | 92.3% | 82.1% | 85.2% | 81.1% | 77.2% | 82.0% | 83.3% |
+| Welshman Stochastic | 93.2% | 83.6% | 84.6% | 84.1% | 74.8% | 77.8% | 83.0% |
+| Popular+Random | 83.4% | 86.8% | 84.1% | 87.0% | 76.9% | 79.7% | 83.0% |
+| Primal Aggregator | 28.3% | 37.3% | 34.8% | 25.2% | 33.6% | 30.2% | 31.6% |
+
+Rankings generalize across all profiles: CS-inspired algorithms (92% mean) consistently outperform client-derived algorithms (84% mean) by ~8 percentage points at event recall.
+
 ## Repo Structure
 
 ```
-OUTBOX-REPORT.md              Full analysis report (~660 lines)
+OUTBOX-REPORT.md              Full analysis report (~700 lines)
 bench/                         Benchmark tool (Deno/TypeScript)
   main.ts                      CLI entry point
   src/algorithms/              14 algorithm implementations
@@ -148,7 +168,7 @@ Run `deno task bench --help` for all options.
 
 Based on patterns across all 15 implementations:
 
-1. **Choose your algorithm by use case.** Greedy set-cover maximizes pubkey coverage for real-time feeds (93.5% at 7d). But it degrades sharply for historical access (16% recall at 1yr). For clients that need older events, stochastic approaches (Welshman: 38% at 1yr) or adaptive exploration (MAB-UCB: 41% at 1yr) are 2–2.5x better. Coverage-optimal is not event-recall-optimal.
+1. **Choose your algorithm by use case.** For real-time feeds, CS-inspired algorithms (Streaming Coverage, Spectral Clustering) achieve 92% mean event recall across 6 profiles vs Greedy's 84%. For historical access, Greedy degrades sharply (16% recall at 1yr) while stochastic approaches (Welshman: 38% at 1yr) or adaptive exploration (MAB-UCB: 41% at 1yr) are 2–2.5x better. Coverage-optimal is not event-recall-optimal.
 
 2. **Most clients default to 2–3 relays per pubkey.** 7 of 9 implementations with per-pubkey limits converge on 2 or 3. This is an observed ecosystem consensus, not an empirically benchmarked finding — no study has measured the optimal number.
 
