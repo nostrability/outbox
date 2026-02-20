@@ -158,14 +158,11 @@ export function ilpOptimal(
       return;
     }
 
-    // Not enough relays left to fill budget
-    if (n - relayIdx < budgetLeft) return;
-
     // Upper bound: current coverage + sum of top-budgetLeft marginal gains
     // (Quick overestimate: assumes no overlap among added relays)
     {
       const marginals: number[] = [];
-      for (let i = relayIdx; i < n && marginals.length < budgetLeft + 5; i++) {
+      for (let i = relayIdx; i < n; i++) {
         let marginal = 0;
         for (let j = 0; j < bytesNeeded; j++) {
           let v = sortedBits[i][j] & ~coveredBits[j];

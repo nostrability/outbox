@@ -420,6 +420,11 @@ export function selectOptimalRelays(
     selection.add(relay);
 
     // Remove users who have hit their maxRelaysPerUser limit
+    // NOTE: Bug in upstream Applesauce — count++ is post-increment, so
+    // selectionCount stores the pre-increment value. The check
+    // `count >= maxRelaysPerUser` never triggers for values >= 2,
+    // meaning maxRelaysPerUser is effectively unenforced.
+    // Fix would be: selectionCount.set(user.pubkey, count + 1)
     if (maxRelaysPerUser) {
       selectionPool = selectionPool.filter((user) => {
         if (!user.relays || !user.relays.includes(relay)) return true;
