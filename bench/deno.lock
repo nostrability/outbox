@@ -1,0 +1,48 @@
+{
+  "version": "5",
+  "specifiers": {
+    "jsr:@nostr/tools@^2.23.1": "2.23.1",
+    "jsr:@std/cli@1": "1.0.27",
+    "npm:@noble/ciphers@2.1.1": "2.1.1",
+    "npm:@noble/curves@2.0.1": "2.0.1",
+    "npm:@noble/hashes@2.0.1": "2.0.1",
+    "npm:@scure/base@2.0.0": "2.0.0"
+  },
+  "jsr": {
+    "@nostr/tools@2.23.1": {
+      "integrity": "8ffba4ffd35b5c11618b19c542d2801cc315e4f6f2ecad4568deb88322a6728d",
+      "dependencies": [
+        "npm:@noble/ciphers",
+        "npm:@noble/curves",
+        "npm:@noble/hashes",
+        "npm:@scure/base"
+      ]
+    },
+    "@std/cli@1.0.27": {
+      "integrity": "eba97edd0891871a7410e835dd94b3c260c709cca5983df2689c25a71fbe04de"
+    }
+  },
+  "npm": {
+    "@noble/ciphers@2.1.1": {
+      "integrity": "sha512-bysYuiVfhxNJuldNXlFEitTVdNnYUc+XNJZd7Qm2a5j1vZHgY+fazadNFWFaMK/2vye0JVlxV3gHmC0WDfAOQw=="
+    },
+    "@noble/curves@2.0.1": {
+      "integrity": "sha512-vs1Az2OOTBiP4q0pwjW5aF0xp9n4MxVrmkFBxc6EKZc6ddYx5gaZiAsZoq0uRRXWbi3AT/sBqn05eRPtn1JCPw==",
+      "dependencies": [
+        "@noble/hashes"
+      ]
+    },
+    "@noble/hashes@2.0.1": {
+      "integrity": "sha512-XlOlEbQcE9fmuXxrVTXCTlG2nlRXa9Rj3rr5Ue/+tX+nmkgbX720YHh0VR3hBF9xDvwnb8D2shVGOwNx+ulArw=="
+    },
+    "@scure/base@2.0.0": {
+      "integrity": "sha512-3E1kpuZginKkek01ovG8krQ0Z44E3DHPjc5S2rjJw9lZn3KSQOs8S7wqikF/AH7iRanHypj85uGyxk0XAyC37w=="
+    }
+  },
+  "workspace": {
+    "dependencies": [
+      "jsr:@nostr/tools@^2.23.0",
+      "jsr:@nostr/tools@^2.23.1"
+    ]
+  }
+}
