@@ -27,6 +27,7 @@ import { streamingCoverage } from "./streaming-coverage.ts";
 import { bipartiteMatching } from "./bipartite-matching.ts";
 import { spectralClustering } from "./spectral-clustering.ts";
 import { hybridGreedyExplore } from "./hybrid-greedy-explore.ts";
+import { nip66WeightedGreedy } from "./nip66-weighted.ts";
 
 export interface AlgorithmEntry {
   id: string;
@@ -160,6 +161,14 @@ export const ALGORITHM_REGISTRY: AlgorithmEntry[] = [
     nativeCap: true,
     stochastic: true,
     defaults: {},
+  },
+  {
+    id: "nip66",
+    name: "NIP-66 Weighted Greedy",
+    fn: nip66WeightedGreedy,
+    nativeCap: true,
+    stochastic: false,
+    defaults: { maxConnections: 20, maxRelaysPerUser: 2 },
   },
 ];
 

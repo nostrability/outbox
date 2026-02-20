@@ -350,3 +350,60 @@ export interface Phase2Result {
   };
   algorithms: AlgorithmVerification[];
 }
+
+// --- NIP-66 types ---
+
+/** Parsed NIP-66 (kind 30166) relay monitor data for a single relay. */
+export interface Nip66RelayData {
+  /** Normalized relay URL (from the "d" tag). */
+  relayUrl: RelayUrl;
+  /** Round-trip time to open a WebSocket connection, in ms. */
+  rttOpenMs: number | null;
+  /** Round-trip time for a read operation, in ms. */
+  rttReadMs: number | null;
+  /** Round-trip time for a write operation, in ms. */
+  rttWriteMs: number | null;
+  /** NIPs supported by the relay (from "N" tags). */
+  supportedNips: number[];
+  /** Network type: "clearnet", "tor", "i2p", etc. (from "n" tag). */
+  network: string | null;
+  /** Timestamp of the NIP-66 event (created_at). */
+  lastSeenAt: number;
+  /** The monitor pubkey that published this event. */
+  monitorPubkey: Pubkey;
+}
+
+/** Aggregated quality snapshot for a relay, possibly from multiple monitors. */
+export interface Nip66RelayScore {
+  relayUrl: RelayUrl;
+  /** Composite quality score, 0.0 (worst) to 1.0 (best). */
+  score: number;
+  /** Individual factor scores for transparency. */
+  factors: {
+    uptime: number;
+    rtt: number;
+    freshness: number;
+    nipSupport: number;
+  };
+}
+
+/** Cache envelope for NIP-66 data. */
+export interface Nip66CacheEnvelope {
+  schemaVersion: number;
+  fetchedAt: number;
+  ttlSeconds: number;
+  source: "nostr" | "http-api" | "synthetic";
+  relays: Nip66RelayDataSerialized[];
+}
+
+/** Serializable form of Nip66RelayData (no Map/Set). */
+export interface Nip66RelayDataSerialized {
+  relayUrl: string;
+  rttOpenMs: number | null;
+  rttReadMs: number | null;
+  rttWriteMs: number | null;
+  supportedNips: number[];
+  network: string | null;
+  lastSeenAt: number;
+  monitorPubkey: string;
+}

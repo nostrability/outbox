@@ -18,6 +18,7 @@ import {
 } from "./src/report.ts";
 import { runPhase2 } from "./src/phase2/run.ts";
 import { printPhase2Table } from "./src/phase2/report.ts";
+import { initNip66Data } from "./src/algorithms/nip66-weighted.ts";
 import type {
   AlgorithmMetrics,
   AlgorithmParams,
@@ -195,6 +196,12 @@ async function main(): Promise<void> {
 
   // Get algorithms
   const algorithms = getAlgorithms(opts.algorithms);
+
+  // Pre-load NIP-66 data if the nip66 algorithm is selected
+  const hasNip66 = algorithms.some((a) => a.id === "nip66");
+  if (hasNip66) {
+    await initNip66Data(input.relayToWriters.keys());
+  }
 
   if (opts.sweep) {
     if (opts.maxConnections !== undefined) {

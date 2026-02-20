@@ -124,6 +124,26 @@ At short windows (7d), ILP/Bipartite/Streaming/Spectral hit 97–98%. At longer 
 
 Rankings generalize across all profiles: CS-inspired algorithms (92% mean) consistently outperform client-derived algorithms (84% mean) by ~8 percentage points at event recall.
 
+**Multi-window cross-profile event recall (mean of 5–6 profiles, reliable authors, %):**
+
+| Algorithm | 14d | 30d | 90d | 365d | 1095d |
+|-----------|:---:|:---:|:---:|:----:|:-----:|
+| **MAB-UCB** | **79.0** | **62.9** | 34.4 | **32.4** | **24.4** |
+| Spectral Clustering | 78.5 | 60.2 | 35.6 | 27.7 | 20.4 |
+| ILP Optimal | 78.3 | 58.7 | 33.8 | 24.7 | 18.6 |
+| Streaming Coverage | 77.6 | 56.6 | 32.1 | 25.6 | 20.7 |
+| Direct Mapping | 77.2 | 60.3 | 27.9 | 28.5 | 21.7 |
+| Bipartite Matching | 76.3 | 56.5 | **37.3** | 26.6 | 20.1 |
+| Greedy Set-Cover | 64.8 | 39.7 | 20.2 | 16.2 | 12.1 |
+| NDK Priority | 64.3 | 39.3 | 18.9 | 15.1 | 11.0 |
+| Primal Aggregator | 16.8 | 6.9 | 3.5 | 3.4 | 2.0 |
+
+- **MAB-UCB dominates at short-to-medium windows (14d–30d)** across most profiles. At longer windows, the winner varies: MAB for hodlbod, Spectral for Derek Ross, Direct Mapping for ODELL, Streaming for jb55.
+- **Greedy Set-Cover (used by most clients) is consistently middle-of-pack** — 7th–10th at every window. It optimizes assignment coverage, not event retrieval.
+- **The 90d window is an inflection point** where relay retention drops sharply. Most algorithms lose 40–60% of their 14d recall by 90d. The sweet spot for relay redundancy is 2–3 relays per author (diminishing returns beyond 3).
+
+**Limitation:** The benchmark does not implement NIP-42 authentication. Approximately 15-20 relays in the candidate set require auth before accepting reads and currently return zero events. Event recall numbers are conservative lower bounds; relative algorithm rankings are unlikely to change since all algorithms are equally affected. See [Known Limitations](OUTBOX-REPORT.md#9-known-limitations) in the full report.
+
 ## Repo Structure
 
 ```
