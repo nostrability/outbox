@@ -20,6 +20,12 @@ import { filterDecomposition } from "./filter-decomposition.ts";
 import { directMapping } from "./direct-mapping.ts";
 import { primalBaseline } from "./primal-baseline.ts";
 import { popularPlusRandom } from "./popular-plus-random.ts";
+import { ilpOptimal } from "./ilp-optimal.ts";
+import { stochasticGreedy } from "./stochastic-greedy.ts";
+import { mabRelay } from "./mab-relay.ts";
+import { streamingCoverage } from "./streaming-coverage.ts";
+import { bipartiteMatching } from "./bipartite-matching.ts";
+import { spectralClustering } from "./spectral-clustering.ts";
 
 export interface AlgorithmEntry {
   id: string;
@@ -96,6 +102,54 @@ export const ALGORITHM_REGISTRY: AlgorithmEntry[] = [
     fn: popularPlusRandom,
     nativeCap: false,
     stochastic: false,
+    defaults: {},
+  },
+  {
+    id: "ilp",
+    name: "ILP Optimal",
+    fn: ilpOptimal,
+    nativeCap: true,
+    stochastic: false,
+    defaults: {},
+  },
+  {
+    id: "stochastic-greedy",
+    name: "Stochastic Greedy",
+    fn: stochasticGreedy,
+    nativeCap: true,
+    stochastic: true,
+    defaults: {},
+  },
+  {
+    id: "mab",
+    name: "MAB-UCB Relay",
+    fn: mabRelay,
+    nativeCap: true,
+    stochastic: true,
+    defaults: {},
+  },
+  {
+    id: "streaming",
+    name: "Streaming Coverage",
+    fn: streamingCoverage,
+    nativeCap: true,
+    stochastic: true,
+    defaults: {},
+  },
+  {
+    id: "matching",
+    name: "Bipartite Matching",
+    fn: bipartiteMatching,
+    nativeCap: true,
+    stochastic: false,
+    defaults: {},
+  },
+  {
+    id: "spectral",
+    name: "Spectral Clustering",
+    fn: spectralClustering,
+    nativeCap: true,
+    stochastic: true,
     defaults: {},
   },
 ];
