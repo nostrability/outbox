@@ -12,7 +12,7 @@ This repo contains a cross-client analysis of outbox model implementations acros
 
 **From the implementation analysis (15 clients):**
 
-1. **Greedy set-cover wins academic coverage.** Four independent implementations (Gossip, Applesauce, Wisp, Amethyst) converged on the same algorithm — iteratively pick the relay covering the most uncovered pubkeys. It wins 23 of 26 benchmark profiles for assignment coverage (the theoretical "on paper" metric). But see findings #7–8 for the real-world caveat.
+1. **Greedy set-cover wins academic coverage.** Three independent implementations (Gossip, Applesauce, Wisp) converged on the same algorithm — iteratively pick the relay covering the most uncovered pubkeys. It wins 23 of 26 benchmark profiles for assignment coverage (the theoretical "on paper" metric). But see findings #7–8 for the real-world caveat.
 2. **Rankings are stable across all profiles.** Greedy > NDK Priority > Welshman Stochastic > Direct Mapping > Filter Decomposition > Coverage Sort. This ordering holds regardless of follow count (194–1,778) or NIP-65 adoption rate (56–87%).
 3. **The skip-top-relays heuristic hurts.** Nostur's approach of skipping the 3 most popular relays costs 5–12% coverage. Those relays are popular because many authors publish there.
 4. **20 connections is nearly sufficient.** Most algorithms reach within 1–2% of their unlimited ceiling at 20 relays. Greedy at 10 connections already achieves 93–97% of its unlimited coverage.
@@ -30,7 +30,7 @@ This repo contains a cross-client analysis of outbox model implementations acros
 |-----------|-------------------|----------|:---:|:----------:|
 | Greedy Set-Cover | Gossip, Applesauce, Wisp | Iterative max-uncovered | 50 | 2 |
 | Priority-Based | NDK | Connected > selected > popular | None | 2 |
-| Weighted Stochastic | Welshman/Coracle | `quality * log(weight) * random()` | None | 3 |
+| Weighted Stochastic | Welshman/Coracle | `quality * (1 + log(weight)) * random()` | None | 3 |
 | Greedy Coverage Sort | Nostur | Sort by count, skip top 3 | 50 | 2 |
 | Filter Decomposition | rust-nostr | Per-author top-N write relays | None | 3w+3r |
 | Direct Mapping | Amethyst (feeds) | All declared write relays | Dynamic | All |
@@ -77,7 +77,7 @@ Fraction of followed authors assigned at least one relay (higher = better). Sele
 
 ILP, Streaming, and Spectral frequently hit the theoretical ceiling. Greedy leaves 1–4% on the table. MAB and Stochastic Greedy trade coverage for exploration diversity.
 
-"Ceiling" = NIP-65 adoption rate. No algorithm can exceed it. Full results for all 26 profiles across 14 algorithms in the [full report](OUTBOX-REPORT.md#81-phase-1-assignment-coverage).
+"Ceiling" = NIP-65 adoption rate. No algorithm can exceed it. Full results for all 26 profiles across 14 algorithms in the [full report](OUTBOX-REPORT.md#81-academic-assignment-coverage).
 
 ### Approximating Real-World Conditions: Event Recall Across Time Windows
 
@@ -100,7 +100,7 @@ Percentage of baseline events actually retrievable from selected relays. Events 
 | Direct Mapping | 89.9% | 79.9% | 63.9% | 38.5% | 16.8% | 9.4% |
 | Filter Decomposition | 88.1% | 77.5% | 63.1% | 39.0% | 19.0% | 10.6% |
 | Popular+Random | 83.4% | 71.9% | 53.3% | 27.1% | 11.8% | 6.6% |
-| Stochastic Greedy | 67.1% | 56.8% | 43.3% | 23.9% | 11.6% | 12.6% |
+| Stochastic Greedy | 67.1% | 56.8% | 43.3% | 23.9% | 11.6% | 12.6%* |
 | Coverage Sort (Nostur) | 67.6% | 65.6% | 53.5% | 30.8% | 13.3% | 7.4% |
 | Primal Aggregator | 28.3% | 14.5% | 8.3% | 3.7% | 1.6% | 0.9% |
 

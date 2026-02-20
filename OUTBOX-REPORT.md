@@ -24,7 +24,7 @@ We analyzed outbox implementations in 15 codebases spanning 5 languages (Rust, T
 
 1. **Greedy set-cover wins academic coverage.** Four independent implementations (Gossip, Applesauce, Wisp, Amethyst for recommendations) use a formal greedy set-cover algorithm that iteratively picks the relay covering the most uncovered pubkeys. Nostur's `createRequestPlan()` uses a related greedy coverage sort (relays sorted by coverage count, assigned greedily) but without the iterative recalculation loop of classic set-cover. This convergence is notable because these codebases were developed independently in different languages. However, real-world event verification shows greedy degrades sharply for historical access — see findings #7–8.
 
-2. **Scoring complexity varies widely.** Gossip uses a two-layer multiplicative score with exponential temporal decay. Welshman uses `quality * log(weight) * random()` with stochastic variation. Wisp uses pure coverage count. Most others fall somewhere between.
+2. **Scoring complexity varies widely.** Gossip uses a two-layer multiplicative score with exponential temporal decay. Welshman uses ``quality * (1 + log(weight)) * random()`` with stochastic variation. Wisp uses pure coverage count. Most others fall somewhere between.
 
 3. **Connection limits range from 20 to 75** for projects with hard caps. Several (NDK, Welshman, Nosotros) have no global cap.
 
@@ -36,7 +36,7 @@ We analyzed outbox implementations in 15 codebases spanning 5 languages (Rust, T
 
 7. **Academic coverage ≠ real-world event recall.** Event verification against real relays shows that algorithms optimizing for assignment coverage don't necessarily win at actual event retrieval. At 365 days, MAB-UCB achieves 40.8% event recall vs. Greedy Set-Cover's 16.3%. The relay that *should* have the event often doesn't — due to retention policies, downtime, or access restrictions. Stochastic exploration discovers relays that retain historical events.
 
-8. **Welshman's `random()` is accidentally brilliant for archival.** The stochastic factor in `quality * log(weight) * random()` spreads queries across relays over time, achieving the best long-window event recall (37.8% at 365d) among deployed client algorithms.
+8. **Welshman's `random()` is accidentally brilliant for archival.** The stochastic factor in ``quality * (1 + log(weight)) * random()`` spreads queries across relays over time, achieving the best long-window event recall (37.8% at 365d) among deployed client algorithms.
 
 ---
 
@@ -60,7 +60,7 @@ Not all implementations optimize in step 4. Amethyst's feed routing maps each fo
 | Project | Read Outbox | Write Inbox | Relay Scoring | Health Tracking | Connection Mgmt |
 |---------|:-----------:|:-----------:|:-------------:|:---------------:|:---------------:|
 | **Gossip** | Full | Full | Multi-factor composite | Exclusion timers 15s-10min | Max 50, minion-per-relay |
-| **Welshman/Coracle** | Full | Full | quality * log(weight) * random() | Tiered error thresholds | Lazy connect, 30s auto-close |
+| **Welshman/Coracle** | Full | Full | `quality * (1 + log(weight)) * random()` | Tiered error thresholds | Lazy connect, 30s auto-close |
 | **Amethyst** | Full | Full | Binary (online/offline) | RelayOfflineTracker | Dynamic pool, 300ms sample |
 | **NDK** | Full | Full | Connected > selected > popular | Flapping detection | Temp relays, 30s auto-disconnect |
 | **Applesauce/noStrudel** | Full | Full | Pluggable coverage ratio | online/offline/dead state machine | Dead relay exclusion |
@@ -107,7 +107,7 @@ Clients with tightly-integrated outbox: **Gossip** (LMDB + Minion architecture),
 | **Greedy set-cover** | Gossip, Applesauce/noStrudel, Wisp, Amethyst (recs) | Iteratively pick relay covering most uncovered pubkeys with recalculation per iteration | [`greedy-set-cover.ts`](bench/src/algorithms/greedy-set-cover.ts) |
 | **Greedy coverage sort** | Nostur | Sort relays by coverage count, greedily assign pubkeys (no iterative recalculation) | [`greedy-coverage-sort.ts`](bench/src/algorithms/greedy-coverage-sort.ts) |
 | **Priority-based** | NDK | Three-tier: connected > already-selected > popularity-ranked | [`priority-based.ts`](bench/src/algorithms/priority-based.ts) |
-| **Weighted stochastic** | Welshman/Coracle | `quality * log(weight) * random()` with deliberate randomness | [`weighted-stochastic.ts`](bench/src/algorithms/weighted-stochastic.ts) |
+| **Weighted stochastic** | Welshman/Coracle | ``quality * (1 + log(weight)) * random()`` with deliberate randomness | [`weighted-stochastic.ts`](bench/src/algorithms/weighted-stochastic.ts) |
 | **Progressive multi-tier** | Amethyst (discovery) | Expanding scope: outbox -> hints -> indexers -> search -> connected | — |
 | **Observable pipeline** | Nosotros, Applesauce (reactive layer) | Per-author relay resolution as data flow streams | — |
 | **Filter decomposition** | rust-nostr | Bitflag-based graph splitting filters by pubkey type | [`filter-decomposition.ts`](bench/src/algorithms/filter-decomposition.ts) |
@@ -565,9 +565,11 @@ Event recall across time windows (fiatjaf, testable-reliable authors). Events pe
 | Direct Mapping | 89.9% | 79.9% | 63.9% | 38.5% | 16.8% | 9.4% |
 | Filter Decomposition | 88.1% | 77.5% | 63.1% | 39.0% | 19.0% | 10.6% |
 | Popular+Random | 83.4% | 71.9% | 53.3% | 27.1% | 11.8% | 6.6% |
-| Stochastic Greedy | 67.1% | 56.8% | 43.3% | 23.9% | 11.6% | 12.6% |
+| Stochastic Greedy | 67.1% | 56.8% | 43.3% | 23.9% | 11.6% | 12.6%* |
 | Greedy Coverage Sort | 67.6% | 65.6% | 53.5% | 30.8% | 13.3% | 7.4% |
 | Primal Aggregator | 28.3% | 14.5% | 8.3% | 3.7% | 1.6% | 0.9% |
+
+\* Stochastic Greedy's non-monotonic 1095d > 365d result (12.6% > 11.6%) is a data artifact: the algorithm selects ~12 relays (fewer than budget due to early convergence), and the baseline event count grows faster than the algorithm's miss rate at this window boundary.
 
 **Cross-profile validation (7d window, testable-reliable authors):**
 
@@ -592,9 +594,9 @@ To test whether patterns generalize beyond fiatjaf, event recall was measured ac
 
 Profile characteristics:
 
-| Profile | Follows | Relay Lists | Unique Relays | Testable Authors | Baseline Events |
-|---------|:-------:|:-----------:|:-------------:|:----------------:|:---------------:|
-| fiatjaf | 148 | 87.1% | 233 | ~116 | 2,176 |
+| Profile | Follows | With Relay List | Unique Relays | Testable Authors | Baseline Events |
+|---------|:-------:|:---------------:|:-------------:|:----------------:|:---------------:|
+| fiatjaf | 194 | 87.1% | 233 | ~116 | 2,176 |
 | hodlbod | 442 | 87.1% | 489 | 191 | 5,357 |
 | Kieran | 377 | 80.4% | 404 | 156 | 3,801 |
 | jb55 | 943 | 69.2% | 725 | 305 | 8,255 |
@@ -614,7 +616,7 @@ Cross-profile patterns:
 
 2. **MAB-UCB is the best long-window algorithm.** Its exploration component isn't noise -- it discovers relays that happen to retain historical events. This outweighs the static optimizers that prioritize coverage density.
 
-3. **Welshman's `random()` factor is accidentally brilliant.** What looks like an anti-centralization quirk (`quality * log(weight) * random()`) turns out to be empirically the best archival strategy among existing client algorithms. At 365d: 37.8% recall (best non-MAB, non-theoretical algorithm). The randomness spreads queries across more relays over time, accidentally discovering which ones retain old events.
+3. **Welshman's `random()` factor is accidentally brilliant.** What looks like an anti-centralization quirk (``quality * (1 + log(weight)) * random()``) turns out to be empirically the best archival strategy among existing client algorithms. At 365d: 37.8% recall (best non-MAB, non-theoretical algorithm). The randomness spreads queries across more relays over time, accidentally discovering which ones retain old events.
 
 4. **Greedy Set-Cover degrades sharply.** 93.5% at 7d → 16.3% at 365d. It minimizes connections by concentrating on popular relays, but those relays don't necessarily retain old events. Algorithms that spread queries fare better long-term.
 

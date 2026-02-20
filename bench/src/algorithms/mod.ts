@@ -26,6 +26,7 @@ import { mabRelay } from "./mab-relay.ts";
 import { streamingCoverage } from "./streaming-coverage.ts";
 import { bipartiteMatching } from "./bipartite-matching.ts";
 import { spectralClustering } from "./spectral-clustering.ts";
+import { hybridGreedyExplore } from "./hybrid-greedy-explore.ts";
 
 export interface AlgorithmEntry {
   id: string;
@@ -148,6 +149,14 @@ export const ALGORITHM_REGISTRY: AlgorithmEntry[] = [
     id: "spectral",
     name: "Spectral Clustering",
     fn: spectralClustering,
+    nativeCap: true,
+    stochastic: true,
+    defaults: {},
+  },
+  {
+    id: "hybrid",
+    name: "Hybrid Greedy+Explore",
+    fn: hybridGreedyExplore,
     nativeCap: true,
     stochastic: true,
     defaults: {},
