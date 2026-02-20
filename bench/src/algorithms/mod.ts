@@ -18,6 +18,8 @@ import { weightedStochastic } from "./weighted-stochastic.ts";
 import { greedyCoverageSort } from "./greedy-coverage-sort.ts";
 import { filterDecomposition } from "./filter-decomposition.ts";
 import { directMapping } from "./direct-mapping.ts";
+import { primalBaseline } from "./primal-baseline.ts";
+import { popularPlusRandom } from "./popular-plus-random.ts";
 
 export interface AlgorithmEntry {
   id: string;
@@ -76,6 +78,22 @@ export const ALGORITHM_REGISTRY: AlgorithmEntry[] = [
     id: "direct",
     name: "Direct Mapping",
     fn: directMapping,
+    nativeCap: false,
+    stochastic: false,
+    defaults: {},
+  },
+  {
+    id: "primal",
+    name: "Primal Aggregator",
+    fn: primalBaseline,
+    nativeCap: true,
+    stochastic: false,
+    defaults: {},
+  },
+  {
+    id: "popular-random",
+    name: "Popular+Random",
+    fn: popularPlusRandom,
     nativeCap: false,
     stochastic: false,
     defaults: {},

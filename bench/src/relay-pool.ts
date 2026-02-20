@@ -7,7 +7,7 @@ import { connectToRelay } from "./fetch.ts";
 import type { NostrEvent } from "./fetch.ts";
 import type { Pubkey, RelayUrl } from "./types.ts";
 
-export const MAX_EVENTS_PER_PAIR = 100;
+export const MAX_EVENTS_PER_PAIR = 10000;
 
 export interface RelayOutcome {
   connected: boolean;
@@ -296,14 +296,14 @@ export class RelayPool {
   }
 
   /**
-   * Send a REQ and collect events until EOSE or timeout.
-   * Returns whether EOSE was received (vs timeout).
+   * Send a REQ and collect events until EOSE, CLOSED, or timeout.
+   * Detects rate limiting via CLOSED messages and NOTICE.
    */
   private subscribeWithTimeout(
     pooled: PooledConnection,
     subId: string,
     filter: Record<string, unknown>,
-  ): Promise<{ events: NostrEvent[]; eose: boolean }> {
+  ): Promise<{ events: NostrEvent[]; eose: boolean; closed?: string }> {
     return new Promise((resolve) => {
       if (pooled.ws.readyState !== WebSocket.OPEN) {
         resolve({ events: [], eose: false });
@@ -313,6 +313,7 @@ export class RelayPool {
       const events: NostrEvent[] = [];
       const timeout = setTimeout(() => {
         pooled.ws.removeEventListener("message", handler);
+        this._timeouts++;
         resolve({ events, eose: false });
       }, this.eoseTimeoutMs);
 
@@ -326,6 +327,19 @@ export class RelayPool {
             clearTimeout(timeout);
             pooled.ws.removeEventListener("message", handler);
             resolve({ events, eose: true });
+          } else if (data[0] === "CLOSED" && data[1] === subId) {
+            clearTimeout(timeout);
+            pooled.ws.removeEventListener("message", handler);
+            const reason = data[2] ?? "unknown";
+            this._closedMessages.push({ relay: pooled.relay, reason: String(reason) });
+            console.error(`[pool] CLOSED from ${pooled.relay}: ${reason}`);
+            resolve({ events, eose: false, closed: String(reason) });
+          } else if (data[0] === "NOTICE") {
+            const notice = data[1] ?? "";
+            if (/rate|limit|slow|too many|blocked/i.test(String(notice))) {
+              console.error(`[pool] NOTICE (rate-limit?) from ${pooled.relay}: ${notice}`);
+              this._rateLimitNotices.push({ relay: pooled.relay, notice: String(notice) });
+            }
           }
         } catch { /* ignore parse errors */ }
       };
@@ -333,5 +347,18 @@ export class RelayPool {
       pooled.ws.addEventListener("message", handler);
       pooled.ws.send(JSON.stringify(["REQ", subId, filter]));
     });
+  }
+
+  // --- Diagnostic counters ---
+  private _timeouts = 0;
+  private _closedMessages: { relay: RelayUrl; reason: string }[] = [];
+  private _rateLimitNotices: { relay: RelayUrl; notice: string }[] = [];
+
+  get diagnostics() {
+    return {
+      timeouts: this._timeouts,
+      closedMessages: this._closedMessages,
+      rateLimitNotices: this._rateLimitNotices,
+    };
   }
 }

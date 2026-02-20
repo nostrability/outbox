@@ -8,6 +8,7 @@ import { verifyAlgorithm } from "./verify.ts";
 import type {
   AlgorithmResult,
   BenchmarkInput,
+  Pubkey,
   Phase2Options,
   Phase2Result,
   RelayUrl,
@@ -54,12 +55,65 @@ export async function runPhase2(
   });
   const cache = new QueryCache();
 
-  // 2. Collect baseline
+  // 2. Collect extra relays needed by algorithms but not in declared write relays
+  const declaredRelays = new Set<RelayUrl>(input.relayToWriters.keys());
+  const extraRelays = new Map<RelayUrl, Set<Pubkey>>();
+  for (const result of algorithmResults) {
+    for (const [relay, pubkeys] of result.relayAssignments) {
+      if (!declaredRelays.has(relay)) {
+        const existing = extraRelays.get(relay) ?? new Set<Pubkey>();
+        for (const pk of pubkeys) existing.add(pk);
+        extraRelays.set(relay, existing);
+      }
+    }
+  }
+
+  if (extraRelays.size > 0) {
+    console.error(
+      `[phase2] ${extraRelays.size} extra relay(s) from algorithms (not in declared write relays): ${[...extraRelays.keys()].join(", ")}`,
+    );
+  }
+
+  // 3. Collect baseline from declared write relays
   const startMs = performance.now();
   const baselines = await collectBaseline(input, pool, cache, options);
+
+  // 4. Query extra relays for their assigned pubkeys
+  if (extraRelays.size > 0) {
+    const since = Math.floor(Date.now() / 1000) - options.windowSeconds;
+    console.error(`[phase2] Querying ${extraRelays.size} extra relay(s)...`);
+    const extraTasks = [...extraRelays.entries()].map(async ([relay, pubkeys]) => {
+      const pubkeyList = [...pubkeys];
+      await pool.queryBatched(
+        relay,
+        pubkeyList,
+        { kinds: options.kinds, since },
+        options.batchSize,
+        cache,
+      );
+    });
+    await Promise.all(extraTasks);
+  }
+
   const collectionTimeMs = performance.now() - startMs;
 
-  // 3. Close all connections (verification reads cache only)
+  // 5. Print diagnostics and close
+  const diag = pool.diagnostics;
+  if (diag.timeouts > 0) {
+    console.error(`[phase2] Subscription timeouts (no EOSE): ${diag.timeouts}`);
+  }
+  if (diag.closedMessages.length > 0) {
+    console.error(`[phase2] CLOSED messages received: ${diag.closedMessages.length}`);
+    for (const c of diag.closedMessages.slice(0, 10)) {
+      console.error(`  ${c.relay}: ${c.reason}`);
+    }
+  }
+  if (diag.rateLimitNotices.length > 0) {
+    console.error(`[phase2] Rate-limit NOTICE messages: ${diag.rateLimitNotices.length}`);
+    for (const n of diag.rateLimitNotices.slice(0, 10)) {
+      console.error(`  ${n.relay}: ${n.notice}`);
+    }
+  }
   pool.closeAll();
 
   // 4. Classify authors
@@ -70,8 +124,11 @@ export async function runPhase2(
   const testableEventCounts: number[] = [];
   let totalUniqueEvents = 0;
 
-  // Collect all relays that were in the baseline
+  // Collect all relays that were queried (baseline + extras)
   const allBaselineRelays = new Set<RelayUrl>(input.relayToWriters.keys());
+  for (const relay of extraRelays.keys()) {
+    allBaselineRelays.add(relay);
+  }
 
   // Track relay success
   let relaysQueried = 0;
