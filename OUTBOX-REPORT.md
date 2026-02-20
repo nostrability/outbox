@@ -548,7 +548,7 @@ ILP, Streaming Coverage, and Spectral Clustering frequently hit the theoretical 
 - Events per (relay, author) pair capped at 10,000 to eliminate recency bias
 - 14 algorithms tested across 8 time windows (7d to 1095d/3 years)
 
-**Relay diagnostics:** 55% relay success rate. Failures are structural, not from query volume -- 9 relays require NIP-42 auth, 4 block anonymous reads, 1 is WoT-gated. Zero rate-limiting detected.
+**Relay diagnostics (cross-profile):** Success rates range from 31% (ODELL, 1,199 relays) to 47% (hodlbod, 489 relays) — inversely correlated with relay count because larger follow lists include more obscure relays. Failures are structural (deterministic per relay, not transient): 12 relays fail across all 6 profiles (NIP-42 auth-required, WoT-gated, or queries blocked). `filter.nostr.wine/*` personal relays are the largest single source of CLOSED messages (5–22 per profile). ~50% of authors with relay lists are "testable-reliable" (events retrievable from declared relays) — this ratio is a network constant across all profiles (47–52%).
 
 Event recall across time windows (fiatjaf, testable-reliable authors). Events per (relay, author) pair capped at 10,000 — this prevents a single prolific relay from dominating the baseline count and biasing recall percentages toward whichever algorithm happens to select that relay:
 
