@@ -126,18 +126,18 @@ Amethyst is the most resilient with 5 configured indexer relays.
 Event recall varies dramatically by time window. An algorithm that works
 well for recent posts may fail badly for older content:
 
-| Algorithm | 7d recall | 1yr recall | Best for | Weakness |
-|-----------|:---------:|:----------:|----------|----------|
-| **Greedy Set-Cover** | 84% | 16% | Max assignment coverage within a budget | Degrades sharply for history; concentrates on popular relays |
-| **Weighted Stochastic** (Welshman) | 83% | 38% | Balanced real-time + archival | Slightly lower coverage than greedy (~1–3%) |
-| **Priority-Based** (NDK) | 83% | 19% | Zero-effort outbox (transparent to app) | Rich-get-richer effect on first-connected relays |
-| **MAB-UCB** | 91% | 41% | Long-window event recall | Requires rounds/state; not yet in any client |
-| **Direct Mapping** (Amethyst feeds) | 88% | 17% | Simplicity; no optimization needed | No connection minimization; scales poorly |
-| **Filter Decomposition** (rust-nostr) | 77% | 19% | Fine-grained per-type limits | Lower recall than greedy at short windows |
-| **Greedy Coverage Sort** (Nostur) | 65% | 13% | Anti-centralization (skipTopRelays) | Costs 5–12% coverage vs standard greedy |
-| **Streaming Coverage** | 92% | 38% | Near-optimal coverage in a single pass | Not yet in any client |
+| Algorithm | 3yr recall | 1yr recall | 7d recall | Best for | Weakness |
+|-----------|:----------:|:----------:|:---------:|----------|----------|
+| **MAB-UCB** | 23% | 41% | 91% | Long-window event recall | Requires rounds/state; not yet in any client |
+| **Streaming Coverage** | 21% | 38% | 92% | Near-optimal coverage in a single pass | Not yet in any client |
+| **Weighted Stochastic** (Welshman) | 21% | 38% | 83% | Balanced real-time + archival | Slightly lower coverage than greedy (~1–3%) |
+| **Priority-Based** (NDK) | 11% | 19% | 83% | Zero-effort outbox (transparent to app) | Rich-get-richer effect on first-connected relays |
+| **Filter Decomposition** (rust-nostr) | 11% | 19% | 77% | Fine-grained per-type limits | Lower recall than greedy at short windows |
+| **Greedy Set-Cover** | 10% | 16% | 84% | Max assignment coverage within a budget | Degrades sharply for history; concentrates on popular relays |
+| **Direct Mapping** (Amethyst feeds) | 9% | 17% | 88% | Simplicity; no optimization needed | No connection minimization; scales poorly |
+| **Greedy Coverage Sort** (Nostur) | 7% | 13% | 65% | Anti-centralization (skipTopRelays) | Costs 5–12% coverage vs standard greedy |
 
-Recall = mean event recall across 6 profiles (7d) or fiatjaf profile (1yr).
+Recall = mean event recall across 6 profiles (7d) or fiatjaf profile (1yr and 3yr).
 See [OUTBOX-REPORT.md Section 8](OUTBOX-REPORT.md#8-benchmark-results) for
 full data across all time windows and profiles.
 

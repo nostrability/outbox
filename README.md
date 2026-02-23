@@ -10,19 +10,19 @@ This repo contains a cross-client analysis of outbox model implementations acros
 
 ## Key Findings
 
+**From benchmarking 14 algorithms against real relays (6 profiles, 8 time windows):**
+
+1. **The best relay-mapping algorithm ranks 7th at actually retrieving events.** Greedy set-cover (used by Gossip, Applesauce, Wisp) produces the best on-paper relay assignments — but when we connected to real relays and queried for real events, it ranked 7th of 14 (84% mean recall at 7d vs 92% for Streaming Coverage). Relays that *should* have an event often don't, due to retention policies, downtime, or access restrictions.
+2. **Event recall degrades sharply over time — and algorithms diverge.** At 7 days, most algorithms retrieve 83–98% of events. At 1 year, greedy set-cover drops to 16% while stochastic approaches (Welshman: 38%, MAB-UCB: 41%) retain 2–2.5x more. The algorithm that's best for recent feeds may be worst for history.
+3. **20 connections is nearly sufficient.** All algorithms reach within 1–2% of their unlimited ceiling at 20 relays. Greedy at 10 already achieves 93–97% of its unlimited coverage.
+4. **NIP-65 adoption is the real bottleneck.** The gap between the best algorithm and the theoretical ceiling is 1–3%. But 20–44% of follows have no relay list at all. More NIP-65 adoption helps far more than better algorithms.
+5. **Concentration is the tradeoff.** Greedy maps the most follows to relays on paper by concentrating on a few popular relays (Gini 0.77) — but those relays don't always retain events long-term. Stochastic approaches spread queries across more relays (Gini 0.39–0.51), which costs some assignment coverage but discovers relays that keep older posts.
+
 **From the implementation analysis (15 clients):**
 
-1. **Greedy set-cover wins academic coverage.** Three independent implementations (Gossip, Applesauce, Wisp) converged on the same algorithm — iteratively pick the relay covering the most uncovered pubkeys. It wins 23 of 26 benchmark profiles for assignment coverage (the theoretical "on paper" metric). But see findings #7–8 for the real-world caveat.
-2. **Rankings are stable across all profiles.** Greedy > NDK Priority > Welshman Stochastic > Direct Mapping > Filter Decomposition > Coverage Sort. This ordering holds regardless of follow count (194–1,778) or NIP-65 adoption rate (56–87%).
-3. **The skip-top-relays heuristic hurts.** Nostur's approach of skipping the 3 most popular relays costs 5–12% coverage. Those relays are popular because many authors publish there.
-4. **20 connections is nearly sufficient.** Most algorithms reach within 1–2% of their unlimited ceiling at 20 relays. Greedy at 10 connections already achieves 93–97% of its unlimited coverage.
-5. **NIP-65 adoption is the real bottleneck.** The gap between the best algorithm and the ceiling is 1–3%. But 20–44% of follows have no relay list at all. More adoption helps far more than better algorithms.
-6. **Concentration is the tradeoff.** Greedy set-cover achieves best coverage by concentrating load on few relays (Gini 0.77). Stochastic/Direct approaches spread load more evenly (Gini 0.39–0.51) at lower coverage.
-
-**From real-world event verification (14 algorithms, connecting to actual relays):**
-
-7. **Academic coverage ≠ real-world event recall.** Greedy Set-Cover wins Phase 1 assignment coverage but ranks 7th of 14 at actual event retrieval (84.4% mean across 6 profiles at 7d vs 92.4% for Streaming Coverage). At 365 days, MAB-UCB (40.8%) beats Greedy (16.3%) by 2.5x. The relay that *should* have the event often doesn't — due to retention policies, downtime, or access restrictions.
-8. **Adaptive algorithms shine at longer windows.** MAB-UCB and Welshman's stochastic approach maintain recall as time windows grow, while static greedy algorithms degrade sharply.
+6. **Three independent codebases converged on greedy set-cover** (Gossip/Rust, Applesauce/TypeScript, Wisp/Kotlin). It wins on-paper relay assignment 23 of 26 profiles, but real-world event recall tells a different story (see #1).
+7. **Only Welshman uses randomness in relay selection** — and it accidentally has the best archival recall among deployed clients (38% at 1yr vs greedy's 16%).
+8. **No client measures whether you actually received an author's events.** noStrudel shows relay assignment coverage, but no client tracks event recall — the metric that matters most.
 
 ## Algorithm Comparison
 
@@ -87,26 +87,26 @@ Percentage of baseline events actually retrievable from selected relays. Events 
 
 **Time-window degradation (fiatjaf):**
 
-| Algorithm | 7d | 14d | 30d | 90d | 365d | 1095d |
-|-----------|:---:|:---:|:---:|:---:|:----:|:-----:|
-| ILP Optimal | 98.0% | 83.2% | 70.9% | 60.3% | 38.1% | 21.3% |
-| Bipartite Matching | 98.0% | 83.3% | 71.0% | 60.3% | 38.0% | 21.2% |
-| Streaming Coverage | 97.5% | 81.7% | 69.9% | 59.8% | 37.9% | 21.2% |
-| Spectral Clustering | 97.5% | 81.7% | 69.9% | 59.8% | 37.9% | 21.2% |
-| Greedy Set-Cover | 93.5% | 77.5% | 61.8% | 35.8% | 16.3% | 9.8% |
-| **MAB-UCB** | 93.5% | 82.3% | **74.6%** | **65.9%** | **40.8%** | **22.8%** |
-| Welshman Stochastic | 93.2% | 82.8% | 68.6% | 59.7% | 37.8% | 21.1% |
-| NDK Priority | 92.3% | 76.5% | 61.4% | 36.1% | 18.7% | 11.2% |
-| Direct Mapping | 89.9% | 79.9% | 63.9% | 38.5% | 16.8% | 9.4% |
-| Filter Decomposition | 88.1% | 77.5% | 63.1% | 39.0% | 19.0% | 10.6% |
-| Popular+Random | 83.4% | 71.9% | 53.3% | 27.1% | 11.8% | 6.6% |
-| Stochastic Greedy | 67.1% | 56.8% | 43.3% | 23.9% | 11.6% | 12.6%* |
-| Coverage Sort (Nostur) | 67.6% | 65.6% | 53.5% | 30.8% | 13.3% | 7.4% |
-| Primal Aggregator | 28.3% | 14.5% | 8.3% | 3.7% | 1.6% | 0.9% |
+| Algorithm | 3yr | 1yr | 90d | 30d | 14d | 7d |
+|-----------|:---:|:---:|:---:|:---:|:---:|:---:|
+| **MAB-UCB** | **22.8%** | **40.8%** | **65.9%** | **74.6%** | 82.3% | 93.5% |
+| ILP Optimal | 21.3% | 38.1% | 60.3% | 70.9% | 83.2% | 98.0% |
+| Bipartite Matching | 21.2% | 38.0% | 60.3% | 71.0% | 83.3% | 98.0% |
+| Streaming Coverage | 21.2% | 37.9% | 59.8% | 69.9% | 81.7% | 97.5% |
+| Spectral Clustering | 21.2% | 37.9% | 59.8% | 69.9% | 81.7% | 97.5% |
+| Welshman Stochastic | 21.1% | 37.8% | 59.7% | 68.6% | 82.8% | 93.2% |
+| Stochastic Greedy | 12.6%\* | 11.6% | 23.9% | 43.3% | 56.8% | 67.1% |
+| NDK Priority | 11.2% | 18.7% | 36.1% | 61.4% | 76.5% | 92.3% |
+| Filter Decomposition | 10.6% | 19.0% | 39.0% | 63.1% | 77.5% | 88.1% |
+| Greedy Set-Cover | 9.8% | 16.3% | 35.8% | 61.8% | 77.5% | 93.5% |
+| Direct Mapping | 9.4% | 16.8% | 38.5% | 63.9% | 79.9% | 89.9% |
+| Coverage Sort (Nostur) | 7.4% | 13.3% | 30.8% | 53.5% | 65.6% | 67.6% |
+| Popular+Random | 6.6% | 11.8% | 27.1% | 53.3% | 71.9% | 83.4% |
+| Primal Aggregator | 0.9% | 1.6% | 3.7% | 8.3% | 14.5% | 28.3% |
 
-\* Stochastic Greedy's non-monotonic 1095d > 365d result is a data artifact: the algorithm selects fewer relays than budget due to early convergence, and the baseline event count grows faster than the miss rate at this window boundary.
+\* Stochastic Greedy's non-monotonic 3yr > 1yr result is a data artifact: the algorithm selects fewer relays than budget due to early convergence, and the baseline event count grows faster than the miss rate at this window boundary.
 
-At short windows (7d), ILP/Bipartite/Streaming/Spectral hit 97–98%. At longer windows, MAB-UCB's adaptive exploration dominates — it discovers relays that retain historical events. Greedy degrades sharply past 14 days (16% at 1yr vs MAB's 41%).
+At short windows (7d), ILP/Bipartite/Streaming/Spectral hit 97–98%. At longer windows, MAB-UCB's adaptive exploration dominates — it discovers relays that retain historical events. Greedy degrades sharply past 14 days (16% at 1 year vs MAB's 41%).
 
 **Cross-profile validation (7d, mean event recall across 6 profiles):**
 
@@ -183,7 +183,7 @@ Based on patterns across all 15 implementations:
 
 6. **Make outbox debuggable — but go beyond assignment coverage.** noStrudel's coverage debugger is the only client that exposes outbox internals (coverage %, orphaned users, per-relay assignment). But it only shows the academic view — the on-paper relay mapping. No client shows real-world event recall: "did I actually get the posts?" Our central finding is that these two views diverge sharply (85% assignment coverage can mean 16% event recall at 1yr). Future work: extend debuggers to show per-author event delivery success, relay response rates, and staleness of relay list data.
 
-7. **Add stochastic exploration.** Welshman's `random()` factor isn't just anti-centralization — it's the best archival strategy by far. The randomness discovers relays that retain old events and that static optimizers miss. Pure greedy concentrates on mega-relays that may prune history.
+7. **Add stochastic exploration.** Among deployed clients, Welshman's `random()` factor gives it the best archival recall — 2x the next-best deployed algorithm (38% at 1yr vs Filter Decomposition's 19%). MAB-UCB (not yet in any client) beats all approaches at 41%. Randomness discovers relays that retain history; pure greedy concentrates on mega-relays that may prune it.
 
 8. **Aggregator results are surprisingly poor.** Primal reaches 28% recall at 7d and <1% at 3yr — worse than Popular+Random (damus + nos.lol + 2 random relays) at every window. This is unexpected: an aggregator that proxies tens if not hundreds of relays should in theory outperform 4 random connections. This may indicate a limitation in the benchmark methodology rather than a real-world indictment of aggregators.
 

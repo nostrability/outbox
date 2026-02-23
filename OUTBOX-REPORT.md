@@ -34,9 +34,9 @@ We analyzed outbox implementations in 15 codebases spanning 5 languages (Rust, T
 
 6. **No implementation measures per-author event coverage.** This is the most important missing metric -- no client can answer "am I seeing all events from this author?"
 
-7. **Academic coverage ≠ real-world event recall.** Event verification against real relays shows that algorithms optimizing for assignment coverage don't necessarily win at actual event retrieval. At 365 days, MAB-UCB achieves 40.8% event recall vs. Greedy Set-Cover's 16.3%. The relay that *should* have the event often doesn't — due to retention policies, downtime, or access restrictions. Stochastic exploration discovers relays that retain historical events.
+7. **Academic coverage ≠ real-world event recall.** Event verification against real relays shows that algorithms optimizing for assignment coverage don't necessarily win at actual event retrieval. At 1 year, MAB-UCB achieves 40.8% event recall vs. Greedy Set-Cover's 16.3%. The relay that *should* have the event often doesn't — due to retention policies, downtime, or access restrictions. Stochastic exploration discovers relays that retain historical events.
 
-8. **Welshman's `random()` is accidentally brilliant for archival.** The stochastic factor in ``quality * (1 + log(weight)) * random()`` spreads queries across relays over time, achieving the best long-window event recall (37.8% at 365d) among deployed client algorithms.
+8. **Welshman's `random()` is accidentally brilliant for archival.** The stochastic factor in ``quality * (1 + log(weight)) * random()`` spreads queries across relays over time, achieving the best long-window event recall (37.8% at 1 year) among deployed client algorithms. MAB-UCB (not yet in any client) beats it at 40.8%.
 
 ---
 
@@ -546,30 +546,30 @@ ILP, Streaming Coverage, and Spectral Clustering frequently hit the theoretical 
 - Baseline: query ALL declared write relays for each author, plus additional relays needed by baselines (primal.net, damus.io, nos.lol)
 - Authors classified as **testable-reliable** (events found + ≥50% declared relays responded), **testable-partial** (<50% responded), **zero-baseline** (no events, relays responded), or **unreliable** (no events, relays unresponsive)
 - Events per (relay, author) pair capped at 10,000 to eliminate recency bias
-- 14 algorithms tested across 8 time windows (7d to 1095d/3 years)
+- 14 algorithms tested across 8 time windows (7d to 3 years)
 
 **Relay diagnostics (cross-profile):** Success rates range from 31% (ODELL, 1,199 relays) to 47% (hodlbod, 489 relays) — inversely correlated with relay count because larger follow lists include more obscure relays. Failures are structural (deterministic per relay, not transient): 12 relays fail across all 6 profiles (NIP-42 auth-required, WoT-gated, or queries blocked). `filter.nostr.wine/*` personal relays are the largest single source of CLOSED messages (5–22 per profile). ~50% of authors with relay lists are "testable-reliable" (events retrievable from declared relays) — this ratio is a network constant across all profiles (47–52%).
 
 Event recall across time windows (fiatjaf, testable-reliable authors). Events per (relay, author) pair capped at 10,000 — this prevents a single prolific relay from dominating the baseline count and biasing recall percentages toward whichever algorithm happens to select that relay:
 
-| Algorithm | 7d | 14d | 30d | 90d | 365d | 1095d |
-|-----------|:---:|:---:|:---:|:---:|:----:|:-----:|
-| ILP Optimal | 98.0% | 83.2% | 70.9% | 60.3% | 38.1% | 21.3% |
-| Bipartite Matching | 98.0% | 83.3% | 71.0% | 60.3% | 38.0% | 21.2% |
-| Streaming Coverage | 97.5% | 81.7% | 69.9% | 59.8% | 37.9% | 21.2% |
-| Spectral Clustering | 97.5% | 81.7% | 69.9% | 59.8% | 37.9% | 21.2% |
-| Greedy Set-Cover | 93.5% | 77.5% | 61.8% | 35.8% | 16.3% | 9.8% |
-| **MAB-UCB** | 93.5% | 82.3% | **74.6%** | **65.9%** | **40.8%** | **22.8%** |
-| Welshman Stochastic | 93.2% | 82.8% | 68.6% | 59.7% | 37.8% | 21.1% |
-| NDK Priority | 92.3% | 76.5% | 61.4% | 36.1% | 18.7% | 11.2% |
-| Direct Mapping | 89.9% | 79.9% | 63.9% | 38.5% | 16.8% | 9.4% |
-| Filter Decomposition | 88.1% | 77.5% | 63.1% | 39.0% | 19.0% | 10.6% |
-| Popular+Random | 83.4% | 71.9% | 53.3% | 27.1% | 11.8% | 6.6% |
-| Stochastic Greedy | 67.1% | 56.8% | 43.3% | 23.9% | 11.6% | 12.6%* |
-| Greedy Coverage Sort | 67.6% | 65.6% | 53.5% | 30.8% | 13.3% | 7.4% |
-| Primal Aggregator | 28.3% | 14.5% | 8.3% | 3.7% | 1.6% | 0.9% |
+| Algorithm | 3yr | 1yr | 90d | 30d | 14d | 7d |
+|-----------|:---:|:---:|:---:|:---:|:---:|:---:|
+| **MAB-UCB** | **22.8%** | **40.8%** | **65.9%** | **74.6%** | 82.3% | 93.5% |
+| ILP Optimal | 21.3% | 38.1% | 60.3% | 70.9% | 83.2% | 98.0% |
+| Bipartite Matching | 21.2% | 38.0% | 60.3% | 71.0% | 83.3% | 98.0% |
+| Streaming Coverage | 21.2% | 37.9% | 59.8% | 69.9% | 81.7% | 97.5% |
+| Spectral Clustering | 21.2% | 37.9% | 59.8% | 69.9% | 81.7% | 97.5% |
+| Welshman Stochastic | 21.1% | 37.8% | 59.7% | 68.6% | 82.8% | 93.2% |
+| Stochastic Greedy | 12.6%\* | 11.6% | 23.9% | 43.3% | 56.8% | 67.1% |
+| NDK Priority | 11.2% | 18.7% | 36.1% | 61.4% | 76.5% | 92.3% |
+| Filter Decomposition | 10.6% | 19.0% | 39.0% | 63.1% | 77.5% | 88.1% |
+| Greedy Set-Cover | 9.8% | 16.3% | 35.8% | 61.8% | 77.5% | 93.5% |
+| Direct Mapping | 9.4% | 16.8% | 38.5% | 63.9% | 79.9% | 89.9% |
+| Coverage Sort (Nostur) | 7.4% | 13.3% | 30.8% | 53.5% | 65.6% | 67.6% |
+| Popular+Random | 6.6% | 11.8% | 27.1% | 53.3% | 71.9% | 83.4% |
+| Primal Aggregator | 0.9% | 1.6% | 3.7% | 8.3% | 14.5% | 28.3% |
 
-\* Stochastic Greedy's non-monotonic 1095d > 365d result (12.6% > 11.6%) is a data artifact: the algorithm selects ~12 relays (fewer than budget due to early convergence), and the baseline event count grows faster than the algorithm's miss rate at this window boundary.
+\* Stochastic Greedy's non-monotonic 3yr > 1yr result (12.6% > 11.6%) is a data artifact: the algorithm selects ~12 relays (fewer than budget due to early convergence), and the baseline event count grows faster than the algorithm's miss rate at this window boundary.
 
 **Cross-profile validation (7d window, testable-reliable authors):**
 
@@ -616,13 +616,13 @@ Cross-profile patterns:
 
 2. **MAB-UCB is the best long-window algorithm.** Its exploration component isn't noise -- it discovers relays that happen to retain historical events. This outweighs the static optimizers that prioritize coverage density.
 
-3. **Welshman's `random()` factor is accidentally brilliant.** What looks like an anti-centralization quirk (``quality * (1 + log(weight)) * random()``) turns out to be empirically the best archival strategy among existing client algorithms. At 365d: 37.8% recall (best non-MAB, non-theoretical algorithm). The randomness spreads queries across more relays over time, accidentally discovering which ones retain old events.
+3. **Welshman's `random()` factor is accidentally brilliant.** What looks like an anti-centralization quirk (``quality * (1 + log(weight)) * random()``) turns out to be empirically the best archival strategy among existing client algorithms. At 1 year: 37.8% recall (best non-MAB, non-theoretical algorithm). MAB-UCB (not yet in any client) beats it at 40.8%. The randomness spreads queries across more relays over time, accidentally discovering which ones retain old events.
 
-4. **Greedy Set-Cover degrades sharply.** 93.5% at 7d → 16.3% at 365d. It minimizes connections by concentrating on popular relays, but those relays don't necessarily retain old events. Algorithms that spread queries fare better long-term.
+4. **Greedy Set-Cover degrades sharply.** 93.5% at 7d → 16.3% at 1 year. It minimizes connections by concentrating on popular relays, but those relays don't necessarily retain old events. Algorithms that spread queries fare better long-term.
 
 5. **Aggregator results are surprisingly poor.** Primal achieves only 28.3% recall at 7 days and 0.9% at 3 years — worse than Popular+Random (damus + nos.lol + 2 random relays) at every window. This is unexpected for a relay that proxies many upstream relays, and may indicate a benchmark methodology limitation rather than a definitive conclusion about aggregators.
 
-6. **Author recall is more stable than event recall.** You can *find* most authors even at long windows (74-81% author recall at 365d), but you miss most of their posts. The disparity means relay retention policies are the binding constraint, not relay selection.
+6. **Author recall is more stable than event recall.** You can *find* most authors even at long windows (74-81% author recall at 1 year), but you miss most of their posts. The disparity means relay retention policies are the binding constraint, not relay selection.
 
 ---
 
