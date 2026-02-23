@@ -652,21 +652,10 @@ Based on patterns observed across all implementations and benchmark results:
 
 ## Appendix: Source Code References
 
-### Per-Client Analysis Files
-- `analysis/clients/gossip.md` (645 lines)
-- `analysis/clients/welshman-coracle.md` (713 lines)
-- `analysis/clients/amethyst.md` (670 lines)
-- `analysis/clients/ndk-applesauce-nostrudel.md` (852 lines)
-- `analysis/clients/nostur-yakihonne-notedeck.md` (615 lines)
-- `analysis/clients/rust-nostr-voyage-nosotros-wisp-shopstr.md` (509 lines)
-
-### Cross-Cutting Topic Analyses
-- `analysis/topics/implementation-approaches.md`
-- `analysis/topics/relay-selection-algorithms.md`
-- `analysis/topics/challenges-and-tradeoffs.md`
-- `analysis/topics/outbox-as-heuristic.md`
-- `analysis/topics/bootstrapping-and-fallbacks.md`
-- `analysis/topics/effectiveness-measurement.md`
+### Supporting Analysis
+- [`analysis/clients/`](analysis/clients/) — Per-client cheat sheets (6 files)
+- [`analysis/cross-client-comparison.md`](analysis/cross-client-comparison.md) — Cross-client comparison by decision point
+- [`IMPLEMENTATION-GUIDE.md`](IMPLEMENTATION-GUIDE.md) — Opinionated recommendations backed by benchmark data
 
 ### Key Code Paths (Most Significant Per Project)
 

@@ -59,7 +59,10 @@ export function normalizeRelayUrl(input: string): RelayUrl | null {
   const port = url.port && url.port !== defaultPort ? `:${url.port}` : "";
   const pathname = removeTrailingSlash(url.pathname);
 
-  return `wss://${host}${port}${pathname}`;
+  // Wrap IPv6 addresses in brackets to maintain valid URLs
+  const hostPart = host.includes(":") ? `[${host}]` : host;
+
+  return `wss://${hostPart}${port}${pathname}`;
 }
 
 export interface FilterResult {

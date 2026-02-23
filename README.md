@@ -104,6 +104,8 @@ Percentage of baseline events actually retrievable from selected relays. Events 
 | Coverage Sort (Nostur) | 67.6% | 65.6% | 53.5% | 30.8% | 13.3% | 7.4% |
 | Primal Aggregator | 28.3% | 14.5% | 8.3% | 3.7% | 1.6% | 0.9% |
 
+\* Stochastic Greedy's non-monotonic 1095d > 365d result is a data artifact: the algorithm selects fewer relays than budget due to early convergence, and the baseline event count grows faster than the miss rate at this window boundary.
+
 At short windows (7d), ILP/Bipartite/Streaming/Spectral hit 97–98%. At longer windows, MAB-UCB's adaptive exploration dominates — it discovers relays that retain historical events. Greedy degrades sharply past 14 days (16% at 1yr vs MAB's 41%).
 
 **Cross-profile validation (7d, mean event recall across 6 profiles):**
@@ -127,7 +129,8 @@ Rankings generalize across all profiles: CS-inspired algorithms (92% mean) consi
 ## Repo Structure
 
 ```
-OUTBOX-REPORT.md              Full analysis report (~700 lines)
+OUTBOX-REPORT.md              Full analysis report
+IMPLEMENTATION-GUIDE.md       Opinionated recommendations backed by benchmarks
 bench/                         Benchmark tool (Deno/TypeScript)
   main.ts                      CLI entry point
   src/algorithms/              14 algorithm implementations
@@ -135,8 +138,8 @@ bench/                         Benchmark tool (Deno/TypeScript)
   phase-1-findings.md          Phase 1 methodology and detailed results
   results/                     JSON benchmark outputs
 analysis/
-  clients/                     Per-client deep dives (6 files, ~4000 lines)
-  topics/                      Cross-cutting topic analyses (6 files)
+  clients/                     Per-client cheat sheets (6 files)
+  cross-client-comparison.md   Cross-client comparison by decision point
 ```
 
 ## Running the Benchmark
@@ -189,6 +192,8 @@ For details, see Sections 8–9 of the [full report](OUTBOX-REPORT.md).
 ## Links
 
 - [Full Analysis Report](OUTBOX-REPORT.md) — Cross-client analysis + benchmark results
+- [Implementation Guide](IMPLEMENTATION-GUIDE.md) — Opinionated recommendations backed by benchmarks
+- [Cross-Client Comparison](analysis/cross-client-comparison.md) — Decisions compared across 15 clients
 - [Phase 1 Findings](bench/phase-1-findings.md) — Benchmark methodology and detailed results
 - [nostrability#69](https://github.com/niclas-pfeifer/nostrability/issues/69) — Parent issue
 - [NIP-65](https://github.com/nostr-protocol/nips/blob/master/65.md) — Relay List Metadata specification

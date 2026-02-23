@@ -175,7 +175,7 @@ export async function runPhase2(
 
   // 5. Verify each algorithm
   const algorithms = algorithmResults.map((result) =>
-    verifyAlgorithm(result, baselines, cache, allBaselineRelays)
+    verifyAlgorithm(result, baselines, cache, allBaselineRelays, declaredRelays)
   );
 
   // Invariant: testableReliable and totalBaselineEvents should be identical across algorithms

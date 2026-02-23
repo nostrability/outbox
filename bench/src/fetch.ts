@@ -166,6 +166,8 @@ export function subscribeAndCollect(
 
     const events: NostrEvent[] = [];
     const timeout = setTimeout(() => {
+      conn.ws.removeEventListener("message", handler);
+      conn.ws.send(JSON.stringify(["CLOSE", subId]));
       resolve(events);
     }, EOSE_TIMEOUT_MS);
 
@@ -181,6 +183,7 @@ export function subscribeAndCollect(
           } else if (data[0] === "EOSE" && data[1] === subId) {
             clearTimeout(timeout);
             conn.ws.removeEventListener("message", handler);
+            conn.ws.send(JSON.stringify(["CLOSE", subId]));
             resolve(events);
           }
         }

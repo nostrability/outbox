@@ -313,6 +313,7 @@ export class RelayPool {
       const events: NostrEvent[] = [];
       const timeout = setTimeout(() => {
         pooled.ws.removeEventListener("message", handler);
+        pooled.ws.send(JSON.stringify(["CLOSE", subId]));
         this._timeouts++;
         resolve({ events, eose: false });
       }, this.eoseTimeoutMs);
@@ -326,6 +327,7 @@ export class RelayPool {
           } else if (data[0] === "EOSE" && data[1] === subId) {
             clearTimeout(timeout);
             pooled.ws.removeEventListener("message", handler);
+            pooled.ws.send(JSON.stringify(["CLOSE", subId]));
             resolve({ events, eose: true });
           } else if (data[0] === "CLOSED" && data[1] === subId) {
             clearTimeout(timeout);

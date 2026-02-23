@@ -20,6 +20,7 @@ export function verifyAlgorithm(
   baselines: Map<Pubkey, PubkeyBaseline>,
   cache: QueryCache,
   allBaselineRelays: Set<RelayUrl>,
+  declaredRelays: Set<RelayUrl>,
 ): AlgorithmVerification {
   // Build author sets
   const headlineSet: Pubkey[] = [];
@@ -97,13 +98,16 @@ export function verifyAlgorithm(
   const secondary = computeRecall(secondarySet);
 
   // Selected relay success rate:
-  // |selected relays ∩ baselineSucceeded| / |selected relays - outOfBaselineRelays|
+  // Only consider declared relays (not extra relays) since only declared relays
+  // have success/failure tracked in baseline.relaysSucceeded
   const selectedRelays = new Set(result.relayAssignments.keys());
   const outSet = new Set(outOfBaselineRelays);
   let selectedInBaseline = 0;
   let selectedSucceeded = 0;
   for (const relay of selectedRelays) {
     if (outSet.has(relay)) continue;
+    // Only count declared relays to avoid biasing the metric downward
+    if (!declaredRelays.has(relay)) continue;
     selectedInBaseline++;
     // A relay "succeeded" if any author's baseline shows it in relaysSucceeded
     let succeeded = false;

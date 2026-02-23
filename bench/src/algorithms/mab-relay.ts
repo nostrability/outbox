@@ -33,6 +33,19 @@ export function mabRelay(
   const n = relayList.length;
   const k = Math.min(maxConnections, n);
 
+  // Early return if no relays to select
+  if (k === 0 || n === 0) {
+    return {
+      name: "MAB-UCB Relay",
+      relayAssignments: new Map(),
+      pubkeyAssignments: new Map(),
+      orphanedPubkeys: new Set(input.follows),
+      params,
+      executionTimeMs: performance.now() - start,
+      notes: ["No relays available"],
+    };
+  }
+
   // Follow set for coverage computation
   const followSet = new Set<Pubkey>(input.follows);
 
@@ -52,6 +65,19 @@ export function mabRelay(
   for (const pubkey of input.follows) {
     const relays = input.writerToRelays.get(pubkey);
     if (relays && relays.size > 0) totalCoverable++;
+  }
+
+  // Early return if no follows have relay data
+  if (totalCoverable === 0) {
+    return {
+      name: "MAB-UCB Relay",
+      relayAssignments: new Map(),
+      pubkeyAssignments: new Map(),
+      orphanedPubkeys: new Set(input.follows),
+      params,
+      executionTimeMs: performance.now() - start,
+      notes: ["No coverable pubkeys (follow set empty or no relay data)"],
+    };
   }
 
   // UCB statistics per relay
