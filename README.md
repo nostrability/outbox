@@ -142,6 +142,8 @@ Rankings generalize across all profiles: CS-inspired algorithms (92% mean) consi
 - **Greedy Set-Cover (used by most clients) is consistently middle-of-pack** — 7th–10th at every window. It optimizes assignment coverage, not event retrieval.
 - **The 90d window is an inflection point** where relay retention drops sharply. Most algorithms lose 40–60% of their 14d recall by 90d. The sweet spot for relay redundancy is 2–3 relays per author (diminishing returns beyond 3).
 
+**NIP-66 liveness filtering:** Pre-filtering dead relays using NIP-66 monitor data and the nostr.watch API (`--nip66-filter`) removes 43–64% of candidate relays. At 7d windows, event recall is preserved. At longer windows (365d, 3yr), recall improves by 1–9 pp on average as algorithms stop wasting connection budget on dead relays. Stochastic algorithms (Welshman, MAB-UCB) benefit most. See [Section 8.3](OUTBOX-REPORT.md#83-nip-66-liveness-filtering) of the full report.
+
 **Limitation:** The benchmark does not implement NIP-42 authentication. Approximately 15-20 relays in the candidate set require auth before accepting reads and currently return zero events. Event recall numbers are conservative lower bounds; relative algorithm rankings are unlikely to change since all algorithms are equally affected. See [Known Limitations](OUTBOX-REPORT.md#9-known-limitations) in the full report.
 
 ## Repo Structure
@@ -151,6 +153,7 @@ OUTBOX-REPORT.md              Full analysis report (~700 lines)
 bench/                         Benchmark tool (Deno/TypeScript)
   main.ts                      CLI entry point
   src/algorithms/              14 algorithm implementations
+  src/nip66/                   NIP-66 liveness filter + nostr.watch integration
   src/phase2/                  Event verification probes
   phase-1-findings.md          Phase 1 methodology and detailed results
   results/                     JSON benchmark outputs
@@ -178,6 +181,12 @@ deno task bench <npub_or_hex> --verify
 # Phase 2 with custom time window (7 days)
 deno task bench <npub_or_hex> --verify --verify-window 604800
 
+# Pre-filter dead relays via NIP-66 + nostr.watch liveness data
+deno task bench <npub_or_hex> --verify --nip66-filter
+
+# NIP-66 strict mode (NIP-66 events only, no HTTP API)
+deno task bench <npub_or_hex> --verify --nip66-filter=strict
+
 # Specific algorithms only
 deno task bench <npub_or_hex> --algorithms greedy,ndk,welshman
 ```
@@ -192,7 +201,7 @@ Based on patterns across all 15 implementations:
 
 2. **Most clients default to 2–3 relays per pubkey.** 7 of 9 implementations with per-pubkey limits converge on 2 or 3. This is an observed ecosystem consensus, not an empirically benchmarked finding — no study has measured the optimal number.
 
-3. **Track relay health.** At minimum, binary online/offline with backoff. Ideally, tiered error thresholds (Welshman) or penalty timers (Gossip). [NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md) (kind 30166) and [nostr.watch](https://github.com/sandwichfarm/nostr-watch) publish network-wide relay liveness data that clients could consume instead of tracking health independently — no analyzed client uses this yet.
+3. **Track relay health — and use NIP-66 data.** At minimum, binary online/offline with backoff. Ideally, tiered error thresholds (Welshman) or penalty timers (Gossip). [NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md) (kind 30166) and [nostr.watch](https://github.com/sandwichfarm/nostr-watch) publish network-wide relay liveness data. Our testing shows pre-filtering dead relays with this data halves the candidate relay pool, doubles connection success rates (30–55% → 76–92%), and improves long-window event recall by 1–9 pp — with zero recall loss at short windows. No analyzed client uses this yet. See [Section 8.3](OUTBOX-REPORT.md#83-nip-66-liveness-filtering) for details.
 
 4. **Use multiple indexer relays.** Relying only on purplepag.es is a single point of failure. It appears in 6/13 implementations. Amethyst's 5-indexer approach is most resilient.
 
