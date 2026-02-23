@@ -1,465 +1,203 @@
 > **DRAFT** — This document is a work in progress. Findings and framing may change.
 
-# Outbox Model Implementation Report
+# Outbox Model Report
 
-**An analysis of NIP-65 outbox/inbox relay routing across 15 Nostr clients and libraries**
+**How 15 Nostr clients implement NIP-65 relay routing — and which algorithms actually retrieve events.**
+
+15 codebases across 5 languages (Rust, TypeScript, Kotlin, Swift, Dart). 14 algorithms benchmarked against real follow lists and relay data. The central finding: the algorithm most clients use (greedy set-cover) ranks 7th at actual event retrieval.
 
 *Produced for [nostrability#69](https://github.com/niclas-pfeifer/nostrability/issues/69)*
-
----
-
-## Executive Summary
-
-The outbox model (NIP-65) enables decentralized event routing on Nostr by having users declare their preferred read (inbox) and write (outbox) relays via kind 10002 events. Clients use these declarations to route subscriptions to authors' write relays and publish events to recipients' read relays, replacing the older approach of broadcasting everything to a static relay set.
-
-We analyzed outbox implementations in 15 codebases spanning 5 languages (Rust, TypeScript, Kotlin, Swift, Dart). Two library-client pairs are tightly coupled (Welshman/Coracle, Applesauce/noStrudel), yielding **13 distinct implementations** when those pairs are merged. Ratios in this report (e.g., "8/13") refer to these 13 implementations unless otherwise noted:
 
 | Maturity | Projects |
 |----------|----------|
 | **Full outbox** (read + write routing, scoring, health tracking) | Gossip, Welshman/Coracle, Amethyst, NDK, Applesauce/noStrudel, Nostur, rust-nostr, Voyage, Wisp, Nosotros |
-| **Partial / planned** | Yakihonne (parser exists, unused for routing), Notedeck (NIP-65 infrastructure, PR #1288 pending) |
+| **Partial / planned** | Yakihonne (parser exists, unused), Notedeck (NIP-65 infra, PR #1288 pending) |
 | **Minimal / none** | Shopstr (own relay config only) |
 
-### Key Findings
+---
 
-1. **Greedy set-cover wins academic coverage.** Four independent implementations (Gossip, Applesauce, Wisp, Amethyst for recommendations) use a formal greedy set-cover algorithm that iteratively picks the relay covering the most uncovered pubkeys. Nostur's `createRequestPlan()` uses a related greedy coverage sort (relays sorted by coverage count, assigned greedily) but without the iterative recalculation loop of classic set-cover. This convergence is notable because these codebases were developed independently in different languages. However, real-world event verification shows greedy degrades sharply for historical access — see findings #7–8.
+## 1. Results
 
-2. **Scoring complexity varies widely.** Gossip uses a two-layer multiplicative score with exponential temporal decay. Welshman uses ``quality * (1 + log(weight)) * random()`` with stochastic variation. Wisp uses pure coverage count. Most others fall somewhere between.
+### 1.1 On-Paper Relay Mapping
 
-3. **Connection limits range from 20 to 75** for projects with hard caps. Several (NDK, Welshman, Nosotros) have no global cap.
+**What this measures:** Given NIP-65 relay lists, how many follows get assigned to at least one relay? No relay connections — just the quality of the mapping on paper.
 
-4. **Per-pubkey relay targets cluster around 2-3** (measuring outbox read-side relays per followed author). noStrudel is the outlier at 5. rust-nostr uses separate limits per relay type (3 write + 3 read + 1 hint + 1 most-used), which is not directly comparable since those serve different routing purposes. The 2-3 consensus reflects the tradeoff: 1 relay is fragile, 2 provides redundancy, 3+ has diminishing returns.
+26 profiles tested (105–1,779 follows, 52–91% NIP-65 adoption). Top 8 shown; full 26-profile tables in [Appendix A](#appendix-a-full-on-paper-mapping-tables).
 
-5. **The ecosystem depends on a few bootstrap relays.** `relay.damus.io` appears in 8/13 implementations, `purplepag.es` in 6/13. If purplepag.es went offline, relay discovery for multiple clients would degrade.
+**Client algorithms at 20 connections:**
 
-6. **No implementation measures per-author event coverage.** This is the most important missing metric -- no client can answer "am I seeing all events from this author?"
+| User (follows) | Ceiling | Greedy | NDK | Welshman | Nostur | rust-nostr | Direct |
+|----------------|--------:|-------:|----:|---------:|-------:|-----------:|-------:|
+| ODELL (1,779) | 76.6% | **75.3%** | 74.9% | 73.7% | 66.4% | 69.8% | 74.1% |
+| Derek Ross (1,328) | 80.8% | **79.6%** | 79.3% | 78.2% | 69.8% | 73.9% | 78.5% |
+| jb55 (943) | 69.2% | **68.1%** | 67.7% | 67.1% | 63.6% | 64.4% | 66.7% |
+| Karnage (581) | 88.5% | **87.6%** | 87.4% | 87.1% | 76.6% | 81.2% | 86.2% |
+| hodlbod (442) | 87.1% | **84.8%** | 83.0% | 83.9% | 75.1% | 80.1% | 83.0% |
+| Kieran (377) | 80.4% | **79.3%** | 79.0% | 78.5% | 75.1% | 74.3% | 78.5% |
+| fiatjaf (194) | 76.3% | **75.3%** | **75.3%** | 73.2% | 61.9% | 71.1% | 71.6% |
+| Rabble (105) | 90.5% | **90.5%** | **90.5%** | 89.5% | 75.2% | 85.7% | 88.6% |
 
-7. **Academic coverage ≠ real-world event recall.** Event verification against real relays shows that algorithms optimizing for assignment coverage don't necessarily win at actual event retrieval. At 365 days, MAB-UCB achieves 40.8% event recall vs. Greedy Set-Cover's 16.3%. The relay that *should* have the event often doesn't — due to retention policies, downtime, or access restrictions. Stochastic exploration discovers relays that retain historical events.
+- Greedy set-cover wins 23 of 26 profiles. Rankings are stable regardless of follow count or NIP-65 adoption rate.
+- Research algorithms (ILP, Streaming, Spectral) frequently hit the theoretical ceiling — the gap between greedy and optimal is 1–4%.
+- "Ceiling" = NIP-65 adoption rate. No algorithm can exceed it. 10–48% of follows lack any relay list — better algorithms cannot fix missing data.
 
-8. **Welshman's `random()` is accidentally brilliant for archival.** The stochastic factor in ``quality * (1 + log(weight)) * random()`` spreads queries across relays over time, achieving the best long-window event recall (37.8% at 365d) among deployed client algorithms.
+### 1.2 Event Retrieval
+
+**What this measures:** Connects to real relays and queries for real events. "Did you actually get the posts?" — depends on relay uptime, retention, event propagation, and auth requirements. Events per (relay, author) pair capped at 10,000.
+
+**Multi-window cross-profile event recall (mean of 5–6 profiles, reliable authors, %):**
+
+| Algorithm | 14d | 30d | 90d | 365d | 1095d |
+|-----------|:---:|:---:|:---:|:----:|:-----:|
+| **MAB-UCB** | **79.0** | **62.9** | 34.4 | **32.4** | **24.4** |
+| Spectral Clustering | 78.5 | 60.2 | 35.6 | 27.7 | 20.4 |
+| ILP Optimal | 78.3 | 58.7 | 33.8 | 24.7 | 18.6 |
+| Streaming Coverage | 77.6 | 56.6 | 32.1 | 25.6 | 20.7 |
+| Direct Mapping | 77.2 | 60.3 | 27.9 | 28.5 | 21.7 |
+| Bipartite Matching | 76.3 | 56.5 | **37.3** | 26.6 | 20.1 |
+| Welshman Stochastic | 67.9 | 48.6 | 25.5 | 20.4 | 15.1 |
+| Pop+Random | 67.1 | 45.9 | 24.7 | 20.4 | 15.1 |
+| Greedy Set-Cover | 64.8 | 39.7 | 20.2 | 16.2 | 12.1 |
+| NDK Priority | 64.3 | 39.3 | 18.9 | 15.1 | 11.0 |
+| Filter Decomposition | 63.5 | 46.6 | 23.7 | 22.4 | 17.3 |
+| Nostur Coverage Sort | 54.3 | 39.6 | 20.2 | 17.6 | 12.8 |
+| Stochastic Greedy | 51.9 | 31.6 | 12.9 | 11.7 | 9.5 |
+| Primal Aggregator | 16.8 | 6.9 | 3.5 | 3.4 | 2.0 |
+
+**Relays-per-author sweep (Greedy Set-Cover, fiatjaf, 7d):**
+
+| Relays per Author | Event Recall | Author Recall |
+|:-----------------:|:-----------:|:------------:|
+| 1 | 86.1% | 98.7% |
+| 2 | 91.6% | 96.2% |
+| 3 | 93.9% | 96.3% |
+| 4 | 94.3% | 96.3% |
+| 5 | 93.7% | 96.3% |
+
+- MAB-UCB dominates at 14d–30d (winning 4 of 6 profiles). At longer windows, the winner varies by profile: MAB for hodlbod, Spectral for Derek Ross, Direct Mapping for ODELL, Streaming for jb55.
+- Greedy set-cover (used by most clients) ranks 7th–10th at every window. It optimizes on-paper mapping, not event retrieval.
+- The 90d mark is an inflection point where relay retention drops sharply — most algorithms lose 40–60% of their 14d recall by 90d.
+
+### 1.3 NIP-66 Liveness Filtering
+
+Pre-filtering dead relays using [NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md) monitor data (kind 30166/1066) and the [nostr.watch](https://api.nostr.watch) API. Union of both sources: ~1,036 unique "alive" relays.
+
+**Relay pool reduction:**
+
+| Profile | Follows | Unfiltered Relays | NIP-66 Relays | Reduction |
+|---------|---------|-------------------|---------------|-----------|
+| fiatjaf | 194 | 233 | 133 | 43% |
+| hodlbod | 442 | 487 | 252 | 48% |
+| jb55 | 943 | 729 | 296 | 59% |
+| ODELL | 1,774 | 1,201 | 437 | 64% |
+
+**Connection success rate:**
+
+| Profile | NIP-66 Filtered | Unfiltered | Lift |
+|---------|:-----------:|:----------:|:----:|
+| fiatjaf | 88–92% | 53–55% | +35 pp |
+| hodlbod | 82–83% | 45–46% | +37 pp |
+| jb55 | 82–83% | 35% | +48 pp |
+| ODELL | 76% | 30–31% | +46 pp |
+
+**Event recall delta (NIP-66 filtered minus unfiltered, pp, 4-profile average):**
+
+| Algorithm | 7d | 365d | 3yr |
+|-----------|:---:|:----:|:---:|
+| Greedy Set-Cover | -0.6 | +1.1 | +3.9 |
+| ILP Optimal | +0.4 | +1.8 | +3.8 |
+| MAB-UCB | +2.5 | +5.1 | +3.1 |
+| NDK Priority | +0.4 | +0.2 | +0.7 |
+| Welshman Stochastic | +2.1 | +8.6 | +4.4 |
+| Direct Mapping | +2.0 | +6.1 | +5.4 |
+
+**Recommendation:** Consume NIP-66 data or the nostr.watch API to pre-filter dead relays before running relay selection. One fetch at startup (cached for hours), pool shrinks ~50%, connection success doubles, long-window recall improves 1–9 pp. Zero recall loss at short windows. Stochastic algorithms (Welshman, MAB-UCB) benefit most because their random exploration is most likely to waste picks on dead relays.
 
 ---
 
-## 1. How Implementations Work
+## 2. Conclusions
 
-### 1.1 The Core Pattern
+1. **On-paper mapping ≠ event retrieval.** Greedy set-cover wins relay assignment coverage but ranks 7th of 14 at actual event recall (84% vs 92% mean at 7d). At 1 year: 16% recall vs MAB-UCB's 41%. The relay that *should* have the event often doesn't — retention policies, downtime, and access restrictions dominate.
 
-Most mature implementations follow this general workflow, though they differ significantly in step 4:
+2. **Add randomness — it discovers relays that retain history.** Welshman's `quality * (1 + log(weight)) * random()` isn't just anti-centralization — it's the best archival strategy among deployed client algorithms (38% at 1yr). MAB-UCB's exploration-exploitation achieves the same effect (41%). Pure greedy concentrates on mega-relays that prune old events.
 
-1. **Fetch kind 10002** for each followed pubkey (usually from indexer relays like purplepag.es)
-2. **Parse relay tags** -- `r` tags with optional read/write markers (no marker = both)
-3. **Build a relay-to-authors map** -- group pubkeys by their declared write relays
-4. **Select relays** -- reduce the relay set using project-specific strategies (greedy set-cover, priority-based selection, weighted scoring, or direct mapping without optimization)
-5. **Fan out subscriptions** -- send each relay a filter containing only its assigned authors
-6. **Publish to inbox** -- when posting, also send to tagged users' read relays
+3. **2–3 relays per author.** 7 of 9 implementations default to 2 or 3. Empirical testing confirms: 1→2 adds 5.5 pp event recall, 2→3 adds 2.3 pp, beyond 3 is flat or negative as the fixed connection budget thins out.
 
-Not all implementations optimize in step 4. Amethyst's feed routing maps each follow directly to their declared write relays without a formal minimization pass (though it uses set-cover for relay recommendations). NDK uses priority-based selection rather than global minimization. Welshman uses stochastic weighted scoring.
+4. **Pre-filter dead relays with NIP-66.** Halves the candidate pool, doubles connection success rates (30–55% → 76–92%), improves long-window recall by 1–9 pp. No client uses this yet.
 
-### 1.2 Implementation Maturity Matrix
+5. **NIP-65 adoption is the real bottleneck.** 10–48% of follows have no relay list at all. The gap between the best algorithm and the ceiling is 1–3%. More relay list adoption helps far more than better algorithms.
 
-| Project | Read Outbox | Write Inbox | Relay Scoring | Health Tracking | Connection Mgmt |
-|---------|:-----------:|:-----------:|:-------------:|:---------------:|:---------------:|
-| **Gossip** | Full | Full | Multi-factor composite | Exclusion timers 15s-10min | Max 50, minion-per-relay |
-| **Welshman/Coracle** | Full | Full | `quality * (1 + log(weight)) * random()` | Tiered error thresholds | Lazy connect, 30s auto-close |
-| **Amethyst** | Full | Full | Binary (online/offline) | RelayOfflineTracker | Dynamic pool, 300ms sample |
-| **NDK** | Full | Full | Connected > selected > popular | Flapping detection | Temp relays, 30s auto-disconnect |
-| **Applesauce/noStrudel** | Full | Full | Pluggable coverage ratio | online/offline/dead state machine | Dead relay exclusion |
-| **Nostur** | Full | Full | Coverage sort + skipTopRelays | Misconfigured kind 10002 detection | 3 pools (persistent/outbox/ephemeral) |
-| **rust-nostr** | Full | Full | Received-event tiebreak | Per-pubkey semaphore freshness | Configurable per-flag limits |
-| **Voyage** | Full | Full | Lexicographic boolean tuple | Spam relay flagging | Autopilot max 25 |
-| **Wisp** | Full | Full | Pure coverage count | None explicit | Max 75 scored relays |
-| **Nosotros** | Full | Full | Event-count sort | Relay stats DB | Max relays/user configurable 1-14 |
-| **Yakihonne** | None | None | None | None | Static 5 constant relays |
-| **Notedeck** | Planned | None | None | None | Flat pool, all-to-all |
-| **Shopstr** | None | None | None | None | Static localStorage list |
+6. **20 connections is enough.** Most algorithms reach within 1–2% of their unlimited ceiling at 20 relays. Greedy at 10 connections already achieves 93–97% of its unlimited coverage.
 
-### 1.3 Architecture Patterns
-
-**Reactive / Observable-driven:**
-- **Amethyst** -- Kotlin `StateFlow` + `combine()`. Kind 10002 changes automatically recompute per-relay subscription filters.
-- **Applesauce/noStrudel** -- RxJS `combineLatest` + `switchMap`. Full pipeline from contacts through mailbox enrichment through relay selection. `debounceTime(500)` stabilizes async data arrival.
-- **Nosotros** -- RxJS `mergeMap` per author. Each author's relay list resolves independently.
-
-**Imperative / Event-driven:**
-- **Gossip** -- Rust async with message-passing (Overlord -> Minion channels). RelayPicker as global singleton.
-- **NDK** -- EventEmitter pattern. `OutboxTracker` emits events, subscriptions listen and refresh.
-- **Nostur** -- Swift imperative with CoreData. Builds plans, passes to ConnectionPool.
-- **rust-nostr** -- Trait-based with async semaphores. Pure function filter decomposition.
-- **Voyage** -- Kotlin coroutines with Room DAO queries. Multi-phase imperative algorithm.
-- **Wisp** -- Kotlin imperative. Full greedy set-cover runs synchronously.
-
-**Library vs. Client:**
-
-Libraries providing outbox as a reusable primitive: **Welshman** (stateless Router, clients compose scenarios), **NDK** (transparent outbox on any subscription), **Applesauce** (pure functions + RxJS operators), **rust-nostr** (trait-based storage abstraction), **NostrEssentials** (Swift pure functions used by Nostur).
-
-Clients with tightly-integrated outbox: **Gossip** (LMDB + Minion architecture), **Amethyst** (LocalCache + Kotlin Flow), **Voyage** (Room DAO), **Wisp** (application-level classes), **Nosotros** (tanstack-query + RxJS).
+7. **No client measures actual event delivery.** noStrudel's coverage debugger shows the on-paper view (assignment coverage). No client answers "did I actually get the posts?" — our central finding is that these two views diverge sharply.
 
 ---
 
-## 2. Relay Selection Algorithms
+## 3. Known Limitations
 
-### 2.1 Algorithm Taxonomy
+**NIP-42 auth-required relays.** The benchmark does not implement NIP-42 authentication. ~15–20 relays require auth before accepting reads and return zero events (nostr1.com cluster, creatr.nostr.wine, aggr.nostr.land, pantry.zap.cooking). Some relays have structural barriers beyond auth: personalized filter relays (filter.nostr.wine/npub...) only serve the owner, WoT relays require graph membership, some disable reads entirely.
 
-**Client-derived algorithms:**
+**Impact:** Event recall numbers are conservative lower bounds. Adding NIP-42 support would unlock ~15–20 additional relays. Relative algorithm rankings are unlikely to change since all algorithms are equally affected.
 
-| Category | Projects | Description | Benchmark impl |
-|----------|----------|-------------|----------------|
-| **Greedy set-cover** | Gossip, Applesauce/noStrudel, Wisp, Amethyst (recs) | Iteratively pick relay covering most uncovered pubkeys with recalculation per iteration | [`greedy-set-cover.ts`](bench/src/algorithms/greedy-set-cover.ts) |
-| **Greedy coverage sort** | Nostur | Sort relays by coverage count, greedily assign pubkeys (no iterative recalculation) | [`greedy-coverage-sort.ts`](bench/src/algorithms/greedy-coverage-sort.ts) |
-| **Priority-based** | NDK | Three-tier: connected > already-selected > popularity-ranked | [`priority-based.ts`](bench/src/algorithms/priority-based.ts) |
-| **Weighted stochastic** | Welshman/Coracle | ``quality * (1 + log(weight)) * random()`` with deliberate randomness | [`weighted-stochastic.ts`](bench/src/algorithms/weighted-stochastic.ts) |
-| **Progressive multi-tier** | Amethyst (discovery) | Expanding scope: outbox -> hints -> indexers -> search -> connected | — |
-| **Observable pipeline** | Nosotros, Applesauce (reactive layer) | Per-author relay resolution as data flow streams | — |
-| **Filter decomposition** | rust-nostr | Bitflag-based graph splitting filters by pubkey type | [`filter-decomposition.ts`](bench/src/algorithms/filter-decomposition.ts) |
-| **Direct mapping** | Amethyst (feed routing) | Use ALL declared write relays, no optimization | [`direct-mapping.ts`](bench/src/algorithms/direct-mapping.ts) |
-
-**CS-inspired algorithms** (added for benchmark comparison — no client uses these yet):
-
-| Algorithm | CS Problem | Strategy | Benchmark impl |
-|-----------|-----------|----------|----------------|
-| **ILP Optimal** | [Maximum coverage](https://en.wikipedia.org/wiki/Maximum_coverage_problem) (exact) | Branch-and-bound with LP relaxation bounds, 3s timeout, greedy fallback | [`ilp-optimal.ts`](bench/src/algorithms/ilp-optimal.ts) |
-| **Bipartite Matching** | [Weighted bipartite matching](https://en.wikipedia.org/wiki/Hungarian_algorithm) | Inverse-frequency weighting prioritizes hard-to-reach pubkeys | [`bipartite-matching.ts`](bench/src/algorithms/bipartite-matching.ts) |
-| **Spectral Clustering** | [Label propagation](https://en.wikipedia.org/wiki/Label_propagation_algorithm) community detection | Label propagation clusters relays by Jaccard similarity, select per-cluster reps | [`spectral-clustering.ts`](bench/src/algorithms/spectral-clustering.ts) |
-| **MAB-UCB** | [Combinatorial multi-armed bandit](https://en.wikipedia.org/wiki/Multi-armed_bandit) (CMAB) | UCB1 exploration-exploitation over 500 rounds, learns marginal coverage | [`mab-relay.ts`](bench/src/algorithms/mab-relay.ts) |
-| **Streaming Coverage** | [Streaming submodular max](https://en.wikipedia.org/wiki/Submodular_set_function) | Single-pass with k-buffer, swap weakest member if candidate improves coverage | [`streaming-coverage.ts`](bench/src/algorithms/streaming-coverage.ts) |
-| **Stochastic Greedy** | [Lazier-than-lazy greedy](https://en.wikipedia.org/wiki/Submodular_set_function) | Sample random relay subset per step, pick best from sample. (1-1/e-ε) approx | [`stochastic-greedy.ts`](bench/src/algorithms/stochastic-greedy.ts) |
-
-**References:**
-- ILP / Maximum Coverage: [Khuller, Moss, Naor (1999)](https://dl.acm.org/doi/10.1016/S0020-0190(99)00031-9) "The Budgeted Maximum Coverage Problem"; [Google OR-Tools](https://github.com/google/or-tools) (industry-standard ILP solver)
-- Stochastic Greedy: [Mirzasoleiman et al. (AAAI 2015)](https://arxiv.org/abs/1409.7938) "Lazier Than Lazy Greedy" — first linear-time (1-1/e-ε) submodular maximization; [SubModLib](https://github.com/decile-team/submodlib)
-- MAB-UCB: [Chen, Wang, Yuan (ICML 2013)](https://proceedings.mlr.press/v28/chen13a.html) "Combinatorial Multi-Armed Bandit: General Framework"; [extended version (JMLR 2016)](https://arxiv.org/abs/1407.8339)
-- Streaming Coverage: [Badanidiyuru et al. (KDD 2014)](https://dl.acm.org/doi/10.1145/2623330.2623637) "Streaming Submodular Maximization: Massive Data Summarization on the Fly"; [apricot](https://github.com/jmschrei/apricot)
-- Bipartite Matching: [Kuhn (1955)](https://onlinelibrary.wiley.com/doi/abs/10.1002/nav.3800020109) "The Hungarian Method for the Assignment Problem"; [SciPy `linear_sum_assignment`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.linear_sum_assignment.html)
-- Spectral / Label Propagation: [Raghavan, Albert, Kumara (2007)](https://arxiv.org/abs/0709.2938) "Near Linear Time Algorithm to Detect Community Structures"; [NetworkX implementation](https://github.com/benedekrozemberczki/LabelPropagation)
-
-**Baseline algorithms:**
-
-| Algorithm | Strategy | Benchmark impl |
-|-----------|----------|----------------|
-| **Primal Aggregator** | Route all authors to a single caching relay (relay.primal.net) | [`primal-baseline.ts`](bench/src/algorithms/primal-baseline.ts) |
-| **Popular+Random** | 2 fixed popular relays (damus.io, nos.lol) + 2 random per-author relays | [`popular-plus-random.ts`](bench/src/algorithms/popular-plus-random.ts) |
-
-### 2.2 Scoring Formulas
-
-**Gossip -- Two-Layer Composite:**
-```
-composite = association_score(pubkey, relay) * adjusted_relay_score(relay)
-```
-- Association: 1.0 for declared (kind 10002/kind 3/NIP-05), 0.2 with 14-day decay for fetched, 0.1 with 7-day decay for hinted
-- Relay score: `(rank/9) * (0.5 + 0.5 * success_rate) * connected_factor * log10(success_count)`
-
-**Welshman/Coracle -- Log-Dampened Weighted:**
-```
-score = quality * (1 + log(weight)) * random()
-```
-- `log(weight)` dampens hub bias: 100 users scores ~5.6x vs 1 user, not 100x
-- `random()` distributes load across relays over time
-- Quality is a hard gate: 0 = excluded (any error in last minute, >3/hour, >10/day)
-
-**Applesauce -- Coverage Ratio (Pluggable):**
-```
-score = covered_users / remaining_pool_size
-```
-Custom `score(relay, coverageScore, popularity)` callback available.
-
-**Nosotros -- Event-Count Ranking:**
-```
-relays.sort_by(stats[relay].events DESC).slice(0, maxRelaysPerUser)
-```
-
-**Voyage -- Lexicographic Boolean Tuple:**
-Sort by: (1) not spam, (2) seen in event-relay data, (3) already connected, (4) not disconnected.
-
-### 2.3 Connection Limits
-
-| Project | Max Total | Per Author | Configurable |
-|---------|:---------:|:----------:|:------------:|
-| Gossip | 50 | 2 | Both |
-| noStrudel | 20 | 5 | Both (sliders 0-30) |
-| Nostur | 50 (outbox pool) | 2 | No |
-| Wisp | 75 | No limit | No |
-| Voyage | 25 | 2 (publish) | No |
-| Welshman | None (3/scenario) | 3 | Yes |
-| NDK | None | 2 | Per-subscription |
-| Nosotros | None | 3 | Yes (1-14 slider) |
-| rust-nostr | None | 3w + 3r + 1h + 1m* | No (compile-time) |
-
-\* rust-nostr's per-pubkey limits are per relay-type (write, read, hint, most-used), not directly comparable to the single outbox-read metric used by other projects.
-
-### 2.4 Anti-Centralization Measures
-
-Greedy set-cover algorithms inherently favor popular relays. Several projects counteract this:
-
-- **Nostur** -- `skipTopRelays: 3` skips the 3 most-populated relays in the Following feed, forcing distribution to smaller relays
-- **Welshman** -- `Math.log(weight)` compresses hub bias logarithmically; `Math.random()` adds stochastic variation
-- **Wisp** -- Onboarding relay prober drops the top 5 mega-relays, selects "middle tier" relays
-- **Gossip** -- User-assignable relay rank 0-9 (rank 0 = excluded)
-- **Amethyst** -- Hardcoded blocklist excludes known aggregator relays (feeds.nostr.band, filter.nostr.wine)
+**Rate limiting.** Some relays throttle concurrent requests. Running parallel benchmarks may exacerbate this.
 
 ---
 
-## 3. Bootstrapping and Relay Discovery
+## 4. Implementation Landscape
 
-### 3.1 Bootstrap Relay Dependencies
+Per-client architecture, scoring formulas, discovery pipelines, fallback chains, and heuristic composition are documented in the analysis files:
 
-| Relay | Projects Using It | Role |
-|-------|:-----------------:|------|
+- **Per-client deep dives:** [`analysis/clients/`](analysis/clients/) (6 files, ~4,000 lines)
+- **Cross-cutting topics:** [`analysis/topics/`](analysis/topics/) (6 files — algorithms, bootstrapping, challenges, heuristics, measurement, implementation approaches)
+
+### Client-to-Algorithm Mapping
+
+| Client | Algorithm | Benchmark Proxy |
+|--------|-----------|-----------------|
+| Gossip | Greedy set-cover | [`greedy-set-cover.ts`](bench/src/algorithms/greedy-set-cover.ts) |
+| Applesauce/noStrudel | Greedy set-cover | [`greedy-set-cover.ts`](bench/src/algorithms/greedy-set-cover.ts) |
+| Wisp | Greedy set-cover | [`greedy-set-cover.ts`](bench/src/algorithms/greedy-set-cover.ts) |
+| Amethyst (recs) | Greedy set-cover | [`greedy-set-cover.ts`](bench/src/algorithms/greedy-set-cover.ts) |
+| Amethyst (feeds) | Direct mapping | [`direct-mapping.ts`](bench/src/algorithms/direct-mapping.ts) |
+| NDK | Priority-based | [`priority-based.ts`](bench/src/algorithms/priority-based.ts) |
+| Welshman/Coracle | Weighted stochastic | [`weighted-stochastic.ts`](bench/src/algorithms/weighted-stochastic.ts) |
+| Nostur | Greedy coverage sort | [`greedy-coverage-sort.ts`](bench/src/algorithms/greedy-coverage-sort.ts) |
+| rust-nostr | Filter decomposition | [`filter-decomposition.ts`](bench/src/algorithms/filter-decomposition.ts) |
+| Voyage | Multi-phase greedy | — |
+| Nosotros | Observable pipeline | — |
+| Yakihonne | None (static relays) | — |
+| Notedeck | None (planned) | — |
+| Shopstr | None (own relays) | — |
+
+### Connection Limits
+
+| Project | Max Total | Per Author |
+|---------|:---------:|:----------:|
+| Gossip | 50 | 2 |
+| noStrudel | 20 | 5 |
+| Nostur | 50 | 2 |
+| Wisp | 75 | No limit |
+| Voyage | 25 | 2 |
+| Welshman | None (3/scenario) | 3 |
+| NDK | None | 2 |
+| Nosotros | None | 3 |
+| rust-nostr | None | 3w+3r+1h+1m |
+
+### Bootstrap Relay Dependencies
+
+| Relay | Projects | Role |
+|-------|:--------:|------|
 | `relay.damus.io` | 8/13 | Universal bootstrap |
-| `purplepag.es` | 6/13 | Primary indexer for kind 10002 |
+| `purplepag.es` | 6/13 | Primary kind 10002 indexer |
 | `nos.lol` | 5/13 | Secondary bootstrap |
 | `relay.primal.net` | 5/13 | Common fallback |
 | `nostr.wine` | 3/13 | Search + fallback |
 
-This concentration represents a centralization risk. If `purplepag.es` went offline, relay discovery for NDK, Coracle, noStrudel, Amethyst, Shopstr, and Notedeck would degrade. Amethyst is the most resilient with 5 configured indexer relays.
-
-### 3.2 Discovery Pipelines
-
-**Gossip:** Dedicated DISCOVER relay role. `subscribe_discover()` fetches kind 10002 + 10050 for all follows with stale data (20-minute staleness threshold). No hardcoded fallback relays at runtime.
-
-**NDK:** Dedicated outbox pool (purplepag.es, nos.lol). Fetches relay lists in batches of 400 pubkeys. Late-arriving data triggers `refreshRelayConnections()` on active subscriptions.
-
-**Amethyst:** Progressive 5-tier cascade with load shedding at >300 follows:
-1. Outbox relays already known
-2. Relay hints (bloom filter)
-3. Indexer relays (5 configured) + home relays
-4. Search relays + connected relays
-5. Common/shared outbox relays
-
-**Wisp (unique onboarding):**
-1. Connect to 2 bootstrap relays
-2. Harvest 500 kind 10002 events
-3. Filter to "middle tier" relays (drop top 5, require frequency >= 3)
-4. Probe 15 candidates with NIP-11 + ephemeral write test
-5. Select top 8 by latency
-
-### 3.3 Fallback Chains
-
-| Project | Primary | Secondary | Terminal Fallback |
-|---------|---------|-----------|-------------------|
-| Gossip | Kind 10002 write relays | Fetched/hinted relays (with decay) | User's own READ relays (15s timeout) |
-| Welshman | Kind 10002 write relays | -- | 1 random default relay (addMinimalFallbacks) |
-| NDK | Kind 10002 write relays | Kind 3 content | Pool permanent relays |
-| Amethyst | Kind 10002 write relays | Bloom filter hints | 7 hardcoded event finder relays |
-| Nostur | Kind 10002 write relays | -- | User's own configured relays (always parallel) |
-| rust-nostr | WRITE relays | HINT + RECEIVED relays | Client's READ relays |
-| Voyage | NIP-65 write relays | Event-relay tracking | READ + selected relays + redundancy pass |
-| Wisp | RelayScoreBoard | -- | sendToAll general relays |
-| Nosotros | Kind 10002 WRITE relays | -- | FALLBACK_RELAYS env var |
-
 ---
 
-## 4. Outbox as One Heuristic Among Many
+## Appendix A: Full On-Paper Mapping Tables
 
-The outbox model is not the only relay selection heuristic. Real implementations combine many:
-
-### 4.1 Heuristics in Use
-
-| Heuristic | Implementations | Purpose |
-|-----------|:--------------:|---------|
-| **Outbox (NIP-65 write)** | 10/13 | Find events by querying author's write relays |
-| **Inbox (NIP-65 read)** | 10/13 | Deliver events to recipient's read relays |
-| **DM inbox (kind 10050)** | 4/13 full, 1 partial | Route encrypted DMs to messaging-specific relays |
-| **Relay hints (tags)** | 8/13 | Use relay URLs from e/p/a tags and NIP-19 entities |
-| **Search relays (NIP-50)** | 4/13 | Route full-text search to capable relays |
-| **Indexer relays** | 6/13 | Fetch metadata from aggregator relays |
-| **Event delivery tracking** | 5/13 | Track which relays delivered events per author |
-| **Discovery relays** | 2/13 | Dedicated role for relay list fetching |
-
-### 4.2 Heuristic Composition Strategies
-
-**Welshman -- Weighted Scenario Merging:**
-Multiple scenarios (outbox, inbox, hints) are merged by summing weights per relay, then scored with `quality * log(merged_weight) * random()`. Different contexts use different scenario compositions (feed loading, thread context, publishing, notifications).
-
-**Gossip -- Bitmask Relay Roles:**
-Relays have bitmask flags (OUTBOX, INBOX, DISCOVER, DM, READ, WRITE, GLOBAL, SEARCH, SPAMSAFE). Different operations query different flag combinations.
-
-**rust-nostr -- Per-Pubkey-Relay Bitflags:**
-Each (pubkey, relay) pair has bitflags (READ, WRITE, PRIVATE_MESSAGE, HINT, RECEIVED). Filter decomposition selects relay subsets based on filter structure (authors-only -> WRITE, #p-only -> READ, both -> union).
-
-**Amethyst -- 10 Distinct Relay List Types:**
-NIP-65, DM (kind 10050), proxy, blocked, broadcast, indexer, search, trusted, private storage, and local relay lists, composed via Kotlin `combine()` and `flatMapLatest()`.
-
-### 4.3 Unsolved Problems
-
-- **Hashtag/geohash routing** -- No pubkey-based routing exists for `#t` or `#g` filtered events. No mechanism for relays to advertise topic specialization.
-- **Relay capability signaling** -- Beyond NIP-11's `supported_nips`, relays cannot advertise coverage, specialization, or performance characteristics.
-- **Cross-heuristic conflict resolution** -- When declared relays disagree with observed evidence, implementations use ad hoc priority rules. No formal framework exists for weighting conflicting signals.
-- **Replaceable vs. regular event routing** -- All implementations treat relay selection identically regardless of event kind replaceability.
-
----
-
-## 5. Challenges and Tradeoffs
-
-### 5.1 Scalability
-
-Large follow lists (hundreds to thousands) stress the outbox model:
-
-| Project | Scaling Strategy | Threshold |
-|---------|-----------------|-----------|
-| Amethyst | Reduce indexer queries per user, limit connected relay probing | >300 follows |
-| NDK | Batch relay list fetches in groups of 400 | N/A |
-| Welshman | Chunk author lists into groups of ~30 for relay selection | N/A |
-| Voyage | Cap keys per filter at 750 | N/A |
-| Greedy set-cover (Gossip, Applesauce, Wisp) | Minimize connections while maintaining coverage | O(n*m) |
-
-### 5.2 Defunct Relays
-
-Five distinct approaches to handling dead relays:
-
-- **Welshman** -- Tiered error thresholds: 1 error/minute, 3/hour, or 10/day = quality 0 (excluded)
-- **Gossip** -- Per-reason exclusion timers: 15 seconds (clean close) to 10 minutes (DNS failure, rejection)
-- **Applesauce** -- Three-state machine (online/offline/dead) with exponential backoff. Dead after 5 failures is permanent for the session.
-- **Amethyst** -- Binary `RelayOfflineTracker` set + exponential backoff on reconnection
-- **NDK** -- System-wide flapping detection: >50% disconnect in 5 seconds triggers coordinated reconnection
-
-### 5.3 Misconfigured Relay Lists
-
-Users often publish kind 10002 with problematic entries (localhost, paid filter relays, NWC relays, write-only blast relays).
-
-**Approaches:**
-- **Amethyst** -- Blocklist: skip individual bad entries (feeds.nostr.band, filter.nostr.wine, nwc.primal.net, relay.getalby.com)
-- **Nostur** -- Aggressive: discard *entire* kind 10002 if *any* write relay matches 9-entry known-bad list
-- **Gossip** -- URL-pattern banning for infinite-subdomain tricks (e.g., user123.relay.nostr.band)
-- **Welshman** -- Protocol-level filtering: exclude onion, local, insecure (ws://) by default
-
-The tradeoff: Nostur's "discard entire event" approach loses good relay data when users have just one bad entry. Others filter per-entry but may still connect to misconfigured relays.
-
-### 5.4 Centralization Pressure
-
-Greedy set-cover algorithms create a "winner take all" dynamic where popular relays handle disproportionate traffic. Five projects include explicit countermeasures: Nostur's `skipTopRelays`, Welshman's logarithmic dampening, Wisp's mega-relay filtering during onboarding, Gossip's user-assignable relay ranks (rank 0 = excluded), and Amethyst's hardcoded aggregator blocklist. However, most projects have no anti-centralization mechanism in their core relay selection. NDK's preference for already-connected relays creates a rich-get-richer effect.
-
-### 5.5 Privacy
-
-The outbox model inherently reveals interest graphs: connecting to a followed user's relay tells that relay you are interested in that user.
-
-- **Nostur** -- VPN detection gate: outbox connections silently skipped if no VPN detected
-- **Amethyst** -- Per-category Tor routing controls + proxy relay system that bypasses outbox entirely (routes all through a single trusted relay)
-- **Welshman** -- Excludes onion and insecure relays by default
-- **Relay hints** -- Embedded relay URLs in tags create metadata that can correlate user behavior
-
-### 5.6 Resource Cost
-
-The outbox model consumes more memory, bandwidth, and battery than static relay lists:
-
-- **Memory:** Amethyst's bloom filters (~9.6MB), Gossip's LMDB, NDK's 100k-entry LRU
-- **Bandwidth:** More WebSocket connections = more ping/pong overhead. Welshman sends pings every 30s per connection.
-- **Battery:** Amethyst samples pool at 300ms, noStrudel debounces at 500ms, Nostur provides "low data mode" that disables outbox entirely
-- **CPU:** Set-cover algorithms are O(n*m) per recomputation; Gossip's exponential decay requires floating-point math per person-relay pair
-
-User-modifiable controls: Nostur (Autopilot opt-in, off by default), noStrudel (max connections slider 0-30), Gossip (max_relays + relays_per_person configurable), Amethyst (proxy relay bypass), Welshman (relay_limit configurable).
-
----
-
-## 6. Measuring Effectiveness
-
-### 6.1 What Could Be Measured
-
-| Metric | Definition | Status |
-|--------|-----------|--------|
-| **Event coverage** | Events received / events published by follows | Not tracked by any implementation |
-| **User coverage** | Followed pubkeys with >= 1 selected relay / total follows | noStrudel shows this in debugger UI |
-| **Relay efficiency** | Pubkeys covered / relay connections | Not tracked |
-| **Relay list staleness** | Age of kind 10002 data used for routing | Gossip (20-min check), NDK (2-min TTL) |
-| **Connection overhead** | Connections delivering 0 events / total connections | Not tracked |
-
-### 6.2 What Is Currently Observable
-
-**Best instrumented:**
-- **Welshman** -- 18-field `RelayStats` (open/close counts, event counts, error timestamps, publish success/failure, EOSE counts)
-- **Gossip** -- Per-relay success/failure counts feeding into scoring. Per-person-relay temporal data (`last_fetched` with 14-day decay, `last_suggested` with 7-day decay)
-- **Amethyst** -- `UserRelaysCache` per-user relay frequency map. Per-relay stats (ping, bytes, errors)
-
-**Per-author event delivery tracking:**
-- Gossip (last_fetched with decay), rust-nostr (RECEIVED flag + event count), Voyage (EventRelayAuthorView), Amethyst (UserRelaysCache counter), Nosotros (seen table)
-
-### 6.3 Coverage Visualization
-
-**noStrudel** is the only project with a user-facing outbox debugger:
-- Coverage percentage (color-coded: green >= 80%, yellow >= 50%, red < 50%)
-- Per-relay table showing user count and connection status
-- "Users by relay count" breakdown
-- "Missing relay list" and "orphaned" user lists
-- Configurable max connections and max relays per user sliders
-
-Nostur provides a more limited "outbox preview" UI that shows which additional relays will be used when composing an event, but it does not expose the full selection process (coverage %, orphaned users, per-relay assignment) the way noStrudel does.
-
-### 6.4 Research Opportunities
-
-1. **Per-author event coverage measurement** -- Compare outbox-routed events vs "ground truth" from indexer relays. Answer: "For which follows is the outbox model failing?"
-2. **Coverage vs. connection count frontier** -- Plot diminishing returns curve; empirically determine how many connections are needed for 95% coverage
-3. **Relay list completeness in the wild** -- What fraction of active users have published kind 10002? Are their listed relays operational?
-4. **Cross-client consistency** -- Do different implementations reach the same events for the same follow list?
-5. **Relay list propagation latency** -- How long after publishing a kind 10002 update do indexers and clients see it?
-6. **Relay hint accuracy** -- How often do relay hints in event tags actually point to relays that have the referenced event?
-7. **Long-tail analysis** -- What fraction of users are on relays used by <10 pubkeys? How does coverage differ for long-tail vs. mainstream users?
-
----
-
-## 7. Comparative Summary
-
-### Algorithm Comparison
-
-| | Gossip | NDK | Welshman | Applesauce | Amethyst | rust-nostr | Voyage | Wisp | Nosotros | Nostur |
-|---|---|---|---|---|---|---|---|---|---|---|
-| **Algorithm** | Greedy set-cover | Priority + popularity | Weighted stochastic | Greedy set-cover | Reactive flow | Filter decomposition | Multi-phase greedy | Greedy set-cover | Observable pipeline | Greedy coverage sort |
-| **Connection cap** | 50 | None | None | 20 | Dynamic | None | 25 | 75 | None | 50 |
-| **Per-pubkey target** | 2 | 2 | 3 | 5 | All declared | 3w+3r+1h+1m | 2 | No limit | 3 | 2 |
-| **Stochastic** | No | No | Yes | No | No | No | No | No | No | No |
-| **Temporal decay** | Yes | No | No | No | No | No | No | No | No | No |
-| **Health in scoring** | Yes | Yes | Yes | Yes | Yes | No | Yes | No | Yes | Yes |
-| **NIP-17 DM relays** | Yes | No | Yes | No | Yes | Yes | No | No | No | Partial |
-| **User-configurable** | Yes | Per-sub | Yes | Yes | No | No | No | No | Yes | No |
-| **Blocklist support** | Yes | Yes | Yes | Yes | Yes | No | Yes | No | Yes | Yes |
-
-### Client-to-Algorithm Mapping
-
-Which relay selection algorithm does each client/library use in production?
-
-| Client | Algorithm | Benchmark Proxy | Key Code Path |
-|--------|-----------|-----------------|---------------|
-| **Gossip** | Greedy set-cover | [`greedy-set-cover.ts`](bench/src/algorithms/greedy-set-cover.ts) | `gossip-lib/src/relay_picker.rs` → `RelayPicker::pick()` |
-| **Applesauce/noStrudel** | Greedy set-cover | [`greedy-set-cover.ts`](bench/src/algorithms/greedy-set-cover.ts) | `packages/core/src/helpers/relay-selection.ts` → `selectOptimalRelays()` |
-| **Wisp** | Greedy set-cover | [`greedy-set-cover.ts`](bench/src/algorithms/greedy-set-cover.ts) | `relay/RelayScoreBoard.kt` → `recompute()` |
-| **Amethyst** (recommendations) | Greedy set-cover | [`greedy-set-cover.ts`](bench/src/algorithms/greedy-set-cover.ts) | Relay recommendation code |
-| **Amethyst** (feed routing) | Direct mapping | [`direct-mapping.ts`](bench/src/algorithms/direct-mapping.ts) | `OutboxRelayLoader.kt` → `authorsPerRelay()` |
-| **NDK** | Priority-based | [`priority-based.ts`](bench/src/algorithms/priority-based.ts) | `core/src/outbox/index.ts` → `chooseRelayCombinationForPubkeys()` |
-| **Welshman/Coracle** | Weighted stochastic | [`weighted-stochastic.ts`](bench/src/algorithms/weighted-stochastic.ts) | `packages/router/src/index.ts` → `RouterScenario.getUrls()` |
-| **Nostur** | Greedy coverage sort | [`greedy-coverage-sort.ts`](bench/src/algorithms/greedy-coverage-sort.ts) | `NostrEssentials/Outbox/Outbox.swift` → `createRequestPlan()` |
-| **rust-nostr** | Filter decomposition | [`filter-decomposition.ts`](bench/src/algorithms/filter-decomposition.ts) | `sdk/src/client/gossip/resolver.rs` → `break_down_filter()` |
-| **Voyage** | Multi-phase greedy | — (no direct benchmark proxy) | `data/provider/RelayProvider.kt` → `getObserveRelays()` |
-| **Nosotros** | Observable pipeline | — (no direct benchmark proxy) | `hooks/subscriptions/subscribeOutbox.ts` → `subscribeOutbox()` |
-| **Yakihonne** | None (static relays) | — | 5 hardcoded relays |
-| **Notedeck** | None (planned) | — | NIP-65 infra exists, PR #1288 pending |
-| **Shopstr** | None (own relays) | — | localStorage relay list |
-
-### Storage Models
-
-| Model | Projects |
-|-------|----------|
-| **Persistent database** | Gossip (LMDB), Voyage (Room/SQLite), rust-nostr (SQLite), Nostur (CoreData), Nosotros (SQLite/OPFS) |
-| **In-memory with optional persistence** | NDK (LRU 100k/2min), Welshman (Repository + IndexedDB tracker), Applesauce (EventStore + localforage), Wisp (LRU 500 + SharedPreferences) |
-| **In-memory only** | Amethyst (LocalCache + bloom filters ~9.6MB) |
-| **No relay state** | Yakihonne, Shopstr, Notedeck (own account only) |
-
-### NIP-17 (DM Relay) Support
-
-"Support" here means routing outgoing DMs to recipients' kind 10050 relays, not merely publishing one's own kind 10050 event.
-
-Full DM relay routing: **Gossip**, **rust-nostr**, **Welshman**, **Amethyst** (4 of 10 mature implementations). **Nostur** publishes kind 10050 via its configuration wizard but does not route outgoing DMs to recipients' kind 10050 relays. The remaining 5 (NDK, Applesauce/noStrudel, Voyage, Wisp, Nosotros) do not implement kind 10050 routing.
-
----
-
-## 8. Benchmark Results
-
-We built a benchmark tool ([`bench/`](bench/)) that simulates relay selection algorithms against identical real-world data. Each algorithm receives the same input (follow list + NIP-65 relay lists from indexer relays) and produces relay-to-pubkey assignments under the same connection budget. See [`bench/phase-1-findings.md`](bench/phase-1-findings.md) for full methodology.
-
-### 8.1 Academic: Assignment Coverage
-
-**What this measures:** Given NIP-65 relay lists, how many of your follows get assigned to at least one relay? This never connects to any relay — it measures the quality of the mapping on paper, not whether events actually exist there. Not a guarantee of event delivery.
-
-**Test profiles:** 26 Nostr users with follow lists ranging from 105 to 1,779, NIP-65 adoption rates 52–91%.
-
-**Client-derived algorithms at 20 connections:**
+### Client Algorithms at 20 Connections (26 profiles)
 
 | User (follows) | Ceiling | Greedy | NDK | Welshman | Nostur | rust-nostr | Direct |
 |----------------|--------:|-------:|----:|---------:|-------:|-----------:|-------:|
@@ -490,9 +228,7 @@ We built a benchmark tool ([`bench/`](bench/)) that simulates relay selection al
 | Ben Arc (137) | 70.8% | **69.3%** | **69.3%** | 66.7% | 62.8% | 62.8% | 67.2% |
 | Rabble (105) | 90.5% | **90.5%** | **90.5%** | 89.5% | 75.2% | 85.7% | 88.6% |
 
-Greedy Set-Cover wins 23 of 26 profiles. NDK ties on 7. Welshman wins 1 (Dilger). NDK wins 1 outright (Tony Giorgio).
-
-**CS-inspired algorithms vs. Greedy (20 connections):**
+### Research Algorithms vs. Greedy (20 connections, 26 profiles)
 
 | User (follows) | Ceiling | Greedy | ILP | Bipartite | Streaming | Spectral | MAB | StochGrdy |
 |----------------|--------:|-------:|----:|----------:|----------:|---------:|----:|----------:|
@@ -523,34 +259,11 @@ Greedy Set-Cover wins 23 of 26 profiles. NDK ties on 7. Welshman wins 1 (Dilger)
 | Ben Arc (137) | 70.8% | 69.3% | **70.8%** | 70.6% | **70.8%** | **70.8%** | 66.9% | 67.9% |
 | Rabble (105) | 90.5% | **90.5%** | **90.5%** | **90.5%** | **90.5%** | **90.5%** | 86.0% | 89.8% |
 
-ILP, Streaming Coverage, and Spectral Clustering frequently hit the theoretical ceiling. Greedy Set-Cover leaves 1-4% on the table. MAB-UCB and Stochastic Greedy trade coverage for exploration.
+---
 
-"Ceiling" = NIP-65 adoption rate (% of follows with any valid write relay). No algorithm can exceed this.
+## Appendix B: Full Event Recall Tables
 
-**Key academic coverage findings:**
-
-1. **Greedy Set-Cover wins 23 of 26 profiles** among client-derived algorithms (ties NDK on 7, loses to Welshman on 1, loses to NDK on 1).
-2. **ILP and Streaming Coverage hit the theoretical ceiling** on most profiles with ≤500 follows, using fewer than 20 connections. The coverage gap between Greedy and optimal is 1-4%.
-3. **Rankings are remarkably stable** regardless of follow count or NIP-65 adoption rate: Greedy > NDK (~0-2% behind) > Welshman (~1-3%) > Direct (~3-5%) > Filter Decomposition (~3-5%) > Coverage Sort (~5-12%).
-4. **Nostur's skip-top-relays heuristic costs 5-12%** of coverage. Popular relays are popular because many authors publish there.
-5. **20 connections is nearly sufficient.** Greedy at 10 connections already achieves 93-97% of its unlimited coverage.
-6. **NIP-65 adoption is the real bottleneck.** 10-48% of follows lack any relay list. Better algorithms cannot fix missing data.
-7. **MAB-UCB trades coverage for exploration.** It underperforms Greedy by 0-3% on assignment coverage, but this exploration pays off in real-world event recall.
-8. **Concentration is the tradeoff.** Greedy has the highest Gini coefficient (0.77) -- a few relays handle most traffic. Stochastic approaches spread load more evenly (Gini 0.39-0.51) at the cost of lower coverage.
-
-### 8.2 Approximating Real-World Conditions: Event Verification
-
-**What this measures:** Did you actually get the posts? This connects to real relays and queries for kind-1 events within time windows, comparing against a multi-relay baseline. Results depend on relay uptime, retention policies, event propagation, and auth requirements.
-
-**Methodology:**
-- Baseline: query ALL declared write relays for each author, plus additional relays needed by baselines (primal.net, damus.io, nos.lol)
-- Authors classified as **testable-reliable** (events found + ≥50% declared relays responded), **testable-partial** (<50% responded), **zero-baseline** (no events, relays responded), or **unreliable** (no events, relays unresponsive)
-- Events per (relay, author) pair capped at 10,000 to eliminate recency bias
-- 14 algorithms tested across 8 time windows (7d to 1095d/3 years)
-
-**Relay diagnostics (cross-profile):** Success rates range from 31% (ODELL, 1,199 relays) to 47% (hodlbod, 489 relays) — inversely correlated with relay count because larger follow lists include more obscure relays. Failures are structural (deterministic per relay, not transient): 12 relays fail across all 6 profiles (NIP-42 auth-required, WoT-gated, or queries blocked). `filter.nostr.wine/*` personal relays are the largest single source of CLOSED messages (5–22 per profile). ~50% of authors with relay lists are "testable-reliable" (events retrievable from declared relays) — this ratio is a network constant across all profiles (47–52%).
-
-Event recall across time windows (fiatjaf, testable-reliable authors). Events per (relay, author) pair capped at 10,000 — this prevents a single prolific relay from dominating the baseline count and biasing recall percentages toward whichever algorithm happens to select that relay:
+### Time-Window Degradation (fiatjaf)
 
 | Algorithm | 7d | 14d | 30d | 90d | 365d | 1095d |
 |-----------|:---:|:---:|:---:|:---:|:----:|:-----:|
@@ -565,15 +278,11 @@ Event recall across time windows (fiatjaf, testable-reliable authors). Events pe
 | Direct Mapping | 89.9% | 79.9% | 63.9% | 38.5% | 16.8% | 9.4% |
 | Filter Decomposition | 88.1% | 77.5% | 63.1% | 39.0% | 19.0% | 10.6% |
 | Popular+Random | 83.4% | 71.9% | 53.3% | 27.1% | 11.8% | 6.6% |
-| Stochastic Greedy | 67.1% | 56.8% | 43.3% | 23.9% | 11.6% | 12.6%* |
-| Greedy Coverage Sort | 67.6% | 65.6% | 53.5% | 30.8% | 13.3% | 7.4% |
+| Stochastic Greedy | 67.1% | 56.8% | 43.3% | 23.9% | 11.6% | 12.6% |
+| Coverage Sort (Nostur) | 67.6% | 65.6% | 53.5% | 30.8% | 13.3% | 7.4% |
 | Primal Aggregator | 28.3% | 14.5% | 8.3% | 3.7% | 1.6% | 0.9% |
 
-\* Stochastic Greedy's non-monotonic 1095d > 365d result (12.6% > 11.6%) is a data artifact: the algorithm selects ~12 relays (fewer than budget due to early convergence), and the baseline event count grows faster than the algorithm's miss rate at this window boundary.
-
-**Cross-profile validation (7d window, testable-reliable authors):**
-
-To test whether patterns generalize beyond fiatjaf, event recall was measured across 6 diverse follow lists. Profile sizes range from 377 follows (Kieran) to 1,779 (ODELL):
+### Cross-Profile Event Recall (7d, reliable authors)
 
 | Algorithm | fiatjaf | hodlbod | Kieran | jb55 | ODELL | Derek Ross | Mean |
 |-----------|:-------:|:-------:|:------:|:----:|:-----:|:----------:|:----:|
@@ -589,50 +298,10 @@ To test whether patterns generalize beyond fiatjaf, event recall was measured ac
 | Popular+Random | 83.4% | 86.8% | 84.1% | 87.0% | 76.9% | 79.7% | 83.0% |
 | Filter Decomposition | 88.1% | 74.7% | 81.7% | 74.0% | 71.4% | 72.1% | 77.0% |
 | Stochastic Greedy | 67.1% | 73.0% | 76.8% | 64.7% | 46.3% | 72.5% | 66.7% |
-| Greedy Coverage Sort | 67.6% | 63.7% | 79.6% | 62.4% | 54.5% | 61.0% | 64.8% |
+| Coverage Sort (Nostur) | 67.6% | 63.7% | 79.6% | 62.4% | 54.5% | 61.0% | 64.8% |
 | Primal Aggregator | 28.3% | 37.3% | 34.8% | 25.2% | 33.6% | 30.2% | 31.6% |
 
-Profile characteristics:
-
-| Profile | Follows | With Relay List | Unique Relays | Testable Authors | Baseline Events |
-|---------|:-------:|:---------------:|:-------------:|:----------------:|:---------------:|
-| fiatjaf | 194 | 87.1% | 233 | ~116 | 2,176 |
-| hodlbod | 442 | 87.1% | 489 | 191 | 5,357 |
-| Kieran | 377 | 80.4% | 404 | 156 | 3,801 |
-| jb55 | 943 | 69.2% | 725 | 305 | 8,255 |
-| ODELL | 1,779 | 76.6% | 1,199 | 661 | 19,057 |
-| Derek Ross | 1,328 | 80.8% | 1,018 | 523 | 15,240 |
-
-Cross-profile patterns:
-- **Rankings generalize.** The top 4 algorithms are CS-inspired across all profiles (mean 91.8–92.4%).
-- **~8pp gap** between CS algorithms and the best client-derived algorithms (92% vs 84% mean).
-- **MAB-UCB is the most consistent** practical algorithm: 83–93% range, always top 5.
-- **ODELL is the hardest profile** (largest follow list, lowest relay list coverage) — all algorithms score lowest here.
-- **Greedy Set-Cover ranks 7th** by mean event recall despite being #1 at assignment coverage.
-
-**Cross-profile event recall by time window (mean of 5–6 profiles, reliable authors, %):**
-
-The 14d column averages all 6 profiles (fiatjaf uses 7d data as proxy). The 30d–1095d columns average 5 profiles (hodlbod, Kieran, jb55, ODELL, Derek Ross) since fiatjaf lacks intermediate-window data for all algorithms. Hybrid Greedy+Explore uses 4 profiles at 365d/1095d (Derek Ross not run).
-
-| Algorithm | 14d | 30d | 90d | 365d | 1095d |
-|-----------|:---:|:---:|:---:|:----:|:-----:|
-| **MAB-UCB** | **79.0** | **62.9** | 34.4 | **32.4** | **24.4** |
-| Spectral Clustering | 78.5 | 60.2 | 35.6 | 27.7 | 20.4 |
-| ILP Optimal | 78.3 | 58.7 | 33.8 | 24.7 | 18.6 |
-| Streaming Coverage | 77.6 | 56.6 | 32.1 | 25.6 | 20.7 |
-| Direct Mapping | 77.2 | 60.3 | 27.9 | 28.5 | 21.7 |
-| Bipartite Matching | 76.3 | 56.5 | **37.3** | 26.6 | 20.1 |
-| Welshman Stochastic | 67.9 | 48.6 | 25.5 | 20.4 | 15.1 |
-| Pop+Random | 67.1 | 45.9 | 24.7 | 20.4 | 15.1 |
-| Greedy Set-Cover | 64.8 | 39.7 | 20.2 | 16.2 | 12.1 |
-| NDK Priority | 64.3 | 39.3 | 18.9 | 15.1 | 11.0 |
-| Filter Decomposition | 63.5 | 46.6 | 23.7 | 22.4 | 17.3 |
-| Nostur Coverage Sort | 54.3 | 39.6 | 20.2 | 17.6 | 12.8 |
-| Hybrid Greedy+Explore | 52.3 | 29.6 | 15.2 | 11.7 | 9.2 |
-| Stochastic Greedy | 51.9 | 31.6 | 12.9 | 11.7 | 9.5 |
-| Primal Aggregator | 16.8 | 6.9 | 3.5 | 3.4 | 2.0 |
-
-**Winner per profile per window:**
+### Winner Per Profile Per Window
 
 | Profile | 14d | 30d | 90d | 365d | 1095d |
 |---------|-----|-----|-----|------|-------|
@@ -643,188 +312,32 @@ The 14d column averages all 6 profiles (fiatjaf uses 7d data as proxy). The 30d�
 | ODELL | Direct (74.2%) | Direct (63.6%) | Direct (43.2%) | Direct (35.1%) | Direct (28.3%) |
 | Derek Ross | Spectral (78.0%) | Spectral (69.3%) | Bipartite (24.6%) | Spectral (36.5%) | Spectral (27.7%) |
 
-Cross-window patterns:
-- **MAB-UCB dominates at short-to-medium windows (14d–30d)** for most profiles, winning 4 of 6 profiles at 14d and 4 of 5 at 30d.
-- **At longer windows (365d–1095d), the winner varies by profile:** MAB for hodlbod (53%/36%), Spectral for Derek Ross (37%/28%), Direct Mapping for ODELL (35%/28%), Streaming for jb55 (42%/33%). No single algorithm is universally best at archival access.
-- **Greedy Set-Cover (used by most clients) is consistently middle-of-pack** — 7th–10th across all windows. It optimizes the wrong objective (assignment coverage) for actual event retrieval.
-- **The 90d window is an inflection point** where relay reliability drops sharply. Most algorithms lose 40–60% of their 14d recall by 90d. Bipartite Matching is the best 90d algorithm by mean (37.3%), suggesting inverse-frequency weighting finds relays with better retention.
-- **Hybrid Greedy+Explore is consistently worst among non-baseline algorithms.** Static exploration (fixed fraction of random relays) underperforms adaptive exploration (MAB-UCB) by 15–27pp at every window. The lesson: exploration must be learned, not hardcoded.
-
-**Relays-per-author sweep (Greedy Set-Cover, fiatjaf, 7d):**
-
-| Relays per Author | Event Recall | Author Recall | Phase 1 Assign% |
-|:-----------------:|:-----------:|:------------:|:---------------:|
-| 1 | 86.1% | 98.7% | 76.3% |
-| 2 | 91.6% | 96.2% | 75.3% |
-| 3 | 93.9% | 96.3% | 73.2% |
-| 4 | 94.3% | 96.3% | 73.2% |
-| 5 | 93.7% | 96.3% | 73.2% |
-
-The sweet spot is 2–3 relays per author. Going from 1 to 2 adds 5.5pp of event recall. Going from 2 to 3 adds 2.3pp. Beyond 3, returns are flat or slightly negative (more connections spread across more relays, diluting the budget). Author recall is high at all levels — you can *find* most authors with 1 relay, but retrieving their *events* benefits from redundancy. Phase 1 assignment coverage actually decreases with higher RPU because the fixed connection budget is spread thinner.
-
-**Key real-world event verification findings:**
-
-1. **Coverage-optimal ≠ event-recall-optimal.** Greedy Set-Cover wins Phase 1 (assignment coverage) but ranks 7th of 14 in actual event recall (84.4% mean across 6 profiles at 7d, vs 92.4% for Streaming Coverage). At 365 days on fiatjaf: 16.3% event recall vs. MAB-UCB's 40.8%.
-
-2. **MAB-UCB is the best long-window algorithm.** Its exploration component isn't noise -- it discovers relays that happen to retain historical events. This outweighs the static optimizers that prioritize coverage density.
-
-3. **Welshman's `random()` factor is accidentally brilliant.** What looks like an anti-centralization quirk (``quality * (1 + log(weight)) * random()``) turns out to be empirically the best archival strategy among existing client algorithms. At 365d: 37.8% recall (best non-MAB, non-theoretical algorithm). The randomness spreads queries across more relays over time, accidentally discovering which ones retain old events.
-
-4. **Greedy Set-Cover degrades sharply.** 93.5% at 7d → 16.3% at 365d. It minimizes connections by concentrating on popular relays, but those relays don't necessarily retain old events. Algorithms that spread queries fare better long-term.
-
-5. **Aggregator results are surprisingly poor.** Primal achieves only 28.3% recall at 7 days and 0.9% at 3 years — worse than Popular+Random (damus + nos.lol + 2 random relays) at every window. This is unexpected for a relay that proxies many upstream relays, and may indicate a benchmark methodology limitation rather than a definitive conclusion about aggregators.
-
-6. **Author recall is more stable than event recall.** You can *find* most authors even at long windows (74-81% author recall at 365d), but you miss most of their posts. The disparity means relay retention policies are the binding constraint, not relay selection.
-
-### 8.3 NIP-66 Liveness Filtering
-
-**What this measures:** Does pre-filtering dead relays using NIP-66 monitor data improve benchmark results? [NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md) relay monitors (kind 30166/1066) and the [nostr.watch](https://api.nostr.watch) HTTP API publish relay liveness observations. We implemented a "liveness" filter that removes candidate relays not seen by any monitor, then re-ran all benchmarks to measure the impact.
-
-**Data sources:**
-- NIP-66 events from 3 source relays: ~1,007 relays with observations
-- nostr.watch `/v1/online` API: ~940 online relays
-- Union: ~1,036 unique "alive" relays (911 overlap between sources)
-- .onion relays and malformed URLs are preserved (cannot be validated)
-
-**Relay pool reduction:**
-
-| Profile | Follows | Unfiltered Relays | NIP-66 Relays | Reduction |
-|---------|---------|-------------------|---------------|-----------|
-| fiatjaf | 194 | 233 | 133 | 43% |
-| hodlbod | 442 | 487 | 252 | 48% |
-| jb55 | 943 | 729 | 296 | 59% |
-| ODELL | 1,774 | 1,201 | 437 | 64% |
-
-NIP-66 filtering removes 43–64% of candidate relays. Reduction scales with follow count: larger follow graphs include more obscure/dead relays.
-
-**Relay success rate (fraction of queried relays that respond):**
-
-| Profile | NIP-66 Filtered | Unfiltered | Lift |
-|---------|:-----------:|:----------:|:----:|
-| fiatjaf | 88–92% | 53–55% | +35 pp |
-| hodlbod | 82–83% | 45–46% | +37 pp |
-| jb55 | 82–83% | 35% | +48 pp |
-| ODELL | 76% | 30–31% | +46 pp |
-
-The remaining relays respond at 76–92% vs 30–55% unfiltered — a consistent doubling across all profiles and time windows.
-
-**Event recall impact (NIP-66 filtered minus unfiltered, in percentage points):**
-
-| Algorithm | 7d | 365d | 3yr |
-|-----------|:---:|:----:|:---:|
-| Greedy Set-Cover | -0.6 | +1.1 | +3.9 |
-| ILP Optimal | +0.4 | +1.8 | +3.8 |
-| MAB-UCB | +2.5 | +5.1 | +3.1 |
-| NDK Priority | +0.4 | +0.2 | +0.7 |
-| Welshman Stochastic | +2.1 | +8.6 | +4.4 |
-| Direct Mapping | +2.0 | +6.1 | +5.4 |
-
-*Average across 4 profiles (fiatjaf, hodlbod, jb55, ODELL). Positive = NIP-66 filter helps.*
-
-**Notable individual results:**
-- Welshman Stochastic on fiatjaf at 365d: **+26.3 pp** (42.96% vs 16.70%)
-- ILP Optimal on ODELL at 3yr: **+13.2 pp** (29.26% vs 16.02%)
-- Greedy Set-Cover on fiatjaf at 3yr: **+13.6 pp** (22.87% vs 9.25%)
-- MAB-UCB on ODELL at 365d: **+10.1 pp** (34.45% vs 24.33%)
-
-**Key NIP-66 filter findings:**
-
-1. **Relay pool halved with no recall loss at 7d.** Algorithms see essentially the same events with half the relays. The benefit is purely efficiency: fewer connections, less bandwidth, less latency.
-
-2. **At longer windows, filtering actively improves recall.** Dead relays waste limited connection budget. With a 20-relay cap, every dead relay means one fewer live relay that could return historical events. Average improvement: +1 to +9 pp at 365d, +1 to +5 pp at 3yr.
-
-3. **Stochastic algorithms benefit most.** Welshman Stochastic (+8.6 pp average at 365d) and MAB-UCB (+5.1 pp) are most sensitive to dead relays polluting their candidate pool. Their random exploration is more likely to "waste" a pick on a dead relay.
-
-4. **Deterministic algorithms benefit least.** Greedy Set-Cover and NDK Priority already concentrate on popular relays (which tend to be alive), so they're less affected by dead relays in the candidate pool.
-
-5. **Benefit scales with follow count.** ODELL (1,774 follows, 64% pool reduction) shows the largest absolute improvements. Hypothesis: larger follow graphs → more diverse relays → more dead relays → bigger filter benefit. Testing across follow-count buckets (100–3,000+) is planned.
-
-6. **No algorithm is meaningfully harmed.** The worst observed delta is -3.0 pp (Welshman Stochastic on hodlbod at 3yr), within normal stochastic variance for a single-seed run. Deterministic algorithms show essentially zero loss at 7d.
-
-**Practical recommendation:** Clients should consume NIP-66 monitor data (or the nostr.watch API) to pre-filter dead relays before running relay selection. The implementation cost is minimal (one additional fetch at startup, cached for hours), the relay pool shrinks by ~50%, connection success rates double, and long-window event recall improves by 1–9 pp on average.
-
 ---
 
-## 9. Known Limitations
-
-### Benchmark Limitation: NIP-42 Auth-Required Relays
-
-The benchmark tool does not implement NIP-42 authentication. Approximately 15-20 relays in the candidate set require NIP-42 auth before accepting read requests, and currently return zero events. These include the nostr1.com relay cluster (david, nortis, auth, tigs), creatr.nostr.wine, aggr.nostr.land, pantry.zap.cooking, and others.
-
-Additionally, some relays have structural barriers beyond basic auth:
-- Personalized filter relays (filter.nostr.wine/npub...) only serve the relay owner
-- Web of Trust relays require membership in a WoT graph
-- Some relays disable reads entirely or don't store kind 1 events
-
-Rate limiting was also observed: wss://wot.tamby.mjex.me returned 1,648 rate-limit messages across benchmark runs, and wss://nostr.rikmeijer.nl hit its 100-subscription cap. Running concurrent benchmarks may exacerbate these limits.
-
-**Impact**: Event recall numbers are conservative lower bounds. Adding NIP-42 support would unlock ~15-20 additional relays and likely improve recall across all algorithms. The relative ranking between algorithms is unlikely to change significantly since all algorithms are equally affected.
-
----
-
-## 10. Observations
-
-Based on patterns observed across all implementations and benchmark results:
-
-1. **Algorithm choice depends on use case.** MAB-UCB dominates at short-to-medium windows (79% mean at 14d, 63% at 30d across 5–6 profiles) and remains best at archival windows (32% at 1yr, 24% at 3yr). At longer windows the best algorithm varies by profile: MAB for hodlbod (53% at 1yr), Spectral for Derek Ross (37%), Direct Mapping for ODELL (35%), Streaming for jb55 (42%). Greedy Set-Cover (used by most clients) ranks 7th–10th at every window — it optimizes assignment coverage, not event retrieval. The 90d window is an inflection point where relay retention drops sharply; most algorithms lose 40–60% of their 14d recall by then.
-
-2. **The sweet spot is 2–3 relays per author.** 7 of 9 implementations default to 2 or 3 (see Section 2.3), and empirical testing confirms this: for Greedy on fiatjaf at 7d, going from 1 to 2 relays per author adds 5.5pp of event recall (86% to 92%), 2 to 3 adds 2.3pp (92% to 94%), and beyond 3 returns are flat or slightly negative as the fixed connection budget thins out.
-
-3. **Track relay health — and use NIP-66 data.** At minimum, implement binary online/offline tracking with backoff. Ideally, use tiered error thresholds (Welshman) or penalty timers (Gossip) to avoid repeatedly connecting to flaky relays. [NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md) (kind 30166) and [nostr.watch](https://github.com/sandwichfarm/nostr-watch) publish network-wide relay liveness and performance data (RTT, uptime, supported NIPs) that clients can consume to pre-filter dead relays — no analyzed client uses this yet. Our testing (Section 8.3) shows this halves the candidate relay pool, doubles connection success rates (30–55% → 76–92%), and improves long-window event recall by 1–9 pp on average, with zero recall loss at short windows.
-
-4. **Configure multiple indexer relays.** Relying on a single indexer (e.g., only purplepag.es) is a single point of failure. Amethyst's 5-indexer approach is the most resilient.
-
-5. **Handle misconfigured kind 10002.** At minimum, filter out known-bad relay entries. Blocklists for aggregator relays (feeds.nostr.band, filter.nostr.wine) and special-purpose relays prevent wasted connections.
-
-6. **Make outbox debuggable — but go beyond assignment coverage.** noStrudel's coverage debugger is the only client that exposes outbox internals (coverage %, orphaned users, per-relay assignment, color-coded health). But it only shows the academic view — the on-paper relay mapping. No client shows real-world event recall: "did I actually get the posts?" Our central finding is that these two views diverge sharply (85% assignment coverage can mean 16% event recall at 1yr). Opportunities for future work: per-author event delivery tracking ("am I seeing all events from this author?"), relay response/efficiency rates (events delivered per connection), orphan root-cause analysis (missing kind 10002 vs relays offline vs filtered out), and relay list staleness indicators.
-
-7. **Stochastic exploration is the best archival strategy.** Welshman's `random()` factor isn't just anti-centralization — it discovers relays that retain old events and that static optimizers miss. MAB-UCB's exploration-exploitation achieves the same effect. Pure greedy concentrates on mega-relays that may prune history.
-
-8. **Support NIP-17 DM relays.** Only 4 of 10 mature implementations fully route DMs via kind 10050 relays. Kind 10050 is straightforward to implement and provides meaningful privacy benefits for direct messaging.
-
-9. **Aggregator results are surprisingly poor.** Primal reaches 28% recall at 7d and <1% at 3yr — worse than Popular+Random (damus + nos.lol + 2 random relays) at every window. This is unexpected: an aggregator that proxies tens if not hundreds of relays should in theory outperform 4 random connections. This may indicate a limitation in the benchmark methodology rather than a real-world indictment of aggregators.
-
----
-
-## Appendix: Source Code References
+## Appendix C: Source Code References
 
 ### Per-Client Analysis Files
-- `analysis/clients/gossip.md` (645 lines)
-- `analysis/clients/welshman-coracle.md` (713 lines)
-- `analysis/clients/amethyst.md` (670 lines)
-- `analysis/clients/ndk-applesauce-nostrudel.md` (852 lines)
-- `analysis/clients/nostur-yakihonne-notedeck.md` (615 lines)
-- `analysis/clients/rust-nostr-voyage-nosotros-wisp-shopstr.md` (509 lines)
+- [`analysis/clients/gossip.md`](analysis/clients/gossip.md)
+- [`analysis/clients/welshman-coracle.md`](analysis/clients/welshman-coracle.md)
+- [`analysis/clients/amethyst.md`](analysis/clients/amethyst.md)
+- [`analysis/clients/ndk-applesauce-nostrudel.md`](analysis/clients/ndk-applesauce-nostrudel.md)
+- [`analysis/clients/nostur-yakihonne-notedeck.md`](analysis/clients/nostur-yakihonne-notedeck.md)
+- [`analysis/clients/rust-nostr-voyage-nosotros-wisp-shopstr.md`](analysis/clients/rust-nostr-voyage-nosotros-wisp-shopstr.md)
 
 ### Cross-Cutting Topic Analyses
-- `analysis/topics/implementation-approaches.md`
-- `analysis/topics/relay-selection-algorithms.md`
-- `analysis/topics/challenges-and-tradeoffs.md`
-- `analysis/topics/outbox-as-heuristic.md`
-- `analysis/topics/bootstrapping-and-fallbacks.md`
-- `analysis/topics/effectiveness-measurement.md`
+- [`analysis/topics/implementation-approaches.md`](analysis/topics/implementation-approaches.md)
+- [`analysis/topics/relay-selection-algorithms.md`](analysis/topics/relay-selection-algorithms.md)
+- [`analysis/topics/challenges-and-tradeoffs.md`](analysis/topics/challenges-and-tradeoffs.md)
+- [`analysis/topics/outbox-as-heuristic.md`](analysis/topics/outbox-as-heuristic.md)
+- [`analysis/topics/bootstrapping-and-fallbacks.md`](analysis/topics/bootstrapping-and-fallbacks.md)
+- [`analysis/topics/effectiveness-measurement.md`](analysis/topics/effectiveness-measurement.md)
 
-### Key Code Paths (Most Significant Per Project)
+### Benchmark Algorithms
 
-| Project | Key File | Function |
-|---------|----------|----------|
-| Gossip | `gossip-lib/src/relay_picker.rs` | `RelayPicker::pick()` (greedy set-cover) |
-| Welshman | `packages/router/src/index.ts` | `RouterScenario.getUrls()` (scoring + selection) |
-| Amethyst | `OutboxRelayLoader.kt` | `authorsPerRelay()` (reactive flow) |
-| NDK | `core/src/outbox/index.ts` | `chooseRelayCombinationForPubkeys()` |
-| Applesauce | `packages/core/src/helpers/relay-selection.ts` | `selectOptimalRelays()` (set-cover) |
-| Nostur | `NostrEssentials/Outbox/Outbox.swift` | `createRequestPlan()` / `createWritePlan()` |
-| rust-nostr | `sdk/src/client/gossip/resolver.rs` | `break_down_filter()` (filter decomposition) |
-| Voyage | `data/provider/RelayProvider.kt` | `getObserveRelays()` (multi-phase) |
-| Wisp | `relay/RelayScoreBoard.kt` | `recompute()` (greedy set-cover) |
-| Nosotros | `hooks/subscriptions/subscribeOutbox.ts` | `subscribeOutbox()` (RxJS pipeline) |
+All 14 implementations in [`bench/src/algorithms/`](bench/src/algorithms/):
 
-### Benchmark Algorithm Implementations
-
-All 14 algorithms are in [`bench/src/algorithms/`](bench/src/algorithms/):
-
-| Algorithm | Source | Inspired By |
-|-----------|--------|-------------|
+| Algorithm | Source | Based On |
+|-----------|--------|----------|
 | Greedy Set-Cover | [`greedy-set-cover.ts`](bench/src/algorithms/greedy-set-cover.ts) | Gossip, Applesauce, Wisp |
 | Priority-Based | [`priority-based.ts`](bench/src/algorithms/priority-based.ts) | NDK |
 | Weighted Stochastic | [`weighted-stochastic.ts`](bench/src/algorithms/weighted-stochastic.ts) | Welshman/Coracle |
@@ -833,11 +346,11 @@ All 14 algorithms are in [`bench/src/algorithms/`](bench/src/algorithms/):
 | Direct Mapping | [`direct-mapping.ts`](bench/src/algorithms/direct-mapping.ts) | Amethyst (feeds) |
 | Primal Aggregator | [`primal-baseline.ts`](bench/src/algorithms/primal-baseline.ts) | Baseline |
 | Popular+Random | [`popular-plus-random.ts`](bench/src/algorithms/popular-plus-random.ts) | Baseline |
-| ILP Optimal | [`ilp-optimal.ts`](bench/src/algorithms/ilp-optimal.ts) | CS: branch-and-bound |
-| Stochastic Greedy | [`stochastic-greedy.ts`](bench/src/algorithms/stochastic-greedy.ts) | CS: lazier-than-lazy greedy |
-| MAB-UCB | [`mab-relay.ts`](bench/src/algorithms/mab-relay.ts) | CS: combinatorial bandits |
-| Streaming Coverage | [`streaming-coverage.ts`](bench/src/algorithms/streaming-coverage.ts) | CS: streaming submodular max |
-| Bipartite Matching | [`bipartite-matching.ts`](bench/src/algorithms/bipartite-matching.ts) | CS: weighted matching |
-| Spectral Clustering | [`spectral-clustering.ts`](bench/src/algorithms/spectral-clustering.ts) | CS: community detection |
+| ILP Optimal | [`ilp-optimal.ts`](bench/src/algorithms/ilp-optimal.ts) | Maximum coverage (exact) |
+| Stochastic Greedy | [`stochastic-greedy.ts`](bench/src/algorithms/stochastic-greedy.ts) | Lazier-than-lazy greedy |
+| MAB-UCB | [`mab-relay.ts`](bench/src/algorithms/mab-relay.ts) | Combinatorial bandits |
+| Streaming Coverage | [`streaming-coverage.ts`](bench/src/algorithms/streaming-coverage.ts) | Streaming submodular max |
+| Bipartite Matching | [`bipartite-matching.ts`](bench/src/algorithms/bipartite-matching.ts) | Weighted matching |
+| Spectral Clustering | [`spectral-clustering.ts`](bench/src/algorithms/spectral-clustering.ts) | Community detection |
 
-Phase 2 verification: [`bench/src/phase2/`](bench/src/phase2/) (baseline construction, event verification, reporting).
+Phase 2 verification: [`bench/src/phase2/`](bench/src/phase2/)
