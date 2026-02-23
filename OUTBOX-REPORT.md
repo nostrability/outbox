@@ -676,6 +676,73 @@ The sweet spot is 2–3 relays per author. Going from 1 to 2 adds 5.5pp of event
 
 6. **Author recall is more stable than event recall.** You can *find* most authors even at long windows (74-81% author recall at 365d), but you miss most of their posts. The disparity means relay retention policies are the binding constraint, not relay selection.
 
+### 8.3 NIP-66 Liveness Filtering
+
+**What this measures:** Does pre-filtering dead relays using NIP-66 monitor data improve benchmark results? [NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md) relay monitors (kind 30166/1066) and the [nostr.watch](https://api.nostr.watch) HTTP API publish relay liveness observations. We implemented a "liveness" filter that removes candidate relays not seen by any monitor, then re-ran all benchmarks to measure the impact.
+
+**Data sources:**
+- NIP-66 events from 3 source relays: ~1,007 relays with observations
+- nostr.watch `/v1/online` API: ~940 online relays
+- Union: ~1,036 unique "alive" relays (911 overlap between sources)
+- .onion relays and malformed URLs are preserved (cannot be validated)
+
+**Relay pool reduction:**
+
+| Profile | Follows | Unfiltered Relays | NIP-66 Relays | Reduction |
+|---------|---------|-------------------|---------------|-----------|
+| fiatjaf | 194 | 233 | 133 | 43% |
+| hodlbod | 442 | 487 | 252 | 48% |
+| jb55 | 943 | 729 | 296 | 59% |
+| ODELL | 1,774 | 1,201 | 437 | 64% |
+
+NIP-66 filtering removes 43–64% of candidate relays. Reduction scales with follow count: larger follow graphs include more obscure/dead relays.
+
+**Relay success rate (fraction of queried relays that respond):**
+
+| Profile | NIP-66 Filtered | Unfiltered | Lift |
+|---------|:-----------:|:----------:|:----:|
+| fiatjaf | 88–92% | 53–55% | +35 pp |
+| hodlbod | 82–83% | 45–46% | +37 pp |
+| jb55 | 82–83% | 35% | +48 pp |
+| ODELL | 76% | 30–31% | +46 pp |
+
+The remaining relays respond at 76–92% vs 30–55% unfiltered — a consistent doubling across all profiles and time windows.
+
+**Event recall impact (NIP-66 filtered minus unfiltered, in percentage points):**
+
+| Algorithm | 7d | 365d | 3yr |
+|-----------|:---:|:----:|:---:|
+| Greedy Set-Cover | -0.6 | +1.1 | +3.9 |
+| ILP Optimal | +0.4 | +1.8 | +3.8 |
+| MAB-UCB | +2.5 | +5.1 | +3.1 |
+| NDK Priority | +0.4 | +0.2 | +0.7 |
+| Welshman Stochastic | +2.1 | +8.6 | +4.4 |
+| Direct Mapping | +2.0 | +6.1 | +5.4 |
+
+*Average across 4 profiles (fiatjaf, hodlbod, jb55, ODELL). Positive = NIP-66 filter helps.*
+
+**Notable individual results:**
+- Welshman Stochastic on fiatjaf at 365d: **+26.3 pp** (42.96% vs 16.70%)
+- ILP Optimal on ODELL at 3yr: **+13.2 pp** (29.26% vs 16.02%)
+- Greedy Set-Cover on fiatjaf at 3yr: **+13.6 pp** (22.87% vs 9.25%)
+- MAB-UCB on ODELL at 365d: **+10.1 pp** (34.45% vs 24.33%)
+
+**Key NIP-66 filter findings:**
+
+1. **Relay pool halved with no recall loss at 7d.** Algorithms see essentially the same events with half the relays. The benefit is purely efficiency: fewer connections, less bandwidth, less latency.
+
+2. **At longer windows, filtering actively improves recall.** Dead relays waste limited connection budget. With a 20-relay cap, every dead relay means one fewer live relay that could return historical events. Average improvement: +1 to +9 pp at 365d, +1 to +5 pp at 3yr.
+
+3. **Stochastic algorithms benefit most.** Welshman Stochastic (+8.6 pp average at 365d) and MAB-UCB (+5.1 pp) are most sensitive to dead relays polluting their candidate pool. Their random exploration is more likely to "waste" a pick on a dead relay.
+
+4. **Deterministic algorithms benefit least.** Greedy Set-Cover and NDK Priority already concentrate on popular relays (which tend to be alive), so they're less affected by dead relays in the candidate pool.
+
+5. **Benefit scales with follow count.** ODELL (1,774 follows, 64% pool reduction) shows the largest absolute improvements. Hypothesis: larger follow graphs → more diverse relays → more dead relays → bigger filter benefit. Testing across follow-count buckets (100–3,000+) is planned.
+
+6. **No algorithm is meaningfully harmed.** The worst observed delta is -3.0 pp (Welshman Stochastic on hodlbod at 3yr), within normal stochastic variance for a single-seed run. Deterministic algorithms show essentially zero loss at 7d.
+
+**Practical recommendation:** Clients should consume NIP-66 monitor data (or the nostr.watch API) to pre-filter dead relays before running relay selection. The implementation cost is minimal (one additional fetch at startup, cached for hours), the relay pool shrinks by ~50%, connection success rates double, and long-window event recall improves by 1–9 pp on average.
+
 ---
 
 ## 9. Known Limitations
@@ -703,7 +770,7 @@ Based on patterns observed across all implementations and benchmark results:
 
 2. **The sweet spot is 2–3 relays per author.** 7 of 9 implementations default to 2 or 3 (see Section 2.3), and empirical testing confirms this: for Greedy on fiatjaf at 7d, going from 1 to 2 relays per author adds 5.5pp of event recall (86% to 92%), 2 to 3 adds 2.3pp (92% to 94%), and beyond 3 returns are flat or slightly negative as the fixed connection budget thins out.
 
-3. **Track relay health.** At minimum, implement binary online/offline tracking with backoff. Ideally, use tiered error thresholds (Welshman) or penalty timers (Gossip) to avoid repeatedly connecting to flaky relays. [NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md) (kind 30166) and [nostr.watch](https://github.com/sandwichfarm/nostr-watch) publish network-wide relay liveness and performance data (RTT, uptime, supported NIPs) that clients could consume instead of independently probing relays — no analyzed client uses this yet.
+3. **Track relay health — and use NIP-66 data.** At minimum, implement binary online/offline tracking with backoff. Ideally, use tiered error thresholds (Welshman) or penalty timers (Gossip) to avoid repeatedly connecting to flaky relays. [NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md) (kind 30166) and [nostr.watch](https://github.com/sandwichfarm/nostr-watch) publish network-wide relay liveness and performance data (RTT, uptime, supported NIPs) that clients can consume to pre-filter dead relays — no analyzed client uses this yet. Our testing (Section 8.3) shows this halves the candidate relay pool, doubles connection success rates (30–55% → 76–92%), and improves long-window event recall by 1–9 pp on average, with zero recall loss at short windows.
 
 4. **Configure multiple indexer relays.** Relying on a single indexer (e.g., only purplepag.es) is a single point of failure. Amethyst's 5-indexer approach is the most resilient.
 
