@@ -1,4 +1,4 @@
-# Outbox Implementation Analysis: rust-nostr, Voyage, Nosotros, Wisp, Shopstr
+# Outbox Implementation: rust-nostr, Voyage, Nosotros, Wisp, Shopstr
 
 ## Summary
 
@@ -16,19 +16,15 @@
 
 **Repository path:** `/tmp/outbox-research/rust-nostr`
 
-### 1.1 Architecture Overview
-
-rust-nostr implements outbox as a dedicated `gossip` subsystem with a trait-based storage abstraction (`NostrGossip`), a filter decomposition engine (`GossipRelayResolver`), and a concurrency-safe semaphore system (`GossipSemaphore`).
-
 Key directories:
 - `gossip/nostr-gossip/src/lib.rs` -- trait definition
 - `gossip/nostr-gossip-memory/src/store.rs` -- in-memory LRU store
 - `gossip/nostr-gossip-sqlite/src/store.rs` -- persistent SQLite store
 - `sdk/src/client/gossip/` -- resolver, updater, semaphore
 
-### 1.2 Gossip Data Model (Bitflags)
+### Gossip Data Model (Bitflags)
 
-Each pubkey-relay pair stores a bitflag with five flags:
+Each pubkey-relay pair stores a bitflag:
 
 **File:** `gossip/nostr-gossip/src/flags.rs`
 ```rust
@@ -39,9 +35,9 @@ pub const HINT: Self = Self(1 << 3);           // 8  - from `p` tag relay hints
 pub const RECEIVED: Self = Self(1 << 4);       // 16 - relay that delivered the event
 ```
 
-The in-memory store tracks per relay: `bitflags`, `received_events` (count), and `last_received_event` (timestamp). Relays are sorted by `received_events DESC, last_received_event DESC` when selecting best relays.
+Per relay also tracks: `received_events` (count) and `last_received_event` (timestamp). Relays sorted by `received_events DESC, last_received_event DESC`.
 
-### 1.3 Relay Selection Defaults
+### Relay Selection Defaults
 
 **File:** `sdk/src/client/builder.rs`
 ```rust
@@ -58,50 +54,33 @@ impl Default for GossipRelayLimits {
 }
 ```
 
-### 1.4 Filter Decomposition (Break Down Filters)
+### Filter Decomposition
 
-The `GossipRelayResolver::break_down_filter()` method (`sdk/src/client/gossip/resolver.rs`) splits a nostr filter based on which public keys are involved:
+**File:** `sdk/src/client/gossip/resolver.rs`
 
-- **`authors` only** (outbox pattern): Maps each author to their WRITE relays + hints + most-received relays. Produces per-relay filters with the subset of authors.
-- **`#p` tags only** (inbox pattern): Maps each tagged pubkey to their READ relays + hints + most-received relays.
-- **Both `authors` and `#p`**: Union of all pubkeys, fetches ALL relay types, sends the full filter to each.
-- **Neither**: Falls back to the client's configured READ relays (`BrokenDownFilters::Other`).
+`break_down_filter()` splits a nostr filter based on pubkey fields:
+- **`authors` only** (outbox): maps each author to WRITE relays + hints + most-received. Produces per-relay filters with author subsets.
+- **`#p` tags only** (inbox): maps each tagged pubkey to READ relays + hints + most-received.
+- **Both `authors` and `#p`**: union of all pubkeys, fetches ALL relay types, sends full filter to each.
+- **Neither**: falls back to client's configured READ relays.
+- Orphan pubkeys (no known relays) fall back to READ relays.
 
-Orphan filters (pubkeys with no known relays) fall back to READ relays.
-
-### 1.5 Event Routing (send_event)
+### Event Routing
 
 **File:** `sdk/src/client/api/send_event.rs`
 
-The `gossip_prepare_urls()` function determines where to send an event:
+`gossip_prepare_urls()` determines where to send:
+- **GiftWrap/NIP-17**: only `PrivateMessage` relays of tagged pubkeys
+- **Regular events**: author's WRITE + hints + most-received, PLUS `#p`-tagged users' READ + hints + most-received, PLUS client's own WRITE relays
+- **Contact list events**: only author's outbox relays (no inbox routing for p-tags)
 
-1. For **GiftWrap/NIP-17** events: Only sends to `PrivateMessage` relays of the tagged pubkeys.
-2. For **regular events**: Combines the author's WRITE relays + hints + most-received relays, PLUS the `#p`-tagged users' READ relays + hints + most-received, PLUS the client's own WRITE relays.
-3. For **contact list** events: Only uses the author's outbox relays (no inbox routing for p-tags).
+Builder supports `.broadcast()`, `.to(urls)`, `.to_nip17()`, `.to_nip65()` overrides.
 
-The builder pattern supports `.broadcast()`, `.to(urls)`, `.to_nip17()`, and `.to_nip65()` overrides.
+### Freshness, Storage, Concurrency
 
-### 1.6 Gossip Data Freshness (Updater)
-
-**File:** `sdk/src/client/gossip/updater.rs`
-
-Before any gossip operation, `ensure_gossip_public_keys_fresh()` checks each pubkey's status (Missing/Outdated/Updated). Outdated detection uses a TTL. The updater:
-1. Acquires per-pubkey semaphore permits (deadlock-free via sorted BTreeSet ordering)
-2. Syncs via negentropy from DISCOVERY or READ relays
-3. Falls back to REQ-based fetching from failed relays
-4. Marks missing pubkeys as checked to avoid repeated fetches
-
-### 1.7 Persistent Storage (SQLite - v0.36+)
-
-**File:** `gossip/nostr-gossip-sqlite/src/store.rs`
-
-The SQLite store uses three tables: `public_keys`, `relays`, and `relays_per_user` (with bitflags, received_events, last_received_event). There is also a `lists` table tracking `last_checked_at` per pubkey per list kind. This enables persistent gossip graphs across restarts.
-
-### 1.8 Concurrency Control
-
-**File:** `sdk/src/client/gossip/semaphore.rs`
-
-`GossipSemaphore` uses per-pubkey tokio semaphores to ensure only one gossip update runs per pubkey at a time. Includes RAII-based cleanup and stress tests up to 10,000 concurrent requests.
+- **Updater** (`sdk/src/client/gossip/updater.rs`): Before any gossip operation, checks each pubkey's status (Missing/Outdated/Updated) via TTL. Syncs via negentropy from DISCOVERY or READ relays, falls back to REQ. Marks missing pubkeys as checked.
+- **SQLite** (`gossip/nostr-gossip-sqlite/src/store.rs`): Three tables: `public_keys`, `relays`, `relays_per_user` (bitflags, received_events, last_received_event). `lists` table tracks `last_checked_at` per pubkey. Persists gossip graph across restarts.
+- **Semaphore** (`sdk/src/client/gossip/semaphore.rs`): Per-pubkey tokio semaphores, RAII cleanup, stress tested to 10k concurrent requests.
 
 ---
 
@@ -109,29 +88,11 @@ The SQLite store uses three tables: `public_keys`, `relays`, and `relays_per_use
 
 **Repository path:** `/tmp/outbox-research/voyage`
 
-### 2.1 Architecture Overview
+Android Kotlin client using Room (SQLite). Outbox centers on `RelayProvider`, combining NIP-65 data from `Nip65Entity` table with event-relay tracking via `EventRelayAuthorView`.
 
-Voyage is an Android Kotlin client using Room (SQLite) for persistence. Its outbox implementation centers on `RelayProvider`, which combines NIP-65 data from the `Nip65Entity` table with event-relay tracking via `EventRelayAuthorView`.
+### Kind 10002 and Constants
 
-### 2.2 Kind 10002 Handling
-
-**File:** `app/src/main/java/com/dluvian/voyage/data/room/entity/lists/Nip65Entity.kt`
-```kotlin
-@Entity(tableName = "nip65", primaryKeys = ["pubkey", "url"])
-data class Nip65Entity(
-    val pubkey: PubkeyHex,
-    @Embedded val nip65Relay: Nip65Relay,
-    val createdAt: Long,
-)
-```
-
-**File:** `app/src/main/java/com/dluvian/voyage/data/room/dao/Nip65Dao.kt`
-
-Provides queries for read relays, write relays, friends' write relays, popular relays, and filtering known pubkeys.
-
-Upsert logic (`Nip65UpsertDao`) only accepts events newer than the existing `createdAt` per pubkey, then deletes outdated entries.
-
-### 2.3 Constants
+**File:** `app/src/main/java/com/dluvian/voyage/data/room/entity/lists/Nip65Entity.kt` -- Room entity with `(pubkey, url)` primary key, `createdAt` for upsert dedup.
 
 **File:** `app/src/main/java/com/dluvian/voyage/core/Constants.kt`
 ```kotlin
@@ -141,31 +102,18 @@ const val MAX_AUTOPILOT_RELAYS = 25
 const val MAX_KEYS = 750
 ```
 
-### 2.4 Relay Selection - "Autopilot" Algorithm
+### Relay Selection -- "Autopilot" Algorithm
 
 **File:** `app/src/main/java/com/dluvian/voyage/data/provider/RelayProvider.kt`
 
-The `getObserveRelays(selection: PubkeySelection)` method implements a multi-phase relay selection:
+Four phases in `getObserveRelays(selection: PubkeySelection)`:
 
-**Phase 1: NIP-65 write relay coverage**
-Groups followed users' write relays by URL, then sorts by:
-1. Not marked as Spam
-2. Appears in event relays (most-used)
-3. Already connected
-4. Not disconnected
+1. **On-paper mapping (NIP-65 write relays):** Groups followed users' write relays by URL, sorts by: not-spam > appears in event relays > already connected > not disconnected. Takes top 25 relays, maps covered pubkeys.
+2. **Event retrieval (most-used relays):** Uses `EventRelayAuthorView` (tracks which relay delivered events from which author). Sorted by `relayCount DESC` + connected status. Adds authors to existing or new relays up to limit.
+3. **Fallback:** Uncovered pubkeys assigned to READ relays + already-selected relays.
+4. **Redundancy:** Pubkeys mapped to only one relay get added to READ relays.
 
-Takes the top `MAX_AUTOPILOT_RELAYS` (25) relays. For each, maps the pubkeys it covers (excluding already-covered ones).
-
-**Phase 2: Event relay coverage (most-used relays)**
-Uses `EventRelayAuthorView` (tracking which relay delivered events from which author). Sorts by `relayCount` DESC and connected status. Adds authors to already-selected relays or new relays up to the limit.
-
-**Phase 3: Fallback**
-Any uncovered pubkeys get assigned to READ relays plus already-selected relays.
-
-**Phase 4: Redundancy**
-Pubkeys mapped to only one relay get added to READ relays for redundancy.
-
-### 2.5 Publish Routing
+### Publish Routing
 
 ```kotlin
 suspend fun getPublishRelays(publishTo: List<PubkeyHex>): List<RelayUrl> {
@@ -179,13 +127,9 @@ suspend fun getPublishRelays(publishTo: List<PubkeyHex>): List<RelayUrl> {
 }
 ```
 
-When publishing to specific users, Voyage reads those users' READ relays (inbox), picks up to `MAX_RELAYS_PER_PUBKEY` (2) per user preferring connected relays, and adds the user's own write relays.
+Reads tagged users' READ relays (inbox), picks up to 2 per user preferring connected relays, adds user's own write relays.
 
-### 2.6 Lazy Discovery
-
-**File:** `app/src/main/java/com/dluvian/voyage/data/nostr/LazyNostrSubscriber.kt`
-
-`lazySubNip65s()` identifies friends with missing NIP-65 data, queries their write relays for kind 10002, and also fetches the newest NIP-65 updates for already-known pubkeys.
+`lazySubNip65s()` (`LazyNostrSubscriber.kt`) identifies friends with missing NIP-65 data and fetches kind 10002 from their write relays.
 
 ---
 
@@ -193,115 +137,36 @@ When publishing to specific users, Voyage reads those users' READ relays (inbox)
 
 **Repository path:** `/tmp/outbox-research/nosotros`
 
-### 3.1 Architecture Overview
+TypeScript/React client using RxJS observables for relay subscription routing.
 
-Nosotros is a TypeScript/React client using RxJS observables for relay subscription routing. The outbox implementation uses an observable pipeline that dynamically resolves each author's relay list before subscribing.
+### Relay List Parsing and Selection
 
-### 3.2 Relay List Parsing
-
-**File:** `src/hooks/parsers/parseRelayList.ts`
-```typescript
-export const READ = 1 << 0   // 1
-export const WRITE = 1 << 1  // 2
-
-export function parseRelayList(event: Pick<NostrEvent, 'pubkey' | 'tags'>): Metadata {
-    // Parses 'r' and 'relay' tags from kind 10002
-    // Groups by URL, OR-combines permissions
-    // No marker = READ | WRITE
-}
-```
-
-### 3.3 Relay Selection
+**File:** `src/hooks/parsers/parseRelayList.ts` -- Bitflag permissions (`READ = 1`, `WRITE = 2`). Parses `r` and `relay` tags from kind 10002, groups by URL, OR-combines permissions. No marker = READ | WRITE.
 
 **File:** `src/hooks/parsers/selectRelays.ts`
-```typescript
-export function selectRelays(data: UserRelay[], ctx: NostrContext, stats?: Record<string, RelayStatsDB>) {
-  return data
-    .filter((data) => !pool.blacklisted?.has(data.relay))
-    .filter((data) => !RELAY_SELECTION_IGNORE.includes(data.relay))
-    .filter((data) => !ctx.ignoreRelays?.includes(data.relay))
-    .filter((data) => data.relay.startsWith('wss://'))
-    .filter((data) => {
-      return ctx.permission !== undefined ? !!(data.permission & ctx.permission) || !data.permission : true
-    })
-    .toSorted((a, b) => {
-      const events1 = stats?.[a.relay]?.events || 0
-      const events2 = stats?.[b.relay]?.events || 0
-      return events2 - events1  // Sort by events DESC (most-used first)
-    })
-    .slice(0, ctx.maxRelaysPerUser || 3)
-}
-```
 
-Key behaviors:
-- Filters out blacklisted, ignored, and non-wss relays
-- Filters by permission (READ for inbox queries, WRITE for outbox queries)
-- Sorts by relay stats event count (most events first)
-- Slices to `maxRelaysPerUser` (default: 3, configurable 1-14 in settings)
+`selectRelays()` pipeline: filter blacklisted/ignored/non-wss relays -> filter by permission (READ for inbox, WRITE for outbox) -> sort by relay stats event count DESC -> slice to `maxRelaysPerUser` (default 3, configurable 1-14).
 
-### 3.4 Outbox Subscription (RxJS Observable Pattern)
+### Outbox Subscription (RxJS Observable)
 
 **File:** `src/hooks/subscriptions/subscribeOutbox.ts`
 
-The `subscribeOutbox()` function is the core of Nosotros's outbox model. It splits a nostr filter by field type:
+`subscribeOutbox()` splits a nostr filter by field type:
+- **`authors`**: fetches each author's relay list (tanstack-query with batching), selects WRITE relays, emits `[relay, { ...filter, authors: [pubkey] }]` tuples
+- **`#p` / `#P`**: same pipeline but selects READ relays (inbox)
+- **`ids`, `#e`, `#E`, `#a`, `#A`**: looks up relay hints, resolves hinted author's relay list
+- **No pubkey fields**: returns `EMPTY`
+- Authors without relay list get FALLBACK_RELAYS
 
-- **`authors` field**: For each author, fetches their relay list (via tanstack-query with batching), selects WRITE relays using `selectRelays()`, and emits `[relay, { ...filter, authors: [pubkey] }]` tuples.
-- **`#p` / `#P` fields**: Same pipeline but selects READ relays (inbox).
-- **`ids`, `#e`, `#E`, `#a`, `#A` fields**: Looks up relay hints for each ID, resolves the hinted author's relay list, selects READ or WRITE relays accordingly.
-- **No pubkey fields**: Returns `EMPTY` (no outbox routing needed).
+Subscription builder merges three sources: outbox-resolved pairs, static relay list, relay hints (capped at 4).
 
-If an author has no relay list, FALLBACK_RELAYS are used.
+### Publish Routing
 
-### 3.5 Relay Filters as Observables
+`subscribeEventRelays()` (`subscribeOutbox.ts`) resolves author's WRITE relays and each mentioned user's READ relays via the same observable pipeline.
 
-**File:** `src/core/NostrSubscriptionBuilder.ts`
-```typescript
-this.relayFilters = from(options.relayFilters || EMPTY).pipe(
-  mergeWith(this.filter ? relaysToRelayFilters(this.relays, this.filter) : EMPTY),
-  mergeWith(
-    hintsToRelayFilters(this.filter, this.relayHints)
-      .filter((x) => !this.relays.includes(x[0]))
-      .slice(0, 4),  // Max 4 hint relays
-  ),
-)
-```
+### Settings and Storage
 
-The subscription builder merges three relay sources:
-1. Outbox-resolved relay-filter pairs (from `subscribeOutbox`)
-2. Static relay list (user's configured relays)
-3. Relay hints (capped at 4)
-
-### 3.6 Settings
-
-**File:** `src/atoms/settings.atoms.ts`
-```typescript
-maxRelaysPerUser: 3,  // default, configurable 1-14
-```
-
-### 3.7 Database Schema
-
-**File:** `src/db/sqlite/sqlite.schemas.ts`
-
-No dedicated `person_relay` table. Instead:
-- `seen` table tracks `(eventId, relay, created_at)` -- which relay delivered which event
-- `relayStats` table stores per-relay statistics (events count, connects, etc.)
-- `nip05` table caches NIP-05 verification results including relay lists
-- Relay lists are stored as kind 10002 events in the `events` table and parsed on demand
-
-### 3.8 Publish Routing
-
-**File:** `src/hooks/subscriptions/subscribeOutbox.ts`
-```typescript
-export function subscribeEventRelays(event: UnsignedEvent, ctx: NostrContext) {
-  const owner = subscribeAuthorsRelayList([event.pubkey], { ...ctx, permission: WRITE })
-  const mentions = from(event.tags.filter(isAuthorTag).map((tag) => tag[1])).pipe(
-    mergeMap((pubkey) => subscribeAuthorsRelayList([pubkey], { ...ctx, permission: READ })),
-  )
-  return merge(owner, mentions).pipe(distinct(), toArray(), mergeMap(identity))
-}
-```
-
-When publishing, it resolves the author's WRITE relays and each mentioned user's READ relays.
+`maxRelaysPerUser`: 3 (default, configurable 1-14). `seen` table tracks `(eventId, relay, created_at)`. `relayStats` tracks per-relay stats. Relay lists stored as kind 10002 events and parsed on demand.
 
 ---
 
@@ -309,18 +174,15 @@ When publishing, it resolves the author's WRITE relays and each mentioned user's
 
 **Repository path:** `/tmp/outbox-research/wisp`
 
-### 4.1 Architecture Overview
+Kotlin Android client. Standout feature: `RelayScoreBoard` using greedy set-cover for optimal relay selection.
 
-Wisp is a Kotlin Android client with a custom relay management stack. Its standout feature is the `RelayScoreBoard`, which uses a greedy set-cover algorithm to select an optimal relay set for following feeds.
-
-### 4.2 RelayScoreBoard - Greedy Set Cover
+### RelayScoreBoard -- Greedy Set Cover
 
 **File:** `app/src/main/kotlin/com/wisp/app/relay/RelayScoreBoard.kt`
 
 ```kotlin
 fun recompute() {
     val follows = contactRepo.getFollowList().map { it.pubkey }
-    // Build relay -> authors mapping from known relay lists
     val relayToAuthors = mutableMapOf<String, MutableSet<String>>()
     for (pubkey in follows) {
         val writeRelays = relayListRepo.getWriteRelays(pubkey) ?: continue
@@ -329,7 +191,6 @@ fun recompute() {
         }
     }
 
-    // Greedy set-cover: pick relay covering most uncovered follows, repeat
     val uncovered = follows.toMutableSet()
     val result = mutableListOf<ScoredRelay>()
     val remainingRelays = relayToAuthors.toMutableMap()
@@ -352,71 +213,22 @@ fun recompute() {
 }
 ```
 
-`MAX_SCORED_RELAYS = 75`. The algorithm:
-1. Builds a map of relay URL -> set of followed authors who write to that relay
-2. Greedily picks the relay that covers the most uncovered authors
-3. Removes covered authors and repeats until all are covered or limit reached
+`MAX_SCORED_RELAYS = 75`. Builds relay -> followed authors map, greedily picks relay covering most uncovered authors, repeats until done.
 
-### 4.3 OutboxRouter
+### OutboxRouter
 
 **File:** `app/src/main/kotlin/com/wisp/app/relay/OutboxRouter.kt`
 
-The `OutboxRouter` provides several routing methods:
+- **`subscribeByAuthors()`**: groups authors by write relays (via scoreboard), sends targeted REQ per relay group. No relay list = `sendToAll`.
+- **`publishToInbox()`**: publishes to own write relays AND target user's read (inbox) relays.
+- **`getRelayHint()`**: prefers overlap between target's inbox and own outbox, then target's inbox, then own outbox.
+- **`requestMissingRelayLists()`**: checks which pubkeys lack relay lists, sends kind 10002 request to all general relays.
 
-**`subscribeByAuthors()`**: Groups authors by their write relays (via scoreboard if available, otherwise unconstrained). Sends targeted REQ per relay group. Authors without relay lists fall back to `sendToAll`.
+### Storage and Onboarding
 
-**`publishToInbox()`**: Publishes to own write relays AND the target user's read (inbox) relays. Used for replies, reactions, and reposts.
-
-**`getRelayHint()`**: Returns the best relay hint by preferring overlap between target's inbox and own outbox, then the target's inbox, then own outbox.
-
-**`requestMissingRelayLists()`**: Checks which pubkeys are missing relay lists and sends a kind 10002 request to all general relays.
-
-### 4.4 Relay List Repository
-
-**File:** `app/src/main/kotlin/com/wisp/app/repo/RelayListRepository.kt`
-
-Uses an in-memory `LruCache<String, List<RelayConfig>>(500)` backed by SharedPreferences. Caches parsed kind 10002 events by pubkey, with timestamp-based deduplication.
-
-### 4.5 NIP-65 Parsing
-
-**File:** `app/src/main/kotlin/com/wisp/app/nostr/Nip65.kt`
-```kotlin
-fun parseRelayList(event: NostrEvent): List<RelayConfig> {
-    if (event.kind != 10002) return emptyList()
-    return event.tags.mapNotNull { tag ->
-        if (tag.size < 2 || tag[0] != "r") return@mapNotNull null
-        val url = tag[1].trim()
-        val marker = tag.getOrNull(2)
-        RelayConfig(
-            url = url,
-            read = marker == null || marker == "read",
-            write = marker == null || marker == "write"
-        )
-    }
-}
-```
-
-### 4.6 Relay Discovery (Onboarding)
-
-**File:** `app/src/main/kotlin/com/wisp/app/relay/RelayProber.kt`
-
-On first use, Wisp:
-1. Connects to bootstrap relays (`relay.damus.io`, `relay.primal.net`)
-2. Harvests up to 500 kind 10002 events
-3. Tallies relay URL frequency
-4. Filters to "middle tier" (drops top 5 mega-relays, requires frequency >= 3)
-5. Probes up to 15 candidates with NIP-11 + ephemeral write test (kind 20242)
-6. Selects top 8 by latency
-
-### 4.7 Feed Integration
-
-**File:** `app/src/main/kotlin/com/wisp/app/viewmodel/FeedViewModel.kt`
-
-The FeedViewModel ties it together:
-1. Fetches relay lists for followed users
-2. On EOSE of relay-list subscription: calls `relayScoreBoard.recompute()`
-3. Merges scored relays into the relay pool
-4. Uses `outboxRouter.subscribeByAuthors()` for feed subscriptions
+- **Relay list cache** (`RelayListRepository.kt`): `LruCache<String, List<RelayConfig>>(500)` backed by SharedPreferences, timestamp dedup.
+- **Relay prober** (`RelayProber.kt`): On first use, harvests 500 kind 10002 events from bootstrap relays, tallies frequency, drops top 5 mega-relays, probes up to 15 middle-tier candidates (NIP-11 + ephemeral write test), selects top 8 by latency.
+- **Feed flow** (`FeedViewModel.kt`): fetches relay lists -> EOSE triggers `relayScoreBoard.recompute()` -> merges scored relays into pool -> `outboxRouter.subscribeByAuthors()` for feed subscriptions.
 
 ---
 
@@ -424,86 +236,10 @@ The FeedViewModel ties it together:
 
 **Repository path:** `/tmp/outbox-research/shopstr`
 
-### 5.1 Architecture Overview
+Static relay list, no outbox routing. Next.js marketplace using nostr-tools' `SimplePool`.
 
-Shopstr is a Next.js marketplace client using nostr-tools' `SimplePool`. It has minimal outbox support -- it reads kind 10002 for the user's own relay configuration but does not implement per-author relay routing.
-
-### 5.2 Kind 10002 Handling (Own Relays Only)
-
-**File:** `utils/nostr/nostr-helper-functions.ts`
-```typescript
-export async function createNostrRelayEvent(nostr: NostrManager, signer: NostrSigner) {
-  const relayList = getLocalStorageData().relays;
-  const readRelayList = getLocalStorageData().readRelays;
-  const writeRelayList = getLocalStorageData().writeRelays;
-  // Builds kind 10002 event with 'r' tags
-}
-```
-
-Shopstr fetches kind 10002 events in `fetchAllRelays()` (`utils/nostr/fetch-service.ts`) to load the user's own relay configuration. It correctly parses read/write markers from `r` tags.
-
-### 5.3 Publishing -- No Outbox Routing
-
-**File:** `utils/nostr/nostr-helper-functions.ts`
-```typescript
-export async function finalizeAndSendNostrEvent(signer, nostr, eventTemplate) {
-    const { writeRelays, relays } = getLocalStorageData();
-    const signedEvent = await signer.sign(eventTemplate);
-    await cacheEventToDatabase(signedEvent);
-    const allWriteRelays = withBlastr([...writeRelays, ...relays]);
-    await nostr.publish(signedEvent, allWriteRelays);
-}
-```
-
-All events are published to the user's own write relays + general relays + `wss://sendit.nosflare.com` (blastr). There is no per-recipient relay routing. The `NostrManager.publish()` method broadcasts to all specified relays uniformly.
-
-### 5.4 Relay Configuration
-
-Relays are stored in `localStorage` with three lists: `relays` (general), `readRelays`, and `writeRelays`. Defaults:
-```typescript
-["wss://relay.damus.io", "wss://nos.lol", "wss://purplepag.es",
- "wss://relay.primal.net", "wss://relay.nostr.band"]
-```
-
-The `withBlastr()` helper always adds `wss://sendit.nosflare.com` as a write-amplification relay.
-
-### 5.5 Database Caching
-
-Kind 10002 events are cached in a PostgreSQL `config_events` table (via API routes), but this is only used for the user's own relay config, not for building a gossip graph.
-
----
-
-## Cross-Project Comparison
-
-### Relay Selection Strategies
-
-| Aspect | rust-nostr | Voyage | Nosotros | Wisp | Shopstr |
-|--------|-----------|--------|----------|------|---------|
-| Per-author routing | Yes (filter decomposition) | Yes (autopilot) | Yes (RxJS pipeline) | Yes (scoreboard + router) | No |
-| Write relay limit/user | 3 | 2 (publish) / 25 (autopilot) | 3 (configurable 1-14) | 75 (scoreboard) | N/A |
-| Read relay limit/user | 3 | 5 | 3 | N/A | N/A |
-| Hint relays | Yes (1/user) | No | Yes (max 4) | Yes (getRelayHint) | No |
-| Most-used relay tracking | Yes (RECEIVED flag) | Yes (EventRelayAuthorView) | Yes (relay stats events count) | No | No |
-| NIP-17 support | Yes (PrivateMessage flag) | No | No | No | No |
-| Fallback strategy | READ relays | Default hardcoded list | FALLBACK_RELAYS env var | sendToAll | Static relay list |
-
-### Data Sources for Relay Discovery
-
-| Source | rust-nostr | Voyage | Nosotros | Wisp | Shopstr |
-|--------|-----------|--------|----------|------|---------|
-| Kind 10002 (NIP-65) | Yes | Yes | Yes | Yes | Own only |
-| Kind 10050 (NIP-17) | Yes | No | No | No | No |
-| Relay hints (p-tags) | Yes | No | Yes | Yes (getRelayHint) | No |
-| Event delivery tracking | Yes (RECEIVED) | Yes (EventRelayAuthorView) | Yes (seen table + stats) | No | No |
-| NIP-05 relay lists | No | No | Via nip05 table | No | No |
-| Contact list (kind 3) | No (but syncs) | Indirect (friend queries) | No | Via ContactRepository | No |
-
-### Publish Routing
-
-| Client | Author's outbox | Tagged users' inbox | Broadcast fallback |
-|--------|----------------|--------------------|--------------------|
-| rust-nostr | WRITE + hints + most-received | READ + hints + most-received | Own WRITE relays |
-| Voyage | Own write relays | Target READ relays (2/user) | Connected + write relays |
-| Nosotros | WRITE relays | READ relays (for #p tags) | OUTBOX_RELAYS env var |
-| Wisp | Own write relays | Target read relays (publishToInbox) | sendToAll |
-| Shopstr | Own write + general relays | None | blastr + all relays |
+- Reads kind 10002 for user's own relay config only, not for other users
+- Publishes to own write relays + general relays + `wss://sendit.nosflare.com` (blastr). No per-recipient routing.
+- Relays stored in `localStorage` with three lists: `relays`, `readRelays`, `writeRelays`
+- Defaults: `relay.damus.io`, `nos.lol`, `purplepag.es`, `relay.primal.net`, `relay.nostr.band`
+- Kind 10002 events cached in PostgreSQL `config_events` table but only for own relay config

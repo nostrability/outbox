@@ -1,36 +1,32 @@
 # Benchmark Recreation Guide
 
-Step-by-step instructions to reproduce all results in the outbox model analysis.
+Reproduce all results from the outbox model analysis.
 
 ## Prerequisites
 
 - [Deno](https://deno.com/) v2+
-- Internet connection (for initial relay data fetch and Phase 2 event verification)
-- ~10 minutes for Phase 1 (all 26 profiles), ~30-60 minutes for Phase 2 (per profile)
+- Internet connection
+- ~10 min for on-paper mapping (all 26 profiles), ~30-60 min for event retrieval (per profile)
 
-## 1. Setup
+## Setup
+
+All commands assume you're in `bench/`.
 
 ```bash
 cd bench
 ```
 
-All commands below assume you're in the `bench/` directory.
+## On-Paper Relay Mapping
 
-## 2. Academic: Assignment Coverage (Phase 1)
+Computes relay-to-pubkey assignments from NIP-65 data. Runs all 14 algorithms against the same input. No relay connections beyond the initial data fetch.
 
-Phase 1 computes relay-to-pubkey assignments from NIP-65 data. It fetches kind 3 (contact list) and kind 10002 (relay list) events from indexer relays, then runs all 14 algorithms against the same input. **No relay connections are made beyond the initial data fetch.**
-
-### Run a single profile
+### Single profile
 
 ```bash
 deno task bench <hex_pubkey>
 ```
 
-This runs all 14 algorithms at the default 20-connection cap, outputs a table and JSON results.
-
-### Run all 26 profiles from the report
-
-The profiles used in the report, with hex pubkeys:
+### All 26 profiles
 
 ```bash
 # ODELL (1,779 follows)
@@ -112,59 +108,40 @@ deno task bench c1fc7771f5fa418fd3ac49221a18f19b42ccb7a663da8f04cbbf6c08c80d20b1
 deno task bench 76c71aae3a491f1d9eec47cba17e229cda4113a0bbb6e6ae1776d7643e29cafa
 ```
 
-### Run specific algorithms only
+### Specific algorithms
 
 ```bash
-# Client-derived only
 deno task bench <hex> --algorithms greedy,ndk,welshman,nostur,rust-nostr,direct
-
-# CS-inspired only
 deno task bench <hex> --algorithms ilp,matching,spectral,mab,streaming,stochastic-greedy
-
-# Baselines only
 deno task bench <hex> --algorithms primal,popular-random
 ```
 
 ### Connection budget sweep
 
-Runs each algorithm at multiple connection caps (5, 10, 15, 20, 25, 28, 30, 50, 100, unlimited):
-
 ```bash
 deno task bench <hex> --sweep
 ```
 
-## 3. Real-World: Event Verification (Phase 2)
+## Event Retrieval
 
-Phase 2 connects to actual relays and queries for kind-1 events, comparing each algorithm's selected relay set against a multi-relay baseline. **This is network-intensive and slow.**
-
-### Run event verification (default 24h window)
+Connects to actual relays and queries for kind-1 events. Compares each algorithm's relay set against a multi-relay baseline. Network-intensive and slow.
 
 ```bash
+# Default 24h window
 deno task bench <hex> --verify
+
+# Specific windows
+deno task bench <hex> --verify --verify-window 604800     # 7d
+deno task bench <hex> --verify --verify-window 2592000    # 30d
+deno task bench <hex> --verify --verify-window 31536000   # 365d
+deno task bench <hex> --verify --verify-window 94608000   # 3yr
 ```
 
-### Run with specific time windows
+### Reproduce report's event retrieval results
+
+fiatjaf's profile across 6 time windows (each takes 10-30 min):
 
 ```bash
-# 7 days
-deno task bench <hex> --verify --verify-window 604800
-
-# 30 days
-deno task bench <hex> --verify --verify-window 2592000
-
-# 365 days
-deno task bench <hex> --verify --verify-window 31536000
-
-# 3 years (1095 days)
-deno task bench <hex> --verify --verify-window 94608000
-```
-
-### Reproduce the report's Phase 2 results
-
-The Phase 2 table in the report was generated from fiatjaf's profile across 6 time windows. To reproduce:
-
-```bash
-# Run each window separately (each takes 10-30 minutes)
 deno task bench 3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d --verify --verify-window 604800
 deno task bench 3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d --verify --verify-window 1209600
 deno task bench 3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d --verify --verify-window 2592000
@@ -173,43 +150,36 @@ deno task bench 3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d
 deno task bench 3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d --verify --verify-window 94608000
 ```
 
-## 4. Key Parameters
+## Parameters
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `--algorithms` | `all` | Comma-separated list or `all` |
 | `--max-connections` | `20` | Global connection cap |
-| `--relays-per-user` | varies | Override per-pubkey relay target |
+| `--relays-per-user` | varies | Per-pubkey relay target |
 | `--runs` | `10` | Stochastic algorithm repetitions |
-| `--seed` | `0` | PRNG seed (use `random` for non-deterministic) |
+| `--seed` | `0` | PRNG seed (`random` for non-deterministic) |
 | `--filter-profile` | `strict` | `strict` or `neutral` relay filtering |
-| `--verify` | off | Enable Phase 2 event verification |
+| `--verify` | off | Enable event retrieval |
 | `--verify-window` | `86400` | Time window in seconds |
 | `--verify-concurrency` | `20` | Max concurrent relay connections |
 | `--no-cache` | off | Force fresh data fetch |
 | `--verbose` | off | Per-relay details |
 | `--fast` | off | Reduced sweep + stochastic runs |
 
-## 5. Output
+## Output
 
-- **Table output** prints to stdout
-- **JSON results** written to `bench/results/<pubkey>_<timestamp>.json`
-- **Cache** stored in `bench/.cache/` (1-hour TTL, auto-refreshes)
+- Table output to stdout
+- JSON results to `bench/results/<pubkey>_<timestamp>.json`
+- Cache in `bench/.cache/` (1h TTL)
 
-## 6. Expected Variability
+## Expected Variability
 
-Results may differ from the report due to:
+Results may differ due to NIP-65 data changes, relay availability (~55% success rate is structural), event retention (long-window results drift), and stochastic algorithms (use `--seed 0` for reproducibility).
 
-- **NIP-65 data changes.** Users update their relay lists. Follow counts change. A profile with 943 follows today may have 960 next week.
-- **Relay availability.** Phase 2 results depend on which relays are online at query time. The 55% relay success rate is structural (auth-required, WoT-gated) but individual relay outages vary.
-- **Event retention.** Relays prune old events. Long-window (365d, 1095d) results will drift over time as events age out.
-- **Stochastic algorithms.** Welshman, MAB-UCB, Streaming, Spectral, and Stochastic Greedy use randomness. Use `--seed 0` for deterministic reproduction; results with different seeds will vary within the confidence intervals reported.
+On-paper mapping results should be nearly identical within a few days. Event retrieval results show more variance.
 
-Phase 1 (academic coverage) results should be nearly identical if run within a few days of the original benchmarks with cached data. Phase 2 (real-world event recall) results will show more variance.
-
-## 7. Algorithm IDs
-
-For use with `--algorithms`:
+## Algorithm IDs
 
 | ID | Algorithm |
 |----|-----------|
