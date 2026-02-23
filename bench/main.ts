@@ -19,6 +19,8 @@ import {
 import { runPhase2 } from "./src/phase2/run.ts";
 import { printPhase2Table } from "./src/phase2/report.ts";
 import { initNip66Data } from "./src/algorithms/nip66-weighted.ts";
+import { fetchNip66Data, fetchNip66MonitorData } from "./src/nip66/fetch.ts";
+import { parseNip66FilterArg, classifyCandidates } from "./src/nip66/filter.ts";
 import type {
   AlgorithmMetrics,
   AlgorithmParams,
@@ -57,6 +59,7 @@ Options:
   --verify                 Run Phase 2 event verification after Phase 1
   --verify-window <sec>    Phase 2 time window in seconds (default: 86400)
   --verify-concurrency <n> Phase 2 max concurrent connections (default: 20)
+  --nip66-filter [mode]    Filter dead relays via NIP-66 + nostr.watch (liveness|strict, default: liveness)
   --no-cache               Skip cache
   --verbose                Per-relay details, raw vs post-processed metrics
   --help                   Show this help
@@ -77,6 +80,7 @@ function parseCliOptions(): CliOptions {
       "output",
       "verify-window",
       "verify-concurrency",
+      "nip66-filter",
     ],
     boolean: ["sweep", "fast", "full-assignments", "no-cache", "verbose", "verify", "help"],
     default: {
@@ -129,6 +133,14 @@ function parseCliOptions(): CliOptions {
     verify: !!args.verify,
     verifyWindow: parseInt(args["verify-window"]!, 10),
     verifyConcurrency: parseInt(args["verify-concurrency"]!, 10),
+    nip66Filter: (() => {
+      try {
+        return parseNip66FilterArg(args["nip66-filter"]);
+      } catch (e) {
+        console.error(`Error: ${(e as Error).message}`);
+        Deno.exit(1);
+      }
+    })(),
   };
 }
 
@@ -192,6 +204,56 @@ async function main(): Promise<void> {
   if (showTable) {
     printFetchQuality(input.fetchMeta);
     console.log(`Unique valid write relays: ${input.relayToWriters.size} | Seed: ${seed}`);
+  }
+
+  // NIP-66 liveness filter: remove relays not seen by any monitor
+  if (opts.nip66Filter) {
+    const nip66Data = opts.nip66Filter === "strict"
+      ? await fetchNip66Data(input.relayToWriters.keys())
+      : await fetchNip66MonitorData();
+
+    if (nip66Data.size > 0) {
+      const before = input.relayToWriters.size;
+      const classify = classifyCandidates(input.relayToWriters.keys(), nip66Data);
+
+      // Remove unknown (dead) relays
+      for (const url of classify.unknown) {
+        const writers = input.relayToWriters.get(url);
+        input.relayToWriters.delete(url);
+        if (writers) {
+          for (const pubkey of writers) {
+            const relays = input.writerToRelays.get(pubkey);
+            if (relays) {
+              relays.delete(url);
+              // Do NOT delete empty entries from writerToRelays
+            }
+          }
+        }
+      }
+
+      // Count authors whose entire relay set was removed
+      let filteredToEmptyAuthors = 0;
+      for (const relays of input.writerToRelays.values()) {
+        if (relays.size === 0) filteredToEmptyAuthors++;
+      }
+
+      if (showTable) {
+        const modeLabel = opts.nip66Filter === "strict" ? "NIP-66 only" : "NIP-66 + HTTP API";
+        console.log(`\n=== NIP-66 Liveness Filter (${modeLabel}) ===`);
+        console.log(`Monitor data: ${nip66Data.size} relays with observations`);
+        console.log(
+          `Candidate relays: ${before} → ${input.relayToWriters.size} (removed ${classify.unknown.length} unseen by monitors)` +
+            (classify.onionPreserved > 0 ? ` | .onion preserved: ${classify.onionPreserved}` : "") +
+            (classify.parseFailedPreserved > 0 ? ` | parse-failed preserved: ${classify.parseFailedPreserved}` : "") +
+            (filteredToEmptyAuthors > 0 ? ` | authors emptied: ${filteredToEmptyAuthors}` : ""),
+        );
+      }
+    } else {
+      if (showTable) {
+        console.log(`\n=== NIP-66 Liveness Filter ===`);
+        console.log(`No monitor data available — filter skipped (keeping all ${input.relayToWriters.size} relays)`);
+      }
+    }
   }
 
   // Get algorithms
@@ -333,6 +395,10 @@ async function runDefault(
       regimeAResults,
       seed,
       opts.fullAssignments,
+      {
+        nip66Filter: opts.nip66Filter,
+        verifyWindowSeconds: opts.verify ? opts.verifyWindow : null,
+      },
     );
     // Include Phase 2 results if available
     if (phase2Result) {

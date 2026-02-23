@@ -25,14 +25,15 @@ import type {
 
 const NIP66_CACHE_DIR = ".cache";
 const NIP66_CACHE_FILE = "nip66_relay_data.json";
+const NIP66_MONITOR_CACHE_FILE = "nip66_monitor_data.json";
 const NIP66_SCHEMA_VERSION = 1;
 const NIP66_TTL_MS = 3600 * 1000; // 1 hour
 
-/** Well-known relays that carry kind 30166 events. */
+/** Well-known relays that carry kind 30166 events (per nostr.watch dev). */
 const NIP66_SOURCE_RELAYS = [
-  "wss://relay.damus.io",
-  "wss://nos.lol",
-  "wss://relay.nostr.band",
+  "wss://relaypag.es",
+  "wss://relay.nostr.watch",
+  "wss://monitorlizard.nostr1.com",
 ];
 
 /** Known nostr.watch monitor pubkeys. */
@@ -103,6 +104,114 @@ export async function writeNip66Cache(
   await Deno.writeTextFile(cachePath(), JSON.stringify(envelope, null, 2));
 }
 
+// ---- Monitor cache (excludes synthetic data) ----
+
+export function monitorCachePath(cacheDir = NIP66_CACHE_DIR): string {
+  return `${cacheDir}/${NIP66_MONITOR_CACHE_FILE}`;
+}
+
+export async function readNip66MonitorCache(
+  cacheDir = NIP66_CACHE_DIR,
+): Promise<Map<RelayUrl, Nip66RelayData> | null> {
+  try {
+    const raw = await Deno.readTextFile(monitorCachePath(cacheDir));
+    const envelope = JSON.parse(raw) as Nip66CacheEnvelope;
+
+    if (envelope.schemaVersion !== NIP66_SCHEMA_VERSION) return null;
+    if (envelope.source === "synthetic") return null; // defense-in-depth
+
+    const age = Date.now() - envelope.fetchedAt;
+    if (age > NIP66_TTL_MS) return null;
+
+    const map = new Map<RelayUrl, Nip66RelayData>();
+    for (const entry of envelope.relays) {
+      if (entry.monitorPubkey === "synthetic") continue; // defense-in-depth
+      map.set(entry.relayUrl, entry);
+    }
+    return map;
+  } catch {
+    return null;
+  }
+}
+
+export async function writeNip66MonitorCache(
+  data: Map<RelayUrl, Nip66RelayData>,
+  source: "nostr" | "http-api",
+  cacheDir = NIP66_CACHE_DIR,
+): Promise<void> {
+  await Deno.mkdir(cacheDir, { recursive: true });
+  const serialized: Nip66RelayDataSerialized[] = [];
+  for (const entry of data.values()) {
+    if (entry.monitorPubkey === "synthetic") continue;
+    serialized.push({
+      relayUrl: entry.relayUrl,
+      rttOpenMs: entry.rttOpenMs,
+      rttReadMs: entry.rttReadMs,
+      rttWriteMs: entry.rttWriteMs,
+      supportedNips: entry.supportedNips,
+      network: entry.network,
+      lastSeenAt: entry.lastSeenAt,
+      monitorPubkey: entry.monitorPubkey,
+    });
+  }
+
+  const envelope: Nip66CacheEnvelope = {
+    schemaVersion: NIP66_SCHEMA_VERSION,
+    fetchedAt: Date.now(),
+    ttlSeconds: NIP66_TTL_MS / 1000,
+    source,
+    relays: serialized,
+  };
+  await Deno.writeTextFile(
+    monitorCachePath(cacheDir),
+    JSON.stringify(envelope, null, 2),
+  );
+}
+
+/**
+ * Fetch NIP-66 monitor data for liveness filtering.
+ * Combines NIP-66 kind 30166/1066 events with the nostr.watch HTTP API.
+ * NIP-66 events take priority (have RTT data); HTTP API fills gaps.
+ *
+ * Returns a merged map. If both sources fail, returns empty map (caller skips filter).
+ */
+export async function fetchNip66MonitorData(): Promise<Map<RelayUrl, Nip66RelayData>> {
+  // 1. Try monitor cache (rejects synthetic)
+  const cached = await readNip66MonitorCache();
+  if (cached && cached.size > 0) {
+    console.error(`[nip66] Using cached monitor data (${cached.size} relays)`);
+    return cached;
+  }
+
+  // 2. Fetch from Nostr (kind 30166+1066)
+  const nostrData = await fetchFromNostrRelays();
+
+  // 3. Fetch HTTP API online list and merge
+  const httpData = await fetchFromHttpApi();
+
+  // Merge: NIP-66 events take priority (richer data), HTTP API fills gaps
+  const merged = new Map(nostrData);
+  let httpOnly = 0;
+  for (const [url, entry] of httpData) {
+    if (!merged.has(url)) {
+      merged.set(url, entry);
+      httpOnly++;
+    }
+  }
+
+  if (nostrData.size > 0 || httpData.size > 0) {
+    console.error(
+      `[nip66] Fetched NIP-66 data for ${nostrData.size} relays via Nostr` +
+        (httpOnly > 0 ? ` + ${httpOnly} via HTTP API (${merged.size} total)` : ""),
+    );
+    await writeNip66MonitorCache(merged, "nostr").catch((e) =>
+      console.error(`[nip66] Monitor cache write failed: ${e}`),
+    );
+  }
+
+  return merged;
+}
+
 // ---- Parse kind 30166 events ----
 
 function parseNip66Event(event: NostrEvent): Nip66RelayData | null {
@@ -160,6 +269,39 @@ function parseNip66Event(event: NostrEvent): Nip66RelayData | null {
   };
 }
 
+// ---- Parse kind 1066 (uptime) events ----
+
+/**
+ * Kind 1066 events are undocumented uptime check events used by nostr.watch.
+ * They contain a relay URL in the "d" or first "r" tag and serve as a
+ * liveness signal (the relay was reachable at event.created_at).
+ */
+function parseKind1066Event(event: NostrEvent): Nip66RelayData | null {
+  let relayUrl: string | null = null;
+
+  for (const tag of event.tags) {
+    if ((tag[0] === "d" || tag[0] === "r") && tag[1]) {
+      relayUrl = tag[1];
+      break;
+    }
+  }
+
+  if (!relayUrl) return null;
+  const normalized = normalizeRelayUrl(relayUrl);
+  if (!normalized) return null;
+
+  return {
+    relayUrl: normalized,
+    rttOpenMs: null,
+    rttReadMs: null,
+    rttWriteMs: null,
+    supportedNips: [],
+    network: "clearnet",
+    lastSeenAt: event.created_at,
+    monitorPubkey: event.pubkey,
+  };
+}
+
 // ---- Fetch via Nostr (kind 30166) ----
 
 async function fetchFromNostrRelays(): Promise<Map<RelayUrl, Nip66RelayData>> {
@@ -178,19 +320,21 @@ async function fetchFromNostrRelays(): Promise<Map<RelayUrl, Nip66RelayData>> {
 
       console.error(`[nip66] ${relayUrl}: connected (${Math.round(conn.connectTimeMs)}ms)`);
 
-      // Fetch recent kind 30166 events
-      // We request the most recent events; since these are NIP-33 addressable,
-      // we get one per relay per monitor
-      const since = Math.floor(Date.now() / 1000) - 86400; // last 24 hours
+      // Fetch recent kind 30166 (relay monitor) and kind 1066 (uptime) events.
+      // kind 30166 are NIP-33 addressable (one per relay per monitor).
+      // kind 1066 are undocumented uptime events used by nostr.watch.
+      const since = Math.floor(Date.now() / 1000) - 86400 * 7; // last 7 days
       const events = await subscribeAndCollect(conn, "nip66", {
-        kinds: [30166],
+        kinds: [30166, 1066],
         since,
-        limit: 500,
+        limit: 5000,
       });
 
-      console.error(`[nip66] ${relayUrl}: received ${events.length} kind 30166 events`);
+      const k30166 = events.filter((e) => e.kind === 30166);
+      const k1066 = events.filter((e) => e.kind === 1066);
+      console.error(`[nip66] ${relayUrl}: received ${k30166.length} kind 30166 + ${k1066.length} kind 1066 events`);
 
-      for (const event of events) {
+      for (const event of k30166) {
         const parsed = parseNip66Event(event);
         if (!parsed) continue;
 
@@ -198,6 +342,19 @@ async function fetchFromNostrRelays(): Promise<Map<RelayUrl, Nip66RelayData>> {
         const existing = result.get(parsed.relayUrl);
         if (!existing || parsed.lastSeenAt > existing.lastSeenAt) {
           result.set(parsed.relayUrl, parsed);
+        }
+      }
+
+      // Parse kind 1066 uptime events — use as liveness signal
+      for (const event of k1066) {
+        const parsed = parseKind1066Event(event);
+        if (!parsed) continue;
+        const existing = result.get(parsed.relayUrl);
+        if (!existing) {
+          result.set(parsed.relayUrl, parsed);
+        } else if (parsed.lastSeenAt > existing.lastSeenAt) {
+          // Merge: keep RTT from 30166 if we have it, update lastSeenAt
+          existing.lastSeenAt = parsed.lastSeenAt;
         }
       }
 

@@ -144,6 +144,7 @@ export interface CliOptions {
   verify: boolean;
   verifyWindow: number;
   verifyConcurrency: number;
+  nip66Filter: false | "strict" | "liveness";
 }
 
 export interface SerializedAlgorithmResult {
@@ -164,6 +165,11 @@ export interface BenchmarkOutput {
     followsMissingRelayList: number;
     fetchMeta: FetchMeta;
     seed: number;
+    nip66Filter: boolean;
+    nip66FilterMode: "strict" | "liveness" | null;
+    verifyWindowSeconds: number | null;
+    timestamp: number;
+    candidateRelays: number;
   };
   metrics: AlgorithmMetrics[];
   results: SerializedAlgorithmResult[];

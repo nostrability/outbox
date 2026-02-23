@@ -192,6 +192,7 @@ export function buildJsonOutput(
   results: AlgorithmResult[],
   seed: number,
   fullAssignments: boolean,
+  opts: { nip66Filter: false | "strict" | "liveness"; verifyWindowSeconds: number | null },
 ): BenchmarkOutput {
   const serializedResults = results.map((r) => {
     const s = serializeAlgorithmResult(r);
@@ -215,6 +216,11 @@ export function buildJsonOutput(
       followsMissingRelayList: input.followsMissingRelayList.length,
       fetchMeta: input.fetchMeta,
       seed,
+      nip66Filter: !!opts.nip66Filter,
+      nip66FilterMode: opts.nip66Filter || null,
+      verifyWindowSeconds: opts.verifyWindowSeconds,
+      timestamp: Date.now(),
+      candidateRelays: input.relayToWriters.size,
     },
     metrics,
     results: serializedResults,

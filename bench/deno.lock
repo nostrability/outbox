@@ -2,7 +2,9 @@
   "version": "5",
   "specifiers": {
     "jsr:@nostr/tools@^2.23.1": "2.23.1",
+    "jsr:@std/assert@*": "1.0.19",
     "jsr:@std/cli@1": "1.0.27",
+    "jsr:@std/internal@^1.0.12": "1.0.12",
     "npm:@noble/ciphers@2.1.1": "2.1.1",
     "npm:@noble/curves@2.0.1": "2.0.1",
     "npm:@noble/hashes@2.0.1": "2.0.1",
@@ -19,8 +21,17 @@
         "npm:@scure/base"
       ]
     },
+    "@std/assert@1.0.19": {
+      "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
+      "dependencies": [
+        "jsr:@std/internal"
+      ]
+    },
     "@std/cli@1.0.27": {
       "integrity": "eba97edd0891871a7410e835dd94b3c260c709cca5983df2689c25a71fbe04de"
+    },
+    "@std/internal@1.0.12": {
+      "integrity": "972a634fd5bc34b242024402972cd5143eac68d8dffaca5eaa4dba30ce17b027"
     }
   },
   "npm": {
