@@ -10,7 +10,7 @@ This repo contains a cross-client analysis of outbox model implementations acros
 
 ## Key Findings
 
-**From benchmarking 14 algorithms against real relays (6 profiles, 8 time windows):**
+**From benchmarking 14 algorithms against real relays (6 profiles, 6 time windows):**
 
 1. **The best relay-mapping algorithm ranks 7th at actually retrieving events.** Greedy set-cover (used by Gossip, Applesauce, Wisp) produces the best on-paper relay assignments — but when we connected to real relays and queried for real events, it ranked 7th of 14 (84% mean recall at 7d vs 92% for Streaming Coverage). Relays that *should* have an event often don't, due to retention policies, downtime, or access restrictions.
 2. **Event recall degrades sharply over time — and algorithms diverge.** At 7 days, most algorithms retrieve 83–98% of events. At 1 year, greedy set-cover drops to 16% while stochastic approaches (Welshman: 38%, MAB-UCB: 41%) retain 2–2.5x more. The algorithm that's best for recent feeds may be worst for history.
