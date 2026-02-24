@@ -57,7 +57,7 @@ unlimited ceiling by 20 connections. Greedy at 10 connections already achieves
 
 ### 2. Target 2–3 relays per author
 
-1 relay = fragile (relay goes down, you lose that author). 2 = redundancy.
+1 relay = fragile (relay goes down or silently drops a write, you lose events). 2 = redundancy.
 3+ = diminishing returns. Industry consensus: 7 of 9 implementations with
 per-pubkey limits default to 2 or 3.
 

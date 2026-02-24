@@ -12,11 +12,11 @@ This repo contains a cross-client analysis of outbox model implementations acros
 
 **From benchmarking 14 algorithms against real relays (6 profiles, 6 time windows):**
 
-1. **The best relay-mapping algorithm ranks 7th at actually retrieving events.** Greedy set-cover (used by Gossip, Applesauce, Wisp) produces the best on-paper relay assignments — but when we connected to real relays and queried for real events, it ranked 7th of 14 (84% mean recall at 7d vs 92% for Streaming Coverage). Relays that *should* have an event often don't, due to retention policies, downtime, or access restrictions.
+1. **The best relay-mapping algorithm ranks 7th at actually retrieving events.** Greedy set-cover (used by Gossip, Applesauce, Wisp) produces the best on-paper relay assignments — but when we connected to real relays and queried for real events, it ranked 7th of 14 (84% mean recall at 7d vs 92% for Streaming Coverage). Relays that *should* have an event often don't, due to retention policies, downtime, silent write failures, or access restrictions.
 2. **Event recall degrades sharply over time — and algorithms diverge.** At 7 days, most algorithms retrieve 83–98% of events. At 1 year, greedy set-cover drops to 16% while stochastic approaches (Welshman: 38%, MAB-UCB: 41%) retain 2–2.5x more. The algorithm that's best for recent feeds may be worst for history.
 3. **20 connections is nearly sufficient.** All algorithms reach within 1–2% of their unlimited ceiling at 20 relays. Greedy at 10 already achieves 93–97% of its unlimited coverage.
 4. **NIP-65 adoption is the real bottleneck.** The gap between the best algorithm and the theoretical ceiling is 1–3%. But 20–44% of follows have no relay list at all. More NIP-65 adoption helps far more than better algorithms.
-5. **Concentration is the tradeoff.** Greedy maps the most follows to relays on paper by concentrating on a few popular relays (Gini 0.77) — but those relays don't always retain events long-term. Stochastic approaches spread queries across more relays (Gini 0.39–0.51), which costs some assignment coverage but discovers relays that keep older posts.
+5. **Concentration is the tradeoff.** Greedy maps the most follows to relays on paper by concentrating on a few popular relays (Gini 0.77) — but those relays don't always retain events long-term. Stochastic approaches spread queries across more relays (Gini 0.39–0.51), which costs some assignment coverage but discovers relays that keep older posts. This also mitigates silent write failures — if one relay silently dropped the author's event during publish, querying their other write relays catches it.
 
 **From the implementation analysis (15 clients):**
 
