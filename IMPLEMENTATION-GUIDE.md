@@ -121,6 +121,45 @@ for indexing. Consider diversifying:
 
 Amethyst is the most resilient with 5 configured indexer relays.
 
+### 7. Learn from what actually works
+
+Every analyzed client picks relays statelessly — recompute from NIP-65 data
+each time, with no memory of which relays actually delivered events. This is
+why greedy set-cover (the most common algorithm) degrades to 10% recall at
+3yr: it keeps choosing the same popular relays that may have pruned old events.
+
+MAB-UCB wins long-term recall (23% at 3yr, 41% at 1yr) because it learns.
+In practice, a learning relay selector is just periodic rebalancing with
+memory — something clients already do for health tracking, but applied to
+event delivery:
+
+```
+On startup:
+  Load per-relay stats from DB: {relay → (times_selected, events_delivered)}
+
+Every N minutes (one "round"):
+  1. Score each candidate relay using stats + exploration bonus
+  2. Pick top K relays by score
+  3. Swap connections if the selected set changed
+  4. Observe: count events received per relay for followed authors
+  5. Update stats, persist to DB
+```
+
+The stored state is small (~100 bytes per relay). Some clients already have
+the building blocks: Gossip persists per-relay penalty timers, Voyage tracks
+which relay delivered which author's events (`EventRelayAuthorView`),
+Nosotros has a `seen` table recording `(eventId, relay, created_at)`. None
+feed this data back into relay selection.
+
+**Easiest path to adoption:** Welshman's `random()` factor — the reason it
+has the best archival recall among deployed clients — is accidentally a
+crude form of [Thompson Sampling](https://en.wikipedia.org/wiki/Thompson_sampling)
+(drawing from Uniform(0,1) = Beta(1,1), the "I know nothing" prior). Replace
+`random()` with `sample_beta(successes, failures)` per relay, where successes
+and failures come from observed event delivery. This keeps the beneficial
+randomness, adds learning, and is a few dozen lines of code on top of what
+Coracle already ships.
+
 ## Algorithm Quick Reference
 
 Event recall varies dramatically by time window. An algorithm that works
@@ -128,7 +167,7 @@ well for recent posts may fail badly for older content:
 
 | Algorithm | 3yr recall | 1yr recall | 7d recall | Best for | Weakness |
 |-----------|:----------:|:----------:|:---------:|----------|----------|
-| **MAB-UCB** | 23% | 41% | 91% | Long-window event recall | Requires rounds/state; not yet in any client |
+| **MAB-UCB** | 23% | 41% | 91% | Long-window event recall | Must persist per-relay stats across sessions; not yet in any client (see [§7](#7-learn-from-what-actually-works)) |
 | **Streaming Coverage** | 21% | 38% | 92% | Near-optimal coverage in a single pass | Not yet in any client |
 | **Weighted Stochastic** (Welshman) | 21% | 38% | 83% | Balanced real-time + archival | Slightly lower coverage than greedy (~1–3%) |
 | **Priority-Based** (NDK) | 11% | 19% | 83% | Zero-effort outbox (transparent to app) | Rich-get-richer effect on first-connected relays |
