@@ -188,7 +188,7 @@ Based on patterns across all 15 implementations:
 
 2. **Most clients default to 2–3 relays per pubkey.** 7 of 9 implementations with per-pubkey limits converge on 2 or 3. This is an observed ecosystem consensus, not an empirically benchmarked finding — no study has measured the optimal number.
 
-3. **Track relay health.** At minimum, binary online/offline with backoff. Ideally, tiered error thresholds (Welshman) or penalty timers (Gossip). [NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md) (kind 30166) and [nostr.watch](https://github.com/sandwichfarm/nostr-watch) publish network-wide relay liveness data that clients could consume instead of tracking health independently — no analyzed client uses this yet.
+3. **Track relay health.** At minimum, binary online/offline with backoff. Ideally, tiered error thresholds (Welshman) or penalty timers (Gossip). [NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md) (kind 30166) and [nostr.watch](https://github.com/sandwichfarm/nostr-watch) publish network-wide relay liveness data (3 states: online/offline/dead — not binary) that clients could consume as a supplement to local tracking. No analyzed client uses this yet. Caveats: some relays block monitors, and the offline→dead threshold is subjective. See [IMPLEMENTATION-GUIDE.md §3](IMPLEMENTATION-GUIDE.md#3-pre-filter-relays-with-nip-66).
 
 4. **Use multiple indexer relays.** Relying only on purplepag.es is a single point of failure. It appears in 6/13 implementations. Amethyst's 5-indexer approach is most resilient.
 

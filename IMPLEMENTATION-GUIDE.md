@@ -61,19 +61,28 @@ unlimited ceiling by 20 connections. Greedy at 10 connections already achieves
 3+ = diminishing returns. Industry consensus: 7 of 9 implementations with
 per-pubkey limits default to 2 or 3.
 
-### 3. Pre-filter dead relays with NIP-66
+### 3. Pre-filter relays with NIP-66
 
 [NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md) (kind
 30166) and [nostr.watch](https://github.com/sandwichfarm/nostr-watch) publish
 relay liveness and performance data. No analyzed client uses this yet.
-Two modes:
 
-- **Strict** — remove relays marked dead
-- **Relaxed** — remove relays marked dead + relays with no NIP-66 data
+Relay liveness is 3 states, not binary (per nostr.watch author):
 
-Caveat: some relays block NIP-66 monitors, resulting in "falsely dead"
-classifications. More monitors publishing kind 30166 would reduce this.
-NIP-66 data is best used as a supplement to local health tracking, not a
+- **Online** — recently seen. Include normally.
+- **Offline** — not seen recently, may come back. Deprioritize but don't
+  exclude — an offline relay may still have historical events you need.
+- **Dead** — probably never coming back. Exclude.
+
+To correctly classify, a client consuming NIP-66 needs: the monitor's
+publishing frequency (kind 10166), a jitter-tolerant multiplier on that
+frequency for the offline threshold (nostr.watch uses 1.2x), and a
+client-chosen dead threshold (subjective — not seen in a week? a month?).
+
+Caveats: some relays block NIP-66 monitors, causing false "offline"
+classifications. The dead threshold is subjective — there is no universal
+answer. More monitors publishing kind 30166 would improve accuracy. NIP-66
+data is best used as a supplement to local health tracking, not a
 replacement.
 
 At minimum, track health locally: binary online/offline with exponential
