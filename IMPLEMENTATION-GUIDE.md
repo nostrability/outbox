@@ -263,7 +263,7 @@ yet. These are concrete enhancements to that model, ordered by effort:
 
 None of these have been benchmarked yet. The Welshman + Thompson Sampling
 variant is tracked as the first test
-([outbox-d79](https://github.com/nostrability/outbox)).
+([#7](https://github.com/nostrability/outbox/issues/7)).
 
 ## Algorithm Quick Reference
 
