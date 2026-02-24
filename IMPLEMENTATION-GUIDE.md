@@ -20,8 +20,8 @@ What matters most?
 │  └─ Simplicity over optimization? → Direct Mapping
 │
 ├─ Historical event recall (archival, search)?
-│  ├─ Can maintain state across rounds? → MAB-UCB
-│  └─ Stateless?                        → Weighted Stochastic
+│  ├─ Can maintain state? → MAB-UCB (not yet in any client)
+│  └─ Stateless?          → Weighted Stochastic (Welshman/Coracle)
 │
 ├─ Anti-centralization (distribute relay load)?
 │  ├─ Via scoring?       → Weighted Stochastic (log dampening + random)
@@ -106,6 +106,20 @@ how many follows are mapped to at least one relay) but not event recall (did
 you actually get the posts). Our benchmark shows these diverge sharply: 85%
 assignment coverage can mean 16% event recall at 1yr.
 
+Example self-healing delivery check (TypeScript pseudocode):
+
+```typescript
+// Every 30 minutes, for a sample of followed authors:
+async function checkDelivery(author: string, outboxRelays: string[]) {
+  const fromOutbox = await queryEvents(outboxRelays, { authors: [author], limit: 50 });
+  const fromIndexer = await queryEvents(["wss://relay.nostr.band"], { authors: [author], limit: 50 });
+  const missing = fromIndexer.filter(e => !fromOutbox.has(e.id));
+  if (missing.length > 5) {
+    addFallbackRelay(author, fromIndexer.bestRelay);
+  }
+}
+```
+
 ### 5. Handle missing relay lists gracefully
 
 20–44% of followed users lack kind 10002. Options (most clients combine
@@ -154,6 +168,19 @@ Every N minutes (one "round"):
   5. Update stats, persist to DB
 ```
 
+Minimal schema for per-relay stats:
+
+```sql
+CREATE TABLE relay_stats (
+  relay_url TEXT PRIMARY KEY,
+  times_selected INTEGER DEFAULT 0,
+  events_delivered INTEGER DEFAULT 0,
+  events_expected INTEGER DEFAULT 0,
+  last_selected_at INTEGER,
+  last_event_at INTEGER
+);
+```
+
 The stored state is small (~100 bytes per relay). Some clients already have
 the building blocks: Gossip persists per-relay penalty timers, Voyage tracks
 which relay delivered which author's events (`EventRelayAuthorView`),
@@ -167,7 +194,22 @@ crude form of [Thompson Sampling](https://en.wikipedia.org/wiki/Thompson_samplin
 `random()` with `sample_beta(successes, failures)` per relay, where successes
 and failures come from observed event delivery. This keeps the beneficial
 randomness, adds learning, and is a few dozen lines of code on top of what
-Coracle already ships.
+Coracle already ships:
+
+```typescript
+// Current Welshman (stateless):
+const score = quality * (1 + Math.log(weight)) * Math.random();
+
+// With Thompson Sampling (learns):
+function sampleBeta(a: number, b: number): number {
+  // Jüni approximation or use a library
+  const x = gammaVariate(a);
+  return x / (x + gammaVariate(b));
+}
+const alpha = stats.eventsDelivered + 1;
+const beta = stats.eventsExpected - stats.eventsDelivered + 1;
+const score = quality * (1 + Math.log(weight)) * sampleBeta(alpha, beta);
+```
 
 ## Improvement Opportunities
 
@@ -185,7 +227,17 @@ yet. These are concrete enhancements to that model, ordered by effort:
 - **Greedy + ε-exploration.** With probability ε (e.g. 5%), pick a random
   relay instead of the max-coverage one. One `if` statement. Would likely
   fix greedy's catastrophic long-term recall (10% at 3yr) by occasionally
-  discovering relays that retain history.
+  discovering relays that retain history:
+
+  ```typescript
+  // Add to any greedy relay selector:
+  function selectNextRelay(candidates, epsilon = 0.05) {
+    if (Math.random() < epsilon) {
+      return candidates[Math.floor(Math.random() * candidates.length)];
+    }
+    return candidates.sort((a, b) => b.uncoveredCount - a.uncoveredCount)[0];
+  }
+  ```
 
 **Medium effort (new capability):**
 
@@ -216,18 +268,25 @@ variant is tracked as the first test
 ## Algorithm Quick Reference
 
 Event recall varies dramatically by time window. An algorithm that works
-well for recent posts may fail badly for older content:
+well for recent posts may fail badly for older content.
+
+**Deployed in clients:**
 
 | Algorithm | 3yr recall | 1yr recall | 7d recall | Best for | Weakness |
 |-----------|:----------:|:----------:|:---------:|----------|----------|
-| **MAB-UCB** | 23% | 41% | 91% | Long-window event recall | Must persist per-relay stats across sessions; not yet in any client (see [§7](#7-learn-from-what-actually-works)) |
-| **Streaming Coverage** | 21% | 38% | 92% | Near-optimal coverage in a single pass | Not yet in any client |
 | **Weighted Stochastic** (Welshman) | 21% | 38% | 83% | Balanced real-time + archival | Slightly lower coverage than greedy (~1–3%) |
 | **Priority-Based** (NDK) | 11% | 19% | 83% | Zero-effort outbox (transparent to app) | Rich-get-richer effect on first-connected relays |
 | **Filter Decomposition** (rust-nostr) | 11% | 19% | 77% | Fine-grained per-type limits | Lower recall than greedy at short windows |
 | **Greedy Set-Cover** | 10% | 16% | 84% | Max assignment coverage within a budget | Degrades sharply for history; concentrates on popular relays |
 | **Direct Mapping** (Amethyst feeds) | 9% | 17% | 88% | Simplicity; no optimization needed | No connection minimization; scales poorly |
 | **Greedy Coverage Sort** (Nostur) | 7% | 13% | 65% | Anti-centralization (skipTopRelays) | Costs 5–12% coverage vs standard greedy |
+
+**Not yet in any client (benchmark results only):**
+
+| Algorithm | 3yr recall | 1yr recall | 7d recall | Best for | Weakness |
+|-----------|:----------:|:----------:|:---------:|----------|----------|
+| **MAB-UCB** | 23% | 41% | 91% | Long-window event recall | Must persist per-relay stats across sessions (see [§7](#7-learn-from-what-actually-works)) |
+| **Streaming Coverage** | 21% | 38% | 92% | Near-optimal coverage in a single pass | Theoretical; no client implementation |
 
 Recall = mean event recall across 6 profiles (7d) or fiatjaf profile (1yr and 3yr).
 See [OUTBOX-REPORT.md Section 8](OUTBOX-REPORT.md#8-benchmark-results) for
