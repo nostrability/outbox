@@ -24,6 +24,17 @@ This repo contains a cross-client analysis of outbox model implementations acros
 7. **Only Welshman uses randomness in relay selection** — and it accidentally has the best archival recall among deployed clients (38% at 1yr vs greedy's 16%).
 8. **No client measures whether you actually received an author's events.** noStrudel shows relay assignment coverage, but no client tracks event recall — the metric that matters most.
 
+## How the Benchmark Works
+
+No apps are involved. The benchmark is a standalone Deno tool ([bench/](bench/)) that reimplements relay selection logic extracted from client source code, then tests it against real data.
+
+1. **Fetch real data.** Given a pubkey, pull their follow list and every followed user's kind 10002 relay list from indexer relays.
+2. **Run 14 relay selection algorithms.** Each answers the same question: "given a budget of K relay connections, which relays should I connect to in order to see posts from the most follows?" 8 algorithms are reimplemented from real client codebases (Gossip, NDK, Welshman, Nostur, rust-nostr, Amethyst, Wisp, Primal). 6 are standard CS optimization techniques adapted to the same relay-selection problem.
+3. **Phase 1 — assignment coverage (no network).** Count what fraction of follows map to at least one selected relay. This is the "on paper" score — how good is the mapping, ignoring whether relays actually have the events.
+4. **Phase 2 — event recall (connects to real relays).** Connect to each algorithm's selected relays and query for kind-1 notes across time windows (7d to 3yr). Compare events returned against a baseline built by querying *all* declared write relays. This is the "did you actually get the posts?" score.
+
+The central finding: these two phases diverge sharply. An algorithm can win on paper and lose in practice.
+
 ## Algorithm Comparison
 
 | Algorithm | Client Inspiration | Strategy | Cap | Per-Pubkey |
@@ -36,12 +47,12 @@ This repo contains a cross-client analysis of outbox model implementations acros
 | Direct Mapping | Amethyst (feeds) | All declared write relays | Dynamic | All |
 | Primal Aggregator | Primal | Single aggregator relay | 1 | N/A |
 | Popular+Random | — | Top popular + random fill | — | — |
-| **ILP Optimal** | — (CS: branch-and-bound) | Exact maximum coverage with LP relaxation bounds, 3s timeout | 20 | — |
-| **Bipartite Matching** | — (CS: weighted matching) | Inverse-frequency weighting prioritizes hard-to-reach pubkeys | 20 | — |
-| **Spectral Clustering** | — (CS: community detection) | Label propagation clusters relays by Jaccard similarity, select per-cluster reps | 20 | — |
-| **MAB-UCB** | — (CS: multi-armed bandit) | UCB1 exploration-exploitation over 500 rounds, learns marginal coverage | 20 | — |
-| **Streaming Coverage** | — (CS: streaming submodular max) | Single-pass with k-buffer, swap weakest if candidate improves coverage | 20 | — |
-| **Stochastic Greedy** | — (CS: lazier-than-lazy greedy) | Sample random relay subset per step, pick best. (1-1/e-ε) approx guarantee | 20 | — |
+| **ILP Optimal** | — | Brute-force best answer (slow, 3s timeout). Upper bound for comparison | 20 | — |
+| **Bipartite Matching** | — | Prioritizes relays that serve hard-to-reach pubkeys (few relay options) | 20 | — |
+| **Spectral Clustering** | — | Groups relays by author overlap, picks one representative per group | 20 | — |
+| **MAB-UCB** | — | Learns which relays add the most new coverage over 500 simulated rounds | 20 | — |
+| **Streaming Coverage** | — | Single pass: keep K best relays, swap one out if a new relay improves coverage | 20 | — |
+| **Stochastic Greedy** | — | Like greedy but samples random subsets each step instead of scanning all | 20 | — |
 
 ## Benchmark Results
 
