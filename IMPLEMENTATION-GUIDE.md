@@ -171,8 +171,9 @@ Coracle already ships.
 
 ## Improvement Opportunities
 
-No client currently learns from observed event delivery. These are concrete
-ways to improve existing algorithms, ordered by effort:
+All of these build on the rounds/state model from [§7](#7-learn-from-what-actually-works)
+— periodic rebalancing with persisted per-relay stats. No client does this
+yet. These are concrete enhancements to that model, ordered by effort:
 
 **Low effort (modify existing algorithm):**
 
