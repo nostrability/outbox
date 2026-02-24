@@ -169,6 +169,49 @@ and failures come from observed event delivery. This keeps the beneficial
 randomness, adds learning, and is a few dozen lines of code on top of what
 Coracle already ships.
 
+## Improvement Opportunities
+
+No client currently learns from observed event delivery. These are concrete
+ways to improve existing algorithms, ordered by effort:
+
+**Low effort (modify existing algorithm):**
+
+- **Welshman + Thompson Sampling.** Replace `random()` with
+  `sample_beta(successes, failures)` per relay. Keeps the randomness that
+  makes Welshman good at archival, adds memory so it learns which relays
+  actually deliver. A few dozen lines on top of what Coracle already ships.
+  See [§7](#7-learn-from-what-actually-works).
+- **Greedy + ε-exploration.** With probability ε (e.g. 5%), pick a random
+  relay instead of the max-coverage one. One `if` statement. Would likely
+  fix greedy's catastrophic long-term recall (10% at 3yr) by occasionally
+  discovering relays that retain history.
+
+**Medium effort (new capability):**
+
+- **Sliding window for MAB.** Current MAB-UCB weights all rounds equally.
+  Relay quality changes — a relay that was great 6 months ago may be dead
+  now. Only use the last N observations per relay, or exponentially decay
+  old ones. Matters in a real client, not in the static benchmark.
+- **Warm-start MAB from greedy.** Instead of random initialization, start
+  from greedy's solution and explore outward. Greedy is already good on
+  paper — MAB should spend exploration budget discovering if alternatives
+  are better in practice, not rediscovering what greedy already knows.
+
+**Higher effort (new signal):**
+
+- **Per-author event recall as reward.** Current reward is binary: is this
+  author covered? Better: how many of this author's events did this relay
+  actually deliver? A relay covering 10 authors but keeping only 7 days of
+  history should score lower than one covering 5 authors with full
+  retention.
+- **Contextual features.** Use relay metadata (NIP-11 capabilities, NIP-66
+  health, paid vs free, estimated retention window) as features. Lets the
+  algorithm estimate quality for new relays without exploring from scratch.
+
+None of these have been benchmarked yet. The Welshman + Thompson Sampling
+variant is tracked as the first test
+([outbox-d79](https://github.com/nostrability/outbox)).
+
 ## Algorithm Quick Reference
 
 Event recall varies dramatically by time window. An algorithm that works
