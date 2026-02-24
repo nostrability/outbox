@@ -28,10 +28,12 @@ This repo contains a cross-client analysis of outbox model implementations acros
 
 No apps are involved. The benchmark is a standalone Deno tool ([bench/](bench/)) that reimplements relay selection logic extracted from client source code, then tests it against real data.
 
+The core problem is [maximum coverage](https://en.wikipedia.org/wiki/Maximum_coverage_problem): each relay "covers" the authors who publish there. Given a budget of K connections, pick the K relays that cover the most authors. This is NP-hard, which is why 3 clients independently converged on the standard greedy approximation.
+
 1. **Fetch real data.** Given a pubkey, pull their follow list and every followed user's kind 10002 relay list from indexer relays.
-2. **Run 14 relay selection algorithms.** Each answers the same question: "given a budget of K relay connections, which relays should I connect to in order to see posts from the most follows?" 8 algorithms are reimplemented from real client codebases (Gossip, NDK, Welshman, Nostur, rust-nostr, Amethyst, Wisp, Primal). 6 are standard CS optimization techniques adapted to the same relay-selection problem.
-3. **Phase 1 — assignment coverage (no network).** Count what fraction of follows map to at least one selected relay. This is the "on paper" score — how good is the mapping, ignoring whether relays actually have the events.
-4. **Phase 2 — event recall (connects to real relays).** Connect to each algorithm's selected relays and query for kind-1 notes across time windows (7d to 3yr). Compare events returned against a baseline built by querying *all* declared write relays. This is the "did you actually get the posts?" score.
+2. **Run 14 relay selection algorithms.** Each answers: "given a budget of K connections, which relays should I open to see posts from the most follows?" 8 are reimplemented from real client codebases (Gossip, NDK, Welshman, Nostur, rust-nostr, Amethyst, Wisp, Primal). 6 are standard CS optimization techniques adapted to the same problem.
+3. **Phase 1 — assignment coverage (no network).** If every relay were perfectly online and kept every event forever, how many of your follows would be reachable from the relays this algorithm picked? Pure math on NIP-65 data — no WebSocket is ever opened.
+4. **Phase 2 — event recall (connects to real relays).** Connect to each algorithm's selected relays and query for kind-1 notes across time windows (7d to 3yr). Compare events returned against a baseline built by querying *all* declared write relays. This is the "did you actually get the posts?" score — relays go down, prune old events, or require auth, so the on-paper score can be very different from reality.
 
 The central finding: these two phases diverge sharply. An algorithm can win on paper and lose in practice.
 
