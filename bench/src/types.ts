@@ -68,6 +68,10 @@ export interface AlgorithmParams {
   skipTopRelays?: number;
   writeLimit?: number;
   seed?: number;
+  /** Per-relay Beta distribution priors for Thompson Sampling. */
+  relayPriors?: Map<RelayUrl, { alpha: number; beta: number }>;
+  /** Epsilon for exploration (greedy-epsilon). */
+  epsilon?: number;
 }
 
 export interface Distribution {
@@ -125,6 +129,8 @@ export type RelaySelectionAlgorithm = (
   rng: () => number,
 ) => AlgorithmResult;
 
+export type Nip66FilterMode = false | "strict" | "liveness";
+
 export interface CliOptions {
   target: string;
   algorithms: string[];
@@ -143,7 +149,11 @@ export interface CliOptions {
   verbose: boolean;
   verify: boolean;
   verifyWindow: number;
+  verifyWindows: number[];
   verifyConcurrency: number;
+  nip66Filter: Nip66FilterMode;
+  nip66TtlMs?: number;
+  noPhase2Cache: boolean;
 }
 
 export interface SerializedAlgorithmResult {
@@ -164,6 +174,8 @@ export interface BenchmarkOutput {
     followsMissingRelayList: number;
     fetchMeta: FetchMeta;
     seed: number;
+    nip66Filter: boolean;
+    nip66FilterMode: "strict" | "liveness" | null;
   };
   metrics: AlgorithmMetrics[];
   results: SerializedAlgorithmResult[];
@@ -349,4 +361,70 @@ export interface Phase2Result {
     collectionTimeMs: number;
   };
   algorithms: AlgorithmVerification[];
+  /** Baselines map, available for score persistence. Not serialized to JSON. */
+  _baselines?: Map<Pubkey, PubkeyBaseline>;
+  /** Query cache, available for score persistence. Not serialized to JSON. */
+  _cache?: unknown;
+}
+
+// --- NIP-66 types ---
+
+export interface Nip66RelayData {
+  relayUrl: RelayUrl;
+  rttOpenMs: number | null;
+  rttReadMs: number | null;
+  rttWriteMs: number | null;
+  supportedNips: number[];
+  network: string | null;
+  lastSeenAt: number;
+  monitorPubkey: string;
+}
+
+export interface Nip66RelayScore {
+  relayUrl: RelayUrl;
+  score: number;
+  factors: {
+    uptime: number;
+    rtt: number;
+    freshness: number;
+    nipSupport: number;
+  };
+}
+
+export interface Nip66CacheEnvelope {
+  schemaVersion: number;
+  fetchedAt: number;
+  ttlSeconds: number;
+  source: "nostr" | "http-api" | "synthetic";
+  relays: Nip66RelayDataSerialized[];
+}
+
+export interface Nip66RelayDataSerialized {
+  relayUrl: string;
+  rttOpenMs: number | null;
+  rttReadMs: number | null;
+  rttWriteMs: number | null;
+  supportedNips: number[];
+  network: string | null;
+  lastSeenAt: number;
+  monitorPubkey: string;
+}
+
+// --- Relay Score DB (Thompson Sampling persistence) ---
+
+export interface RelayScoreEntry {
+  alpha: number;
+  beta: number;
+  lastQueried: number;
+  totalEvents: number;
+  totalExpected: number;
+}
+
+export interface RelayScoreDB {
+  schemaVersion: 1;
+  pubkey: string;
+  windowSeconds: number;
+  updatedAt: number;
+  sessionCount: number;
+  relays: Record<RelayUrl, RelayScoreEntry>;
 }

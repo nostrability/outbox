@@ -3,6 +3,7 @@ import type {
   BenchmarkInput,
   BenchmarkOutput,
   FetchMeta,
+  Nip66FilterMode,
   SweepRow,
   AlgorithmResult,
 } from "./types.ts";
@@ -192,6 +193,7 @@ export function buildJsonOutput(
   results: AlgorithmResult[],
   seed: number,
   fullAssignments: boolean,
+  nip66Filter?: Nip66FilterMode,
 ): BenchmarkOutput {
   const serializedResults = results.map((r) => {
     const s = serializeAlgorithmResult(r);
@@ -215,6 +217,8 @@ export function buildJsonOutput(
       followsMissingRelayList: input.followsMissingRelayList.length,
       fetchMeta: input.fetchMeta,
       seed,
+      nip66Filter: !!nip66Filter,
+      nip66FilterMode: nip66Filter ? nip66Filter : null,
     },
     metrics,
     results: serializedResults,
