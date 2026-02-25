@@ -531,7 +531,9 @@ async function runSweep(
   await runDefault(input, algorithms, opts, seed, runs, showTable, showJson);
 }
 
-main().catch((err) => {
+main().then(() => {
+  Deno.exit(0);
+}).catch((err) => {
   console.error("Fatal error:", err);
   Deno.exit(1);
 });
