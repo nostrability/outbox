@@ -516,8 +516,8 @@ Queried kind 1 events on major indexer relays (purplepag.es, relay.damus.io, nos
 | Profile | Missing relay list | Dead (no posts found) | Active (<90d) |
 |---|---|---|---|
 | fiatjaf (194) | 46 (23.7%) | 39 (84.8%) | 7 (15.2%) |
-| ODELL (1777) | 415 (23.4%) | 348 (83.9%) | 67 (16.1%) |
-| jb55 (945) | 290 (30.7%) | 245 (84.5%) | 45 (15.5%) |
+| ODELL (1774) | 415 (23.4%) | 348 (83.9%) | 67 (16.1%) |
+| jb55 (943) | 290 (30.7%) | 245 (84.5%) | 45 (15.5%) |
 | Nackoo2000 (283) | 118 (41.7%) | 104 (88.1%) | 14 (11.9%) |
 
 **~84-88% of follows missing relay lists have no kind 1 posts on major indexer relays — dead accounts.** ~12-16% are active users who just haven't published kind 10002. The real NIP-65 adoption gap is ~3-5% of total follows, not 20-44%.
