@@ -566,6 +566,8 @@ ILP, Streaming Coverage, and Spectral Clustering frequently hit the theoretical 
 
 **Relay diagnostics (cross-profile):** Success rates range from 31% (ODELL, 1,199 relays) to 47% (hodlbod, 489 relays) — inversely correlated with relay count because larger follow lists include more obscure relays. Failures are structural (deterministic per relay, not transient): 12 relays fail across all 6 profiles (NIP-42 auth-required, WoT-gated, or queries blocked). `filter.nostr.wine/*` personal relays are the largest single source of CLOSED messages (5–22 per profile). ~50% of authors with relay lists are "testable-reliable" (events retrievable from declared relays) — this ratio is a network constant across all profiles (47–52%).
 
+**Why recall degrades with time window:** Relay retention policies are the binding constraint. Most relays prune old events to manage storage — popular high-volume relays prune more aggressively because they receive more data. A greedy algorithm that concentrates on these popular relays sees 93% recall at 7 days but 16% at 1 year: the relays it selected had the events last week, but deleted them months ago. Stochastic algorithms discover smaller relays that retain history longer because they receive less volume. This is why randomness in relay selection isn't noise — it's an archival strategy.
+
 Event recall across time windows (fiatjaf, testable-reliable authors). Events per (relay, author) pair capped at 10,000 — this prevents a single prolific relay from dominating the baseline count and biasing recall percentages toward whichever algorithm happens to select that relay.
 
 **Practitioner algorithms** (deployed or deployable in real clients):
@@ -576,10 +578,15 @@ Event recall across time windows (fiatjaf, testable-reliable authors). Events pe
 | NDK Priority | 11.2% | 18.7% | 36.1% | 61.4% | 76.5% | 92.3% |
 | Filter Decomposition | 10.6% | 19.0% | 39.0% | 63.1% | 77.5% | 88.1% |
 | Greedy Set-Cover | 9.8% | 16.3% | 35.8% | 61.8% | 77.5% | 93.5% |
-| Direct Mapping | 9.4% | 16.8% | 38.5% | 63.9% | 79.9% | 89.9% |
+| Direct Mapping† | 9.4% | 16.8% | 38.5% | 63.9% | 79.9% | 89.9% |
 | Coverage Sort (Nostur) | 7.4% | 13.3% | 30.8% | 53.5% | 65.6% | 67.6% |
-| Popular+Random | 6.6% | 11.8% | 27.1% | 53.3% | 71.9% | 83.4% |
+| Popular+Random‡ | 6.6% | 11.8% | 27.1% | 53.3% | 71.9% | 83.4% |
+| Big Relays§ | 3.0% | 4.9% | 10.9% | 21.4% | 34.6% | 56.5% |
 | Primal Aggregator | 0.9% | 1.6% | 3.7% | 8.3% | 14.5% | 28.3% |
+
+†Direct Mapping uses unlimited connections (all declared write relays). Other algorithms capped at 20.
+‡Popular+Random = relay.damus.io + nos.lol + 2 random relays from the candidate set.
+§Big Relays = just relay.damus.io + nos.lol with no outbox logic — the "do nothing" baseline.
 
 **Academic algorithms** (benchmark ceilings — not practical for real clients):
 
@@ -604,15 +611,19 @@ To test whether patterns generalize beyond fiatjaf, event recall was measured ac
 
 | Algorithm | fiatjaf | hodlbod | Kieran | jb55 | ODELL | Derek Ross | Mean |
 |-----------|:-------:|:-------:|:------:|:----:|:-----:|:----------:|:----:|
-| **Direct Mapping** | 89.9% | 85.9% | 90.9% | 85.9% | 87.6% | 87.3% | **87.9%** |
+| **Direct Mapping**† | 89.9% | 85.9% | 90.9% | 85.9% | 87.6% | 87.3% | **87.9%** |
 | **Greedy Set-Cover** | 93.5% | 87.6% | 84.8% | 81.0% | 77.2% | 82.5% | 84.4% |
 | **NDK Priority** | 92.3% | 82.1% | 85.2% | 81.1% | 77.2% | 82.0% | 83.3% |
 | **Welshman Stochastic** | 93.2% | 83.6% | 84.6% | 84.1% | 74.8% | 77.8% | 83.0% |
-| **Popular+Random** | 83.4% | 86.8% | 84.1% | 87.0% | 76.9% | 79.7% | 83.0% |
+| **Popular+Random**‡ | 83.4% | 86.8% | 84.1% | 87.0% | 76.9% | 79.7% | 83.0% |
 | **Filter Decomposition** | 88.1% | 74.7% | 81.7% | 74.0% | 71.4% | 72.1% | 77.0% |
 | **Greedy Coverage Sort** | 67.6% | 63.7% | 79.6% | 62.4% | 54.5% | 61.0% | 64.8% |
 | **Big Relays** | 56.5% | 64.4% | 69.9% | 67.4% | 45.0% | 62.3% | 60.9% |
 | **Primal Aggregator** | 28.3% | 37.3% | 34.8% | 25.2% | 33.6% | 30.2% | 31.6% |
+
+†Direct Mapping uses all declared write relays with no connection cap (typically 50-200+ connections). All other algorithms are capped at 20 connections. Its high recall reflects unlimited connections, not algorithmic superiority.
+
+‡Popular+Random = relay.damus.io + nos.lol + 2 random relays from the candidate set. A "minimum viable outbox" baseline.
 
 **Academic algorithms** (benchmark ceilings — not practical for real clients):
 

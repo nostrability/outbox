@@ -50,7 +50,7 @@ NIP-66 publishes relay liveness data. Filtering out dead relays before running a
 
 ### 3. Randomness > determinism for anything beyond real-time
 
-Greedy set-cover gets 93% event recall at 7 days but crashes to 16% at 1 year (fiatjaf profile). Welshman's stochastic scoring (`quality * (1 + log(weight)) * random()`) gets 38% at 1 year — 2.3× better — by spreading queries across relays that happen to keep old posts.
+Greedy set-cover gets 93% event recall at 7 days but crashes to 16% at 1 year (fiatjaf profile). Why? Relays prune old events to manage storage, and popular high-volume relays prune more aggressively. Greedy concentrates on those popular relays — great for last week's posts, useless for last year's. Welshman's stochastic scoring (`quality * (1 + log(weight)) * random()`) gets 38% at 1 year — 2.3× better — by spreading queries across smaller relays that retain history longer.
 
 **What to do:** If you use greedy set-cover, switch to stochastic scoring. If you already use Welshman, upgrade to Thompson Sampling for even better results.
 
@@ -66,23 +66,39 @@ A few prolific authors produce most events (mean/median ratio: 7.6:1 at 3 years)
 
 **What to do:** Don't optimize purely for "covers the most authors." Factor in whether the relay actually retains events long-term.
 
+## What each step buys you
+
+Each technique adds incremental value. You don't need to implement everything at once:
+
+| Step | What you do | 7d recall | 1yr recall | Effort |
+|:---:|---|:---:|:---:|---|
+| 0 | **Hardcode big relays** (damus + nos.lol) | 61% | 5% | Zero |
+| 1 | **Basic outbox** (greedy set-cover from NIP-65 data) | 84% | 16% | Medium — fetch relay lists, implement set-cover |
+| 2 | **Stochastic scoring** (Welshman's `random()` factor) | 83% | 38% | Low — replace greedy with weighted random |
+| 3 | **Filter dead relays** (NIP-66 liveness data) | +5pp efficiency | neutral | Low — fetch kind 30166, exclude dead relays |
+| 4 | **Learn from delivery** (Thompson Sampling) | 92% | 81% | Low — track per-relay stats, replace `random()` with `sampleBeta()` |
+
+*Steps 2→4 are incremental — each builds on the previous. Step 3 (NIP-66) can be added at any point. Going from step 0 to step 4 takes your 7d recall from 61% to 92% and your 1yr recall from near-zero to 81%.*
+
 ## Algorithm quick reference
 
-These are the algorithms a nostr dev might actually use or encounter:
+All deployed client algorithms plus key experimental ones:
 
 | Algorithm | Used by | 7d recall | 1yr recall | Verdict |
 |---|---|:---:|:---:|---|
-| **Greedy Set-Cover** | Gossip, Applesauce, Wisp | 93% | 77% | Best on-paper coverage; degrades for history |
-| **Welshman Stochastic** | Coracle | 92% | 80% | Best deployed client for archival access |
+| **Greedy Set-Cover** | Gossip, Applesauce, Wisp | 84% | 16% | Best on-paper coverage; degrades sharply for history |
+| **NDK Priority** | NDK | 83% | 19% | Similar to Greedy; connected > selected > popular |
+| **Welshman Stochastic** | Coracle | 83% | 38% | Best deployed client for archival — 2.3× Greedy at 1yr |
+| **Coverage Sort** | Nostur | 65% | 13% | Skip-top-relays heuristic costs 5-12% coverage |
+| **Filter Decomposition** | rust-nostr | 77% | 19% | Per-author top-N write relays |
+| **Direct Mapping**\*\* | Amethyst (feeds) | 88% | 17% | All declared write relays — high recall but unlimited connections |
 | **Welshman+Thompson** | *not yet deployed* | 92% | 81% | Upgrade path for Coracle — learns from delivery |
-| **MAB-UCB**\* | *not yet deployed* | 94% | 84% | Benchmark ceiling — not practical to ship |
-| **Direct Mapping** | Amethyst (feeds) | 88% | 33% | Simplest outbox baseline — use all declared write relays |
-| **Primal Aggregator** | Primal | 34% | 3% | Centralized — 100% assignment but low actual recall |
-| **Big Relays** | *common default* | 61% | — | Just damus+nos.lol: ~63% assignment, 61% 7d recall |
+| **Big Relays** | *common default* | 61% | 5% | Just damus+nos.lol — the "do nothing" baseline |
+| **Primal Aggregator** | Primal | 32% | 2% | Centralized — 100% assignment but low actual recall |
 
-*Multi-profile means with NIP-66 liveness filtering, averaged across 4 profiles (3 for 1yr). Thompson/MAB after 5 learning sessions. Big Relays = 6-profile mean without NIP-66.*
+*7d recall: 6-profile mean from cross-profile benchmarks. 1yr recall: fiatjaf single-profile (Section 8.2 of [OUTBOX-REPORT.md](OUTBOX-REPORT.md)). All testable-reliable authors, 20-connection cap except Direct Mapping. Thompson = 4-profile mean with NIP-66, 5 learning sessions. Big Relays/Primal 7d = 6-profile mean without NIP-66.*
 
-*\*MAB-UCB requires 500 simulated rounds per relay selection to converge. It defines the theoretical ceiling but is not a practical algorithm for real clients.*
+*\*\*Direct Mapping uses unlimited connections (all declared write relays, typically 50-200+). All other algorithms capped at 20. Its high 7d recall reflects connection count, not algorithmic superiority.*
 
 <details>
 <summary>All 16 algorithms</summary>

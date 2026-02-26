@@ -8,21 +8,24 @@ See [OUTBOX-REPORT.md](OUTBOX-REPORT.md) for full benchmark data.
 ## Choosing an Algorithm
 
 ```
-What matters most?
+What's your starting point?
+│
+├─ No outbox yet?
+│  └─ Start here → hardcode relay.damus.io + nos.lol (61% 7d recall)
+│     then upgrade to basic outbox when ready
 │
 ├─ Maximum coverage (real-time feeds)?
-│  ├─ Need connection minimization? → Greedy Set-Cover
-│  ├─ Need zero-config library?     → Priority-Based (NDK)
-│  └─ Simplicity over optimization? → Direct Mapping
+│  ├─ Need connection minimization? → Greedy Set-Cover (84% 7d)
+│  ├─ Need zero-config library?     → Priority-Based / NDK (83% 7d)
+│  └─ Simplicity over optimization? → Direct Mapping (88% 7d, but unlimited connections)
 │
 ├─ Historical event recall (archival, search)?
-│  ├─ Can persist state across sessions? → Welshman+Thompson Sampling
-│  ├─ State within single session?       → MAB-UCB
-│  └─ Stateless?                         → Weighted Stochastic (Welshman/Coracle)
+│  ├─ Can persist state across sessions? → Welshman+Thompson Sampling (81% 1yr)
+│  └─ Stateless?                         → Weighted Stochastic / Welshman (38% 1yr)
 │
 └─ Anti-centralization (distribute relay load)?
    ├─ Via scoring?       → Weighted Stochastic (log dampening + random)
-   └─ Via explicit skip? → Greedy Coverage Sort (skipTopRelays)
+   └─ Via explicit skip? → Greedy Coverage Sort (skipTopRelays, but -20% recall)
 ```
 
 Key tradeoff: **coverage-optimal ≠ event-recall-optimal.** Greedy set-cover
@@ -98,8 +101,11 @@ async function checkDelivery(author: string, outboxRelays: string[]) {
 
 ### 5. Handle missing relay lists gracefully
 
-20-44% of followed users lack kind 10002. Options (most clients combine
-several):
+On paper, 20-44% of followed users lack kind 10002 — but [dead account
+analysis](bench/NIP66-COMPARISON-REPORT.md#5-dead-account-analysis) shows
+~85% of those are accounts with no posts in 2+ years. The real NIP-65 adoption
+gap among active users is ~3-5%. Options for handling missing relay lists
+(most clients combine several):
 
 - **Fallback to hardcoded popular relays** — relay.damus.io, nos.lol,
   relay.primal.net (most clients do this)
@@ -126,8 +132,9 @@ each time, with no memory of which relays actually delivered events.
 Welshman+Thompson Sampling adds learning to Welshman's existing stochastic
 scoring. After 2-3 sessions, it consistently outperforms Greedy and matches
 or exceeds baseline Welshman at long windows (120 benchmark runs across 4
-profiles, 3 time windows, 5 sessions). MAB-UCB still wins overall, but
-requires 500 simulated rounds per selection:
+profiles, 3 time windows, 5 sessions). MAB-UCB still wins overall in benchmarks, but
+requires 500 simulated rounds per selection — a benchmark ceiling, not a
+practical algorithm for real clients:
 
 ```typescript
 // Current Welshman (stateless):
