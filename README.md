@@ -20,9 +20,11 @@ Full methodology: [OUTBOX-REPORT.md](OUTBOX-REPORT.md) | Reproduce results: [Ben
 
 ### 1. Learning beats static optimization
 
-The relay that's "best on paper" isn't always the one that delivers events. Greedy set-cover (used by Gossip, Applesauce, Wisp) wins on-paper relay assignments but ranks 7th at actually retrieving events.
+The relay that's "best on paper" isn't always the one that delivers events. Greedy set-cover (used by Gossip, Applesauce, Wisp) wins on-paper relay assignments but ranks 7th at actually retrieving events. This is inherent to the algorithm: greedy set-cover is a static, one-shot computation — it picks relays based on declared write lists and never learns whether those relays actually delivered.*
 
 **What to do:** Track which relays return events. Feed that data back into selection. Thompson Sampling does this with a few dozen lines of code on top of Welshman/Coracle's existing algorithm ([code below](#thompson-sampling)).
+
+*\*Greedy set-cover solves "which relays cover the most authors?" but the answer doesn't change between sessions. A relay that failed to deliver events last time gets picked again next time if it still covers the most authors on paper. Learning algorithms (Thompson, MAB) update their beliefs after each session.*
 
 | Profile (follows) | Window | Before learning | After 2-3 sessions | Gain |
 |---|---|---|---|---|
@@ -54,9 +56,9 @@ Greedy set-cover gets 93% event recall at 7 days but crashes to 16% at 1 year (f
 
 ### 4. 20 relay connections is enough — NIP-65 adoption is the real ceiling
 
-All algorithms reach within 1-2% of their unlimited ceiling at 20 relays. But 20-44% of follows have no relay list at all. More NIP-65 adoption helps far more than better algorithms.
+All algorithms reach within 1-2% of their unlimited ceiling at 20 relays. Raw data shows 20-44% of follows have no relay list — but [dead account analysis](bench/NIP66-COMPARISON-REPORT.md#5-dead-account-analysis) reveals ~85% of those are accounts with no posts in 2+ years (or ever). The real NIP-65 adoption gap among active users is ~3-5%.
 
-**What to do:** Cap at 20 connections. Invest effort in fallback strategies for users without relay lists (hardcoded popular relays, relay hints from tags, indexer queries).
+**What to do:** Cap at 20 connections. The "missing relay list" problem is smaller than it looks — most of it is dead accounts, not active users who forgot to publish NIP-65. For the ~3-5% of active follows without relay lists, use fallback strategies (relay hints from tags, indexer queries, hardcoded popular relays).
 
 ### 5. Event volume follows a power law — this is why stochastic wins
 
@@ -73,10 +75,14 @@ These are the algorithms a nostr dev might actually use or encounter:
 | **Greedy Set-Cover** | Gossip, Applesauce, Wisp | 93% | 77% | Best on-paper coverage; degrades for history |
 | **Welshman Stochastic** | Coracle | 92% | 80% | Best deployed client for archival access |
 | **Welshman+Thompson** | *not yet deployed* | 92% | 81% | Upgrade path for Coracle — learns from delivery |
-| **MAB-UCB** | *not yet deployed* | 94% | 84% | Benchmark ceiling (500 simulated rounds per selection — not practical to ship) |
-| **Direct Mapping** | Amethyst (feeds) | 88% | — | Simplest baseline — use all declared write relays |
+| **MAB-UCB**\* | *not yet deployed* | 94% | 84% | Benchmark ceiling — not practical to ship |
+| **Direct Mapping** | Amethyst (feeds) | 88% | 33% | Simplest outbox baseline — use all declared write relays |
+| **Primal Aggregator** | Primal | 34% | 3% | Centralized — 100% assignment but low actual recall |
+| **Big Relays** | *common default* | — | — | Just damus+nos.lol: ~63% assignment coverage, no event recall data |
 
 *Multi-profile means with NIP-66 liveness filtering, averaged across 4 profiles (3 for 1yr). Thompson/MAB after 5 learning sessions.*
+
+*\*MAB-UCB requires 500 simulated rounds per relay selection to converge. It defines the theoretical ceiling but is not a practical algorithm for real clients.*
 
 <details>
 <summary>All 16 algorithms</summary>

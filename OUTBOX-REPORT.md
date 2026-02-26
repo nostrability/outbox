@@ -38,7 +38,7 @@ We analyzed outbox implementations in 15 codebases spanning 5 languages (Rust, T
 
 7. **Academic coverage ≠ real-world event recall.** Event verification against real relays shows that algorithms optimizing for assignment coverage don't necessarily win at actual event retrieval. At 1 year, MAB-UCB achieves 40.8% event recall vs. Greedy Set-Cover's 16.3%. The relay that *should* have the event often doesn't — due to retention policies, downtime, or access restrictions. Stochastic exploration discovers relays that retain historical events.
 
-8. **Welshman's `random()` is accidentally brilliant for archival.** The stochastic factor in ``quality * (1 + log(weight)) * random()`` spreads queries across relays over time, achieving the best long-window event recall (37.8% at 1 year) among deployed client algorithms. MAB-UCB (not yet in any client) beats it at 40.8%.
+8. **Welshman's `random()` is brilliant for archival.** The stochastic factor in ``quality * (1 + log(weight)) * random()`` spreads queries across relays over time, achieving the best long-window event recall (37.8% at 1 year) among deployed client algorithms. MAB-UCB (not yet in any client) beats it at 40.8%.
 
 ---
 
@@ -470,71 +470,75 @@ We built a benchmark tool ([`bench/`](bench/)) that simulates relay selection al
 
 **Client-derived algorithms at 20 connections:**
 
-| User (follows) | Ceiling | Greedy | NDK | Welshman | Nostur | rust-nostr | Direct |
-|----------------|--------:|-------:|----:|---------:|-------:|-----------:|-------:|
-| ODELL (1,779) | 76.6% | **75.3%** | 74.9% | 73.7% | 66.4% | 69.8% | 74.1% |
-| Derek Ross (1,328) | 80.8% | **79.6%** | 79.3% | 78.2% | 69.8% | 73.9% | 78.5% |
-| pablof7z (1,050) | 67.7% | **66.4%** | 66.1% | 65.7% | 60.9% | 62.0% | 65.8% |
-| Gigi (1,033) | 67.2% | **66.2%** | 65.7% | 65.2% | 58.4% | 62.1% | 64.9% |
-| jb55 (943) | 69.2% | **68.1%** | 67.7% | 67.1% | 63.6% | 64.4% | 66.7% |
-| verbiricha (938) | 82.2% | **80.3%** | 78.8% | 79.6% | 71.4% | 75.5% | 79.7% |
-| miljan (811) | 76.4% | **75.2%** | 74.8% | 73.9% | 66.2% | 68.1% | 74.0% |
-| Calle (718) | 69.8% | **68.2%** | 66.6% | 67.7% | 61.0% | 63.8% | 62.7% |
-| jack (694) | 56.1% | **55.3%** | **55.3%** | 54.3% | 50.7% | 51.6% | 54.3% |
-| Karnage (581) | 88.5% | **87.6%** | 87.4% | 87.1% | 76.6% | 81.2% | 86.2% |
-| NVK (502) | 65.7% | **64.9%** | **64.9%** | 64.1% | 61.4% | 59.2% | 63.7% |
-| hodlbod (442) | 87.1% | **84.8%** | 83.0% | 83.9% | 75.1% | 80.1% | 83.0% |
-| Alex Gleason (434) | 84.3% | **83.4%** | 82.7% | 82.6% | 74.2% | 78.1% | 82.7% |
-| Semisol (421) | 87.2% | **85.0%** | 84.8% | 84.8% | 81.0% | 82.2% | 84.6% |
-| Martti Malmi (395) | 72.4% | **71.6%** | 70.9% | 70.4% | 66.1% | 67.6% | 70.6% |
-| hzrd149 (388) | 84.0% | **82.7%** | 82.2% | 81.4% | 74.7% | 77.6% | 81.7% |
-| Kieran (377) | 80.4% | **79.3%** | 79.0% | 78.5% | 75.1% | 74.3% | 78.5% |
-| Preston Pysh (369) | 52.3% | **51.8%** | **51.8%** | 51.4% | 50.7% | 49.9% | 50.9% |
-| Tony Giorgio (361) | 72.0% | 70.6% | **71.2%** | 70.1% | 67.3% | 67.3% | 69.8% |
-| Snowden (354) | 63.0% | **62.7%** | 62.4% | 61.8% | 59.3% | 59.0% | 61.9% |
-| Vitor (240) | 82.5% | **80.8%** | 80.4% | 80.6% | 72.1% | 76.7% | 80.4% |
-| Dilger (233) | 80.3% | 76.8% | 76.4% | **77.0%** | 70.8% | 73.0% | 75.5% |
-| Lyn Alden (226) | 67.3% | **67.3%** | **67.3%** | 66.2% | 63.7% | 61.1% | 65.0% |
-| fiatjaf (194) | 76.3% | **75.3%** | **75.3%** | 73.2% | 61.9% | 71.1% | 71.6% |
-| Ben Arc (137) | 70.8% | **69.3%** | **69.3%** | 66.7% | 62.8% | 62.8% | 67.2% |
-| Rabble (105) | 90.5% | **90.5%** | **90.5%** | 89.5% | 75.2% | 85.7% | 88.6% |
+| User (follows) | Primal | BigRelays | Ceiling | Greedy | NDK | Welshman | Nostur | rust-nostr | Direct |
+|----------------|-------:|----------:|--------:|-------:|----:|---------:|-------:|-----------:|-------:|
+| ODELL (1,779) | 100%* | 64.1% | 76.6% | **75.3%** | 74.9% | 73.7% | 66.4% | 69.8% | 74.1% |
+| Derek Ross (1,328) | 100%* | 69.3% | 80.8% | **79.6%** | 79.3% | 78.2% | 69.8% | 73.9% | 78.5% |
+| pablof7z (1,050) | 100%* | 57.6% | 67.7% | **66.4%** | 66.1% | 65.7% | 60.9% | 62.0% | 65.8% |
+| Gigi (1,033) | 100%* | 57.9% | 67.2% | **66.2%** | 65.7% | 65.2% | 58.4% | 62.1% | 64.9% |
+| jb55 (943) | 100%* | 59.8% | 69.2% | **68.1%** | 67.7% | 67.1% | 63.6% | 64.4% | 66.7% |
+| verbiricha (938) | 100%* | 70.5% | 82.2% | **80.3%** | 78.8% | 79.6% | 71.4% | 75.5% | 79.7% |
+| miljan (811) | 100%* | 62.0% | 76.4% | **75.2%** | 74.8% | 73.9% | 66.2% | 68.1% | 74.0% |
+| Calle (718) | 100%* | 54.9% | 69.8% | **68.2%** | 66.6% | 67.7% | 61.0% | 63.8% | 62.7% |
+| jack (694) | 100%* | 46.5% | 56.1% | **55.3%** | **55.3%** | 54.3% | 50.7% | 51.6% | 54.3% |
+| Karnage (581) | 100%* | 75.1% | 88.5% | **87.6%** | 87.4% | 87.1% | 76.6% | 81.2% | 86.2% |
+| NVK (502) | 100%* | 54.0% | 65.7% | **64.9%** | **64.9%** | 64.1% | 61.4% | 59.2% | 63.7% |
+| hodlbod (442) | 100%* | 74.7% | 87.1% | **84.8%** | 83.0% | 83.9% | 75.1% | 80.1% | 83.0% |
+| Alex Gleason (434) | 100%* | 59.3% | 84.3% | **83.4%** | 82.7% | 82.6% | 74.2% | 78.1% | 82.7% |
+| Semisol (421) | 100%* | 72.6% | 87.2% | **85.0%** | 84.8% | 84.8% | 81.0% | 82.2% | 84.6% |
+| Martti Malmi (395) | 100%* | 62.9% | 72.4% | **71.6%** | 70.9% | 70.4% | 66.1% | 67.6% | 70.6% |
+| hzrd149 (388) | 100%* | 74.0% | 84.0% | **82.7%** | 82.2% | 81.4% | 74.7% | 77.6% | 81.7% |
+| Kieran (377) | 100%* | 71.4% | 80.4% | **79.3%** | 79.0% | 78.5% | 75.1% | 74.3% | 78.5% |
+| Preston Pysh (369) | 100%* | 45.8% | 52.3% | **51.8%** | **51.8%** | 51.4% | 50.7% | 49.9% | 50.9% |
+| Tony Giorgio (361) | 100%* | 63.7% | 72.0% | 70.6% | **71.2%** | 70.1% | 67.3% | 67.3% | 69.8% |
+| Snowden (354) | 100%* | 58.2% | 63.0% | **62.7%** | 62.4% | 61.8% | 59.3% | 59.0% | 61.9% |
+| Vitor (240) | 100%* | 68.3% | 82.5% | **80.8%** | 80.4% | 80.6% | 72.1% | 76.7% | 80.4% |
+| Dilger (233) | 100%* | 63.1% | 80.3% | 76.8% | 76.4% | **77.0%** | 70.8% | 73.0% | 75.5% |
+| Lyn Alden (226) | 100%* | 53.7% | 67.3% | **67.3%** | **67.3%** | 66.2% | 63.7% | 61.1% | 65.0% |
+| fiatjaf (194) | 100%* | 63.4% | 76.3% | **75.3%** | **75.3%** | 73.2% | 61.9% | 71.1% | 71.6% |
+| Ben Arc (137) | 100%* | 59.9% | 70.8% | **69.3%** | **69.3%** | 66.7% | 62.8% | 62.8% | 67.2% |
+| Rabble (105) | 100%* | 76.9% | 90.5% | **90.5%** | **90.5%** | 89.5% | 75.2% | 85.7% | 88.6% |
 
 Greedy Set-Cover wins 23 of 26 profiles. NDK ties on 7. Welshman wins 1 (Dilger). NDK wins 1 outright (Tony Giorgio).
 
+\*"Primal" = Primal Aggregator, routes all queries to `wss://relay.primal.net`. 100% assignment coverage by definition (centralized, not outbox model). "BigRelays" = coverage from just `wss://relay.damus.io` + `wss://nos.lol` (% of follows who declare either as a write relay).
+
 **CS-inspired algorithms vs. Greedy (20 connections):**
 
-| User (follows) | Ceiling | Greedy | ILP | Bipartite | Streaming | Spectral | MAB | StochGrdy |
-|----------------|--------:|-------:|----:|----------:|----------:|---------:|----:|----------:|
-| ODELL (1,779) | 76.6% | 75.3% | **75.5%** | 75.3% | 75.4% | 75.4% | 75.0% | 73.9% |
-| Derek Ross (1,328) | 80.8% | 79.6% | **80.0%** | 79.9% | 79.9% | 79.9% | 79.2% | 78.9% |
-| pablof7z (1,050) | 67.7% | 66.4% | **66.9%** | 66.7% | 66.6% | 66.4% | 65.7% | 65.7% |
-| Gigi (1,033) | 67.2% | 66.2% | **66.7%** | **66.7%** | 66.5% | 66.6% | 66.2% | 65.9% |
-| jb55 (943) | 69.2% | 68.1% | **68.6%** | **68.6%** | **68.6%** | 68.5% | 67.9% | 67.7% |
-| verbiricha (938) | 82.2% | 80.3% | **80.6%** | 80.3% | 80.4% | 80.5% | 79.7% | 80.1% |
-| miljan (811) | 76.4% | 75.2% | **76.1%** | 75.6% | **76.1%** | 76.0% | 75.3% | 75.1% |
-| Calle (718) | 69.8% | 68.2% | **69.1%** | 68.7% | **69.1%** | 69.0% | 67.5% | 68.0% |
-| jack (694) | 56.1% | 55.3% | **56.1%** | 55.7% | **56.1%** | 56.0% | 54.9% | 54.8% |
-| Karnage (581) | 88.5% | 87.6% | **88.5%** | 88.2% | **88.5%** | **88.5%** | 86.5% | 87.4% |
-| NVK (502) | 65.7% | 64.9% | **65.7%** | 65.3% | **65.7%** | **65.7%** | 63.5% | 64.7% |
-| hodlbod (442) | 87.1% | 84.8% | **86.0%** | 85.5% | **86.0%** | 85.9% | 84.6% | 84.3% |
-| Alex Gleason (434) | 84.3% | 83.4% | **84.3%** | 83.6% | **84.3%** | **84.3%** | 78.1% | 82.6% |
-| Semisol (421) | 87.2% | 85.0% | **87.2%** | 86.4% | **87.2%** | 86.9% | 85.0% | 85.0% |
-| Martti Malmi (395) | 72.4% | 71.6% | **72.4%** | 72.0% | **72.4%** | **72.4%** | 69.6% | 70.6% |
-| hzrd149 (388) | 84.0% | 82.7% | **84.0%** | 83.4% | **84.0%** | **84.0%** | 82.1% | 82.0% |
-| Kieran (377) | 80.4% | 79.3% | **80.4%** | 80.1% | **80.4%** | **80.4%** | 78.7% | 79.0% |
-| Preston Pysh (369) | 52.3% | 51.8% | **52.3%** | 52.2% | **52.3%** | **52.3%** | 51.0% | 51.5% |
-| Tony Giorgio (361) | 72.0% | 70.6% | **72.0%** | 71.6% | **72.0%** | **72.0%** | 70.3% | 70.4% |
-| Snowden (354) | 63.0% | 62.7% | **63.0%** | 62.9% | **63.0%** | **63.0%** | 60.1% | 61.9% |
-| Vitor (240) | 82.5% | 80.8% | **82.5%** | 81.4% | **82.5%** | **82.5%** | 79.9% | 80.8% |
-| Dilger (233) | 80.3% | 76.8% | **80.3%** | 79.4% | **80.3%** | **80.3%** | 77.4% | 77.1% |
-| Lyn Alden (226) | 67.3% | **67.3%** | **67.3%** | 67.0% | **67.3%** | **67.3%** | 64.0% | 66.4% |
-| fiatjaf (194) | 76.3% | 75.3% | **76.3%** | 75.9% | **76.3%** | **76.3%** | 72.3% | 73.4% |
-| Ben Arc (137) | 70.8% | 69.3% | **70.8%** | 70.6% | **70.8%** | **70.8%** | 66.9% | 67.9% |
-| Rabble (105) | 90.5% | **90.5%** | **90.5%** | **90.5%** | **90.5%** | **90.5%** | 86.0% | 89.8% |
+| User (follows) | Primal | BigRelays | Ceiling | Greedy | ILP | Bipartite | Streaming | Spectral | MAB | StochGrdy |
+|----------------|-------:|----------:|--------:|-------:|----:|----------:|----------:|---------:|----:|----------:|
+| ODELL (1,779) | 100%* | 64.1% | 76.6% | 75.3% | **75.5%** | 75.3% | 75.4% | 75.4% | 75.0% | 73.9% |
+| Derek Ross (1,328) | 100%* | 69.3% | 80.8% | 79.6% | **80.0%** | 79.9% | 79.9% | 79.9% | 79.2% | 78.9% |
+| pablof7z (1,050) | 100%* | 57.6% | 67.7% | 66.4% | **66.9%** | 66.7% | 66.6% | 66.4% | 65.7% | 65.7% |
+| Gigi (1,033) | 100%* | 57.9% | 67.2% | 66.2% | **66.7%** | **66.7%** | 66.5% | 66.6% | 66.2% | 65.9% |
+| jb55 (943) | 100%* | 59.8% | 69.2% | 68.1% | **68.6%** | **68.6%** | **68.6%** | 68.5% | 67.9% | 67.7% |
+| verbiricha (938) | 100%* | 70.5% | 82.2% | 80.3% | **80.6%** | 80.3% | 80.4% | 80.5% | 79.7% | 80.1% |
+| miljan (811) | 100%* | 62.0% | 76.4% | 75.2% | **76.1%** | 75.6% | **76.1%** | 76.0% | 75.3% | 75.1% |
+| Calle (718) | 100%* | 54.9% | 69.8% | 68.2% | **69.1%** | 68.7% | **69.1%** | 69.0% | 67.5% | 68.0% |
+| jack (694) | 100%* | 46.5% | 56.1% | 55.3% | **56.1%** | 55.7% | **56.1%** | 56.0% | 54.9% | 54.8% |
+| Karnage (581) | 100%* | 75.1% | 88.5% | 87.6% | **88.5%** | 88.2% | **88.5%** | **88.5%** | 86.5% | 87.4% |
+| NVK (502) | 100%* | 54.0% | 65.7% | 64.9% | **65.7%** | 65.3% | **65.7%** | **65.7%** | 63.5% | 64.7% |
+| hodlbod (442) | 100%* | 74.7% | 87.1% | 84.8% | **86.0%** | 85.5% | **86.0%** | 85.9% | 84.6% | 84.3% |
+| Alex Gleason (434) | 100%* | 59.3% | 84.3% | 83.4% | **84.3%** | 83.6% | **84.3%** | **84.3%** | 78.1% | 82.6% |
+| Semisol (421) | 100%* | 72.6% | 87.2% | 85.0% | **87.2%** | 86.4% | **87.2%** | 86.9% | 85.0% | 85.0% |
+| Martti Malmi (395) | 100%* | 62.9% | 72.4% | 71.6% | **72.4%** | 72.0% | **72.4%** | **72.4%** | 69.6% | 70.6% |
+| hzrd149 (388) | 100%* | 74.0% | 84.0% | 82.7% | **84.0%** | 83.4% | **84.0%** | **84.0%** | 82.1% | 82.0% |
+| Kieran (377) | 100%* | 71.4% | 80.4% | 79.3% | **80.4%** | 80.1% | **80.4%** | **80.4%** | 78.7% | 79.0% |
+| Preston Pysh (369) | 100%* | 45.8% | 52.3% | 51.8% | **52.3%** | 52.2% | **52.3%** | **52.3%** | 51.0% | 51.5% |
+| Tony Giorgio (361) | 100%* | 63.7% | 72.0% | 70.6% | **72.0%** | 71.6% | **72.0%** | **72.0%** | 70.3% | 70.4% |
+| Snowden (354) | 100%* | 58.2% | 63.0% | 62.7% | **63.0%** | 62.9% | **63.0%** | **63.0%** | 60.1% | 61.9% |
+| Vitor (240) | 100%* | 68.3% | 82.5% | 80.8% | **82.5%** | 81.4% | **82.5%** | **82.5%** | 79.9% | 80.8% |
+| Dilger (233) | 100%* | 63.1% | 80.3% | 76.8% | **80.3%** | 79.4% | **80.3%** | **80.3%** | 77.4% | 77.1% |
+| Lyn Alden (226) | 100%* | 53.7% | 67.3% | **67.3%** | **67.3%** | 67.0% | **67.3%** | **67.3%** | 64.0% | 66.4% |
+| fiatjaf (194) | 100%* | 63.4% | 76.3% | 75.3% | **76.3%** | 75.9% | **76.3%** | **76.3%** | 72.3% | 73.4% |
+| Ben Arc (137) | 100%* | 59.9% | 70.8% | 69.3% | **70.8%** | 70.6% | **70.8%** | **70.8%** | 66.9% | 67.9% |
+| Rabble (105) | 100%* | 76.9% | 90.5% | **90.5%** | **90.5%** | **90.5%** | **90.5%** | **90.5%** | 86.0% | 89.8% |
 
 ILP, Streaming Coverage, and Spectral Clustering frequently hit the theoretical ceiling. Greedy Set-Cover leaves 1-4% on the table. MAB-UCB and Stochastic Greedy trade coverage for exploration.
 
 "Ceiling" = NIP-65 adoption rate (% of follows with any valid write relay). No algorithm can exceed this.
+
+\*"Primal" = Primal Aggregator, routes all queries to `wss://relay.primal.net`. 100% assignment coverage by definition (centralized, not outbox model). "BigRelays" = coverage from just `wss://relay.damus.io` + `wss://nos.lol` (% of follows who declare either as a write relay).
 
 **Key academic coverage findings:**
 
@@ -615,7 +619,7 @@ Profile characteristics:
 Cross-profile patterns:
 - **Rankings generalize.** The top 4 algorithms are CS-inspired across all profiles (mean 91.8–92.4%).
 - **~8pp gap** between CS algorithms and the best client-derived algorithms (92% vs 84% mean).
-- **MAB-UCB is the most consistent** practical algorithm: 83–93% range, always top 5.
+- **MAB-UCB is the most consistent** algorithm: 83–93% range, always top 5. However, it requires 500 simulated rounds per selection — a benchmark ceiling, not a practical algorithm for real clients.
 - **ODELL is the hardest profile** (largest follow list, lowest relay list coverage) — all algorithms score lowest here.
 - **Greedy Set-Cover ranks 7th** by mean event recall despite being #1 at assignment coverage.
 
@@ -729,7 +733,7 @@ A small fraction of prolific authors produce the majority of events. This power-
 
 2. **MAB-UCB is the best long-window algorithm.** Its exploration component isn't noise -- it discovers relays that happen to retain historical events. This outweighs the static optimizers that prioritize coverage density.
 
-3. **Welshman's `random()` factor is accidentally brilliant.** What looks like an anti-centralization quirk (``quality * (1 + log(weight)) * random()``) turns out to be empirically the best archival strategy among existing client algorithms. At 1 year: 37.8% recall (best non-MAB, non-theoretical algorithm). MAB-UCB (not yet in any client) beats it at 40.8%. The randomness spreads queries across more relays over time, accidentally discovering which ones retain old events.
+3. **Welshman's `random()` factor is brilliant for archival.** The stochastic factor in ``quality * (1 + log(weight)) * random()`` turns out to be empirically the best archival strategy among existing client algorithms. At 1 year: 37.8% recall (best non-MAB, non-theoretical algorithm). MAB-UCB (not yet in any client) beats it at 40.8%. The randomness spreads queries across more relays over time, discovering which ones retain old events.
 
 4. **Greedy Set-Cover degrades sharply.** 93.5% at 7d → 16.3% at 1 year. It minimizes connections by concentrating on popular relays, but those relays don't necessarily retain old events. Algorithms that spread queries fare better long-term.
 
