@@ -27,6 +27,15 @@ export function printPhase2Table(result: Phase2Result): void {
   console.log(
     `Baseline: ${comma(s.totalRelaysQueried)} relays queried (${pct(s.relaySuccessRate)} success), ${timeStr}`,
   );
+  if (s.timingStats) {
+    const t = s.timingStats;
+    const fmtMs = (ms: number) => ms < 1000 ? `${ms.toFixed(0)}ms` : `${(ms / 1000).toFixed(1)}s`;
+    console.log(
+      `  Timing: connect ${fmtMs(t.connectMs.median)} median (${fmtMs(t.connectMs.p95)} p95)` +
+      ` | query ${fmtMs(t.queryMs.median)} median (${fmtMs(t.queryMs.p95)} p95)` +
+      ` | ${t.timeoutCount} timeouts (${t.timeoutRelayCount} relays)`,
+    );
+  }
   console.log(`  Authors: ${comma(result.totalAuthorsWithRelayData)} with relay data`);
   console.log(
     `    Testable (reliable): ${result.testableReliableAuthors}` +

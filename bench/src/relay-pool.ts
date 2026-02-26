@@ -13,6 +13,8 @@ export interface RelayOutcome {
   connected: boolean;
   reachedEose: boolean;
   connectTimeMs: number;
+  queryTimeMs: number;
+  timedOut: boolean;
   error?: string;
 }
 
@@ -133,7 +135,9 @@ export class RelayPool {
     cache: QueryCache,
   ): Promise<{ perPubkey: Map<Pubkey, Set<string>>; reachedEose: boolean }> {
     await this.semaphore.acquire();
+    const queryStartMs = performance.now();
     let reachedEose = false;
+    let anyTimedOut = false;
     // Collect full events per pubkey for proper capping
     const eventsPerPubkey = new Map<Pubkey, NostrEvent[]>();
     for (const pk of pubkeys) eventsPerPubkey.set(pk, []);
@@ -161,6 +165,7 @@ export class RelayPool {
         });
 
         if (events.eose) reachedEose = true;
+        if (!events.eose && !events.closed) anyTimedOut = true;
 
         for (const event of events.events) {
           const pk = event.pubkey as Pubkey;
@@ -184,6 +189,8 @@ export class RelayPool {
         connected: true,
         reachedEose,
         connectTimeMs: pooled.connectTimeMs,
+        queryTimeMs: performance.now() - queryStartMs,
+        timedOut: anyTimedOut,
       });
 
     } catch (err) {
@@ -192,6 +199,8 @@ export class RelayPool {
           connected: false,
           reachedEose: false,
           connectTimeMs: 0,
+          queryTimeMs: performance.now() - queryStartMs,
+          timedOut: false,
           error: String(err),
         });
       }
@@ -217,6 +226,10 @@ export class RelayPool {
 
   getRelayOutcome(relay: RelayUrl): RelayOutcome | undefined {
     return this.relayOutcomes.get(relay);
+  }
+
+  getAllOutcomes(): ReadonlyMap<RelayUrl, RelayOutcome> {
+    return this.relayOutcomes;
   }
 
   closeAll(): void {
@@ -263,6 +276,8 @@ export class RelayPool {
         connected: false,
         reachedEose: false,
         connectTimeMs: conn.connectTimeMs,
+        queryTimeMs: 0,
+        timedOut: false,
         error: conn.errors.join("; "),
       });
       return null;

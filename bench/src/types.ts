@@ -359,6 +359,13 @@ export interface Phase2Result {
     meanEventsPerTestableAuthor: number;
     medianEventsPerTestableAuthor: number;
     collectionTimeMs: number;
+    timingStats?: {
+      connectMs: { median: number; p95: number; mean: number };
+      queryMs: { median: number; p95: number; mean: number };
+      timeoutCount: number;
+      timeoutRelayCount: number;
+      totalRelayCount: number;
+    };
   };
   algorithms: AlgorithmVerification[];
   /** Baselines map, available for score persistence. Not serialized to JSON. */
