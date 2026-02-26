@@ -21,7 +21,7 @@ What's your starting point?
 │
 ├─ Historical event recall (archival, search)?
 │  ├─ Can persist state across sessions? → Welshman+Thompson Sampling (81% 1yr)
-│  └─ Stateless?                         → Weighted Stochastic / Welshman (38% 1yr)
+│  └─ Stateless?                         → Weighted Stochastic / Welshman (24% 1yr)
 │
 └─ Anti-centralization (distribute relay load)?
    ├─ Via scoring?       → Weighted Stochastic (log dampening + random)
