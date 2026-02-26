@@ -3,6 +3,7 @@
  */
 
 import type { Phase2Result } from "../types.ts";
+import { median as computeMedian } from "../types.ts";
 
 function pad(s: string, width: number, align: "left" | "right" = "right"): string {
   if (align === "left") return s.padEnd(width);
@@ -79,6 +80,34 @@ export function printPhase2Table(result: Phase2Result): void {
         pad(relayOk, widths[3]),
       ].join(" | ");
       console.log(`  ${row}`);
+    }
+
+    // Per-author recall distribution
+    if (result.algorithms.some((a) => a.perAuthorRecallRates.length > 0)) {
+      console.log("");
+      const dHeaders = ["Algorithm", "Median", "% at 0%", "p25", "p75"];
+      const dWidths = [32, 8, 8, 8, 8];
+      const dHeaderRow = dHeaders.map((h, i) => pad(h, dWidths[i], i === 0 ? "left" : "right")).join(" | ");
+      const dSeparator = dWidths.map((w) => "-".repeat(w)).join("-+-");
+      console.log(`  Per-author recall distribution:`);
+      console.log(`  ${dHeaderRow}`);
+      console.log(`  ${dSeparator}`);
+      for (const alg of result.algorithms) {
+        const rates = alg.perAuthorRecallRates;
+        if (rates.length === 0) continue;
+        const med = computeMedian(rates);
+        const atZero = rates.filter((r) => r === 0).length / rates.length;
+        const p25 = rates[Math.floor((rates.length - 1) * 0.25)];
+        const p75 = rates[Math.floor((rates.length - 1) * 0.75)];
+        const row = [
+          pad(alg.algorithmName, dWidths[0], "left"),
+          pad(pct(med), dWidths[1]),
+          pad(pct(atZero), dWidths[2]),
+          pad(pct(p25), dWidths[3]),
+          pad(pct(p75), dWidths[4]),
+        ].join(" | ");
+        console.log(`  ${row}`);
+      }
     }
   }
 

@@ -72,6 +72,8 @@ export interface AlgorithmParams {
   relayPriors?: Map<RelayUrl, { alpha: number; beta: number }>;
   /** Epsilon for exploration (greedy-epsilon). */
   epsilon?: number;
+  /** Max fraction of covered pubkeys any single relay may serve (0-1). */
+  maxSharePerRelay?: number;
 }
 
 export interface Distribution {
@@ -342,6 +344,8 @@ export interface AlgorithmVerification {
   testablePartialAuthors: number;
   authorsWithEvents: number;
   outOfBaselineRelays: RelayUrl[];
+  /** Per-author event recall rates (testable-reliable only), sorted ascending. */
+  perAuthorRecallRates: number[];
 }
 
 export interface Phase2Result {
@@ -425,6 +429,10 @@ export interface RelayScoreEntry {
   lastQueried: number;
   totalEvents: number;
   totalExpected: number;
+  /** Per-session delivery rate history (most recent last). */
+  sessionRates?: number[];
+  /** Trend direction: "improving", "declining", or "stable". */
+  trend?: "improving" | "declining" | "stable";
 }
 
 export interface RelayScoreDB {

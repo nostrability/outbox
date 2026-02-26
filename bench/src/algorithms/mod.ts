@@ -266,6 +266,59 @@ export function postProcessCap(
 }
 
 /**
+ * Post-process concentration cap: if any relay serves more than maxShare
+ * fraction of covered pubkeys, drop excess assignments from that relay.
+ * Pubkeys with other relay coverage retain it; others become orphans.
+ */
+export function postProcessConcentrationCap(
+  result: AlgorithmResult,
+  maxShare: number,
+): AlgorithmResult {
+  // Count total covered pubkeys
+  const totalCovered = result.pubkeyAssignments.size;
+  const maxPubkeys = Math.ceil(totalCovered * maxShare);
+
+  let changed = false;
+  const newRelayAssignments = new Map(
+    [...result.relayAssignments.entries()].map(([r, ps]) => [r, new Set(ps)]),
+  );
+
+  for (const [relay, pubkeys] of newRelayAssignments) {
+    if (pubkeys.size <= maxPubkeys) continue;
+    changed = true;
+    // Keep the first maxPubkeys (deterministic for reproducibility)
+    const sorted = [...pubkeys].sort();
+    const toRemove = sorted.slice(maxPubkeys);
+    for (const pk of toRemove) pubkeys.delete(pk);
+  }
+
+  if (!changed) return result;
+
+  // Rebuild pubkey→relay map and detect new orphans
+  const newPubkeyAssignments = new Map<Pubkey, Set<RelayUrl>>();
+  for (const [relay, pubkeys] of newRelayAssignments) {
+    for (const pk of pubkeys) {
+      const existing = newPubkeyAssignments.get(pk) ?? new Set<RelayUrl>();
+      existing.add(relay);
+      newPubkeyAssignments.set(pk, existing);
+    }
+  }
+
+  const newOrphans = new Set(result.orphanedPubkeys);
+  for (const [pk] of result.pubkeyAssignments) {
+    if (!newPubkeyAssignments.has(pk)) newOrphans.add(pk);
+  }
+
+  return {
+    ...result,
+    relayAssignments: newRelayAssignments,
+    pubkeyAssignments: newPubkeyAssignments,
+    orphanedPubkeys: newOrphans,
+    notes: [...(result.notes ?? []), `Concentration cap: max ${(maxShare * 100).toFixed(0)}% per relay`],
+  };
+}
+
+/**
  * Run an algorithm with the proper cap strategy:
  * - Native cap algorithms: pass maxConnections directly
  * - Per-pubkey algorithms: run uncapped, then post-process cap
@@ -286,6 +339,11 @@ export function runAlgorithm(
     mergedParams.maxConnections < Infinity
   ) {
     result = postProcessCap(result, mergedParams.maxConnections);
+  }
+
+  // Apply per-relay concentration cap if set
+  if (mergedParams.maxSharePerRelay && mergedParams.maxSharePerRelay < 1) {
+    result = postProcessConcentrationCap(result, mergedParams.maxSharePerRelay);
   }
 
   return result;
