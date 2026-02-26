@@ -44,6 +44,8 @@ NIP-66 publishes relay liveness data. Filtering out dead relays before running a
 
 *Relay success rate = % of selected relays that actually respond to queries. This is an efficiency improvement (fewer wasted connections), not necessarily more events retrieved.*
 
+**Speed impact:** Across 10 profiles (4,587 relay queries), NIP-66 pre-filtering reduces feed load time by 39% (40s → 24s). Dead relays each burn a 15-second timeout that blocks a concurrency slot from querying live relays.
+
 ### 3. Randomness > determinism for anything beyond real-time
 
 Greedy set-cover gets 93% event recall at 7 days but crashes to 16% at 1 year (fiatjaf profile). Welshman's stochastic scoring (`quality * (1 + log(weight)) * random()`) gets 38% at 1 year — 2.3× better — by spreading queries across relays that happen to keep old posts.
