@@ -15,7 +15,7 @@ import type {
   PubkeyBaseline,
   RelayUrl,
 } from "../types.ts";
-import { meanOf, median, toSortedNumericArray } from "../types.ts";
+import { meanOf, median, percentile, toSortedNumericArray } from "../types.ts";
 
 const DEFAULT_OPTIONS: Phase2Options = {
   kinds: [1],
@@ -155,6 +155,44 @@ export async function runPhase2(
       console.error(`  ${n.relay}: ${n.notice}`);
     }
   }
+  // Compute timing stats from relay outcomes only for fresh runs (not cache hits)
+  let timingStats: Phase2Result["baselineStats"]["timingStats"];
+  if (!cacheHit) {
+    const outcomes = pool.getAllOutcomes();
+    const connectTimes: number[] = [];
+    const queryTimes: number[] = [];
+    let timeoutCount = 0;
+    let timeoutRelayCount = 0;
+    for (const outcome of outcomes.values()) {
+      if (outcome.connected) {
+        connectTimes.push(outcome.connectTimeMs);
+        queryTimes.push(outcome.queryTimeMs);
+      }
+      if (outcome.timedOut) timeoutRelayCount++;
+    }
+    timeoutCount = diag.timeouts;
+
+    const sortedConnect = toSortedNumericArray(connectTimes);
+    const sortedQuery = toSortedNumericArray(queryTimes);
+    timingStats = sortedConnect.length > 0
+      ? {
+          connectMs: {
+            median: median(sortedConnect),
+            p95: percentile(sortedConnect, 0.95),
+            mean: meanOf(connectTimes),
+          },
+          queryMs: {
+            median: median(sortedQuery),
+            p95: percentile(sortedQuery, 0.95),
+            mean: meanOf(queryTimes),
+          },
+          timeoutCount,
+          timeoutRelayCount,
+          totalRelayCount: outcomes.size,
+        }
+      : undefined;
+  }
+
   pool.closeAll();
 
   // Write baseline to disk cache if we collected fresh data
@@ -255,6 +293,7 @@ export async function runPhase2(
       meanEventsPerTestableAuthor: meanOf(testableEventCounts),
       medianEventsPerTestableAuthor: median(sortedEventCounts),
       collectionTimeMs,
+      timingStats,
     },
     algorithms,
     _baselines: baselines,
