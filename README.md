@@ -85,7 +85,7 @@ NIP-66 publishes relay liveness data. Filtering out dead relays before running a
 
 ### 3. Randomness > determinism for anything beyond real-time
 
-Greedy set-cover gets 84% event recall at 7 days but crashes to 16% at 1 year (6-profile means). Why? Relays prune old events to manage storage, and popular high-volume relays prune more aggressively. A few prolific authors produce most events (mean/median ratio: 7.6:1 at 3 years) — greedy concentrates on popular relays where many authors publish, but those relays can't retain the high-volume output. Welshman's stochastic scoring (`quality * (1 + log(weight)) * random()`) gets 24% at 1 year — 1.5× better — by spreading queries across smaller relays that retain history longer. Filter Decomposition (rust-nostr) does even better at 25% by preserving per-author relay diversity.
+Greedy set-cover gets 84% event recall at 7 days but crashes to 16% at 1 year (6-profile means). Why? Relays prune old events to manage storage, and popular high-volume relays prune more aggressively. A few prolific authors produce most events (mean/median ratio: 7.6:1 at 3 years) — greedy concentrates on popular relays where many authors publish, but those relays can't retain the high-volume output. Welshman's stochastic scoring (`quality * (1 + log(weight)) * random()`) gets 24% at 1 year — 1.5× better — by spreading queries across smaller relays that retain history longer. Filter Decomposition (rust-nostr) does even better at 25% by preserving per-author relay diversity. Note: stochastic results have meaningful run-to-run variance (±2–8pp depending on profile size) — the advantage is real but noisy on any single run.
 
 **What to do:** If you use greedy set-cover, switch to stochastic scoring. If you already use Welshman, upgrade to Thompson Sampling for even better results. Don't optimize purely for "covers the most authors" — factor in whether the relay actually retains events long-term.
 
@@ -116,7 +116,7 @@ All deployed client algorithms plus key experimental ones:
 | Big Relays | 61% | 8% | Just damus+nos.lol — the "do nothing" baseline |
 | Primal Aggregator\*\*\* | 32% | 1% | Single caching relay — 100% assignment but low actual recall |
 
-*7d and 1yr recall: 6-profile means from cross-profile benchmarks (Section 8.2 of [OUTBOX-REPORT.md](OUTBOX-REPORT.md)). All testable-reliable authors, 20-connection cap except Direct Mapping. Thompson = 4-profile mean with NIP-66, 5 learning sessions.*
+*7d and 1yr recall: 6-profile means from cross-profile benchmarks (Section 8.2 of [OUTBOX-REPORT.md](OUTBOX-REPORT.md)). All testable-reliable authors, 20-connection cap except Direct Mapping. Thompson = 4-profile mean with NIP-66, 5 learning sessions. Stochastic algorithms have run-to-run variance of ±2–8pp depending on profile size (see [variance analysis](OUTBOX-REPORT.md#82-approximating-real-world-conditions-event-verification)).*
 
 *\*\*Direct Mapping uses unlimited connections (all declared write relays, typically 50-200+). Its high recall reflects connection count, not algorithmic superiority.*
 

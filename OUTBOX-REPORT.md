@@ -705,6 +705,23 @@ Cross-profile patterns:
 - **ODELL remains hardest** (largest follow list) but the pattern is consistent across all profiles.
 - **Academic algorithms define the ceiling at ~33% mean** (MAB-UCB), but even the ceiling is modest — relay retention, not algorithm choice, is the fundamental constraint at 1yr.
 
+**Variance analysis (stochastic algorithms, 1yr window):**
+
+Single-seed results can be misleading. To quantify run-to-run variability, we ran Welshman Stochastic and Popular+Random with 5 PRNG seeds (0–4) on 3 profiles at the 1yr window. Each run also encounters different baseline conditions (relay availability, response times), so the variance captures both algorithmic randomness and network noise.
+
+| Profile | Follows | Welshman seeds 0–4 | Mean ± std | P+R seeds 0–4 | Mean ± std |
+|---------|:-------:|---------------------|:----------:|----------------|:----------:|
+| fiatjaf | 194 | 37.8, 20.2, 23.3, 16.9, 25.2 | 24.7% ± 8.0pp | 11.8, 18.9, 20.1, 14.9, 23.0 | 17.7% ± 4.4pp |
+| jb55 | 655 | 27.0, 26.8, 30.5, 36.5, 27.8 | 29.7% ± 4.1pp | 22.1, 23.0, 23.7, 23.4, 22.6 | 23.0% ± 0.6pp |
+| ODELL | 1,779 | 21.0, 18.5, 17.6, 19.4, 17.0 | 18.7% ± 1.6pp | 20.2, 18.9, 18.9, 19.2, 18.3 | 19.1% ± 0.7pp |
+
+Key observations:
+- **Variance decreases with follow count.** fiatjaf (194 follows) has ±8pp Welshman std; ODELL (1,779 follows) has ±1.6pp. Larger follow lists average out per-relay randomness.
+- **fiatjaf seed 0 (37.8%) was a genuine outlier** — 1.6 standard deviations above the mean. The cross-profile table's single-seed values should be interpreted with this variance in mind.
+- **Popular+Random is remarkably stable** for larger profiles (±0.6–0.7pp for jb55/ODELL). Its randomness is limited to 2 relay slots, so most of the signal comes from the fixed Popular relays.
+- **At large follow counts, Welshman ≈ Popular+Random.** ODELL shows 18.7% vs 19.1% — within noise. The stochastic advantage is strongest for smaller, more concentrated follow lists.
+- **Baseline variability matters.** The number of testable-reliable authors varies 5-10% between runs of the same profile (e.g., jb55: 368–390), reflecting relay availability differences. This contributes to variance beyond PRNG.
+
 ### 8.3 Expanded Benchmark: NIP-66 Filter, Thompson Sampling, and Multi-Session Learning
 
 A second round of benchmarks expanded the test matrix: 4 profiles across 3 time windows, 5 learning sessions per configuration, with and without NIP-66 liveness filtering (120 total runs). Two new algorithms were added: Welshman+Thompson Sampling (learning from event delivery) and Greedy+ε-Explore (5% random exploration).
@@ -814,7 +831,7 @@ A small fraction of prolific authors produce the majority of events. This power-
 *Practitioner takeaways:*
 1. **Coverage-optimal ≠ event-recall-optimal.** Greedy Set-Cover wins Phase 1 (assignment coverage) but at 1yr drops to 16% event recall (6-profile mean) while Filter Decomposition (25%) and Welshman Stochastic (24%) retain more history through relay diversity.
 
-2. **Welshman's `random()` factor helps for archival.** The stochastic factor in ``quality * (1 + log(weight)) * random()`` spreads queries across more relays over time. At 1 year: 24% mean recall across 6 profiles (1.5× Greedy's 16%). Filter Decomposition (25%) edges it out through per-author relay diversity. Welshman's fiatjaf-specific result (37.8%) was an outlier — cross-profile means are more representative.
+2. **Welshman's `random()` factor helps for archival.** The stochastic factor in ``quality * (1 + log(weight)) * random()`` spreads queries across more relays over time. At 1 year: 24% mean recall across 6 profiles (1.5× Greedy's 16%). Filter Decomposition (25%) edges it out through per-author relay diversity. Welshman's fiatjaf-specific result (37.8%) was an outlier — cross-profile means are more representative. Variance analysis (5 seeds × 3 profiles) shows ±2–8pp run-to-run std, with variance decreasing as follow count increases.
 
 3. **Greedy Set-Cover degrades sharply.** 84% at 7d → 16% at 1 year (6-profile means). It minimizes connections by concentrating on popular relays, but those relays don't necessarily retain old events. Algorithms that spread queries fare better long-term.
 
