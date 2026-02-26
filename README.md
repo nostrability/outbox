@@ -78,9 +78,9 @@ These are the algorithms a nostr dev might actually use or encounter:
 | **MAB-UCB**\* | *not yet deployed* | 94% | 84% | Benchmark ceiling — not practical to ship |
 | **Direct Mapping** | Amethyst (feeds) | 88% | 33% | Simplest outbox baseline — use all declared write relays |
 | **Primal Aggregator** | Primal | 34% | 3% | Centralized — 100% assignment but low actual recall |
-| **Big Relays** | *common default* | — | — | Just damus+nos.lol: ~63% assignment coverage, no event recall data |
+| **Big Relays** | *common default* | 61% | — | Just damus+nos.lol: ~63% assignment, 61% 7d recall |
 
-*Multi-profile means with NIP-66 liveness filtering, averaged across 4 profiles (3 for 1yr). Thompson/MAB after 5 learning sessions.*
+*Multi-profile means with NIP-66 liveness filtering, averaged across 4 profiles (3 for 1yr). Thompson/MAB after 5 learning sessions. Big Relays = 6-profile mean without NIP-66.*
 
 *\*MAB-UCB requires 500 simulated rounds per relay selection to converge. It defines the theoretical ceiling but is not a practical algorithm for real clients.*
 
@@ -100,18 +100,23 @@ These are the algorithms a nostr dev might actually use or encounter:
 | Primal Aggregator | Primal | Single aggregator relay |
 | Popular+Random | — | Top popular + random fill |
 
-**Experimental (benchmarked, not in any client):**
+**Experimental — actionable** (not yet in any client, but deployable):
 
 | Algorithm | Strategy |
 |---|---|
 | Welshman+Thompson | Welshman scoring with `sampleBeta(α,β)` instead of `random()` — learns from delivery |
 | Greedy+ε-Explore | Greedy with 5% chance of picking a random relay instead of the best |
-| ILP Optimal | Brute-force best answer (slow). Upper bound for comparison |
-| Bipartite Matching | Prioritizes relays serving hard-to-reach pubkeys |
-| Spectral Clustering | Groups relays by author overlap, picks one per group |
-| MAB-UCB | Learns which relays add the most new coverage over 500 simulated rounds |
-| Streaming Coverage | Single pass: keep K best relays, swap if a new one improves coverage |
-| Stochastic Greedy | Greedy but samples random subsets each step instead of scanning all |
+
+**Academic** (benchmark ceilings only — not practical for real clients):
+
+| Algorithm | Strategy | Why not practical |
+|---|---|---|
+| ILP Optimal | Brute-force best answer | NP-hard, requires solver, exponential worst-case |
+| MAB-UCB | 500 simulated rounds of explore/exploit | Too slow — defines ceiling, not shippable |
+| Bipartite Matching | Weighted matching for hard-to-reach pubkeys | O(V²E), complex, marginal gains |
+| Spectral Clustering | Eigendecomposition of relay-author matrix | Requires linear algebra library |
+| Streaming Coverage | Single-pass submodular maximization | Marginal gains over simpler greedy |
+| Stochastic Greedy | Random subset sampling per step | Worse than standard greedy at this scale |
 
 **Full benchmark data:** [OUTBOX-REPORT.md Section 8](OUTBOX-REPORT.md#8-benchmark-results)
 

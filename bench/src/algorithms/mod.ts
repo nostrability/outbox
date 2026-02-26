@@ -29,6 +29,8 @@ import { spectralClustering } from "./spectral-clustering.ts";
 import { hybridGreedyExplore } from "./hybrid-greedy-explore.ts";
 import { greedyEpsilon } from "./greedy-epsilon.ts";
 import { welshmanThompson } from "./welshman-thompson.ts";
+import { jumbleCoveragePruning } from "./jumble.ts";
+import { bigRelaysBaseline } from "./big-relays.ts";
 
 export interface AlgorithmEntry {
   id: string;
@@ -178,6 +180,22 @@ export const ALGORITHM_REGISTRY: AlgorithmEntry[] = [
     nativeCap: false,
     stochastic: true,
     defaults: { relayLimit: 3 },
+  },
+  {
+    id: "jumble",
+    name: "Jumble Coverage Pruning",
+    fn: jumbleCoveragePruning,
+    nativeCap: false,
+    stochastic: false,
+    defaults: {},
+  },
+  {
+    id: "big-relays",
+    name: "Big Relays (damus+nos.lol)",
+    fn: bigRelaysBaseline,
+    nativeCap: true,
+    stochastic: false,
+    defaults: {},
   },
 ];
 
