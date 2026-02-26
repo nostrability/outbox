@@ -8,6 +8,21 @@ Reproduce all results from the outbox model analysis.
 - Internet connection
 - ~10 min for on-paper mapping (all 26 profiles), ~30-60 min for event retrieval (per profile)
 
+## Quick Start
+
+```bash
+cd bench
+
+# Run the most interesting comparison: greedy vs stochastic vs learning, with NIP-66 filter
+deno task bench 3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d \
+  --verify --verify-window 604800 \
+  --algorithms greedy,welshman,welshman-thompson,mab \
+  --nip66-filter liveness
+
+# Multi-session Thompson Sampling (watch it learn across 5 sessions)
+bash run-benchmark-batch.sh
+```
+
 ## Setup
 
 All commands assume you're in `bench/`.
@@ -135,6 +150,12 @@ deno task bench <hex> --verify --verify-window 604800     # 7d
 deno task bench <hex> --verify --verify-window 2592000    # 30d
 deno task bench <hex> --verify --verify-window 31536000   # 365d
 deno task bench <hex> --verify --verify-window 94608000   # 3yr
+
+# With NIP-66 liveness filter (removes dead relays before selection)
+deno task bench <hex> --verify --nip66-filter liveness
+
+# Disable Phase 2 baseline cache (forces re-query of all relays)
+deno task bench <hex> --verify --no-phase2-cache
 ```
 
 ### Reproduce report's event retrieval results
@@ -150,6 +171,28 @@ deno task bench 3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d
 deno task bench 3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d --verify --verify-window 94608000
 ```
 
+### Multi-session Thompson Sampling benchmark
+
+Run multiple sessions per profile to test learning. The batch script automates
+this across 4 profiles × 3 windows × 5 sessions × 2 NIP-66 modes:
+
+```bash
+# Full batch (120 runs, ~2 hours, resumable)
+bash run-benchmark-batch.sh
+
+# Single profile, multi-session
+for session in 1 2 3 4 5; do
+  deno task bench <hex> --verify --verify-window 604800 \
+    --algorithms greedy,welshman,greedy-epsilon,welshman-thompson,mab \
+    --nip66-filter liveness --fast
+  sleep 30
+done
+```
+
+Thompson Sampling persists relay scores to `.cache/relay_scores_*.json` between
+sessions. Each run loads the previous session's scores and updates them with
+Phase 2 verification results.
+
 ## Parameters
 
 | Parameter | Default | Description |
@@ -163,6 +206,9 @@ deno task bench 3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d
 | `--verify` | off | Enable event retrieval |
 | `--verify-window` | `86400` | Time window in seconds |
 | `--verify-concurrency` | `20` | Max concurrent relay connections |
+| `--nip66-filter` | off | NIP-66 relay filter (`liveness` or `strict`) |
+| `--nip66-ttl` | `3600000` | NIP-66 cache TTL in milliseconds |
+| `--no-phase2-cache` | off | Disable Phase 2 baseline disk cache |
 | `--no-cache` | off | Force fresh data fetch |
 | `--verbose` | off | Per-relay details |
 | `--fast` | off | Reduced sweep + stochastic runs |
@@ -197,3 +243,5 @@ On-paper mapping results should be nearly identical within a few days. Event ret
 | `streaming` | Streaming Coverage |
 | `matching` | Bipartite Matching |
 | `spectral` | Spectral Clustering |
+| `welshman-thompson` | Welshman+Thompson Sampling |
+| `greedy-epsilon` | Greedy+ε-Explore |

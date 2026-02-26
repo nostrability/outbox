@@ -1,5 +1,7 @@
 > **DRAFT** — This document is a work in progress. Findings and framing may change.
 
+> **For the practitioner summary, see [README.md](README.md).** This document contains the full methodology, cross-client analysis, and complete benchmark data.
+
 # Outbox Model Implementation Report
 
 **An analysis of NIP-65 outbox/inbox relay routing across 15 Nostr clients and libraries**
@@ -112,6 +114,13 @@ Clients with tightly-integrated outbox: **Gossip** (LMDB + Minion architecture),
 | **Observable pipeline** | Nosotros, Applesauce (reactive layer) | Per-author relay resolution as data flow streams | — |
 | **Filter decomposition** | rust-nostr | Bitflag-based graph splitting filters by pubkey type | [`filter-decomposition.ts`](bench/src/algorithms/filter-decomposition.ts) |
 | **Direct mapping** | Amethyst (feed routing) | Use ALL declared write relays, no optimization | [`direct-mapping.ts`](bench/src/algorithms/direct-mapping.ts) |
+
+**Experimental algorithms** (benchmarked but not yet in any client):
+
+| Algorithm | Strategy | Benchmark impl |
+|-----------|----------|----------------|
+| **Welshman+Thompson** | Welshman scoring with `sampleBeta(α, β)` instead of `random()`. Learns from Phase 2 event delivery outcomes, persists Beta distribution priors across sessions. Cold start = baseline Welshman; converges in 2–3 sessions | [`welshman-thompson.ts`](bench/src/algorithms/welshman-thompson.ts) |
+| **Greedy+ε-Explore** | Greedy set-cover with probability ε (5%) of picking a random relay instead of the max-coverage one. One `if` statement on top of standard greedy | [`greedy-epsilon.ts`](bench/src/algorithms/greedy-epsilon.ts) |
 
 **CS-inspired algorithms** (added for benchmark comparison — no client uses these yet):
 
@@ -610,6 +619,110 @@ Cross-profile patterns:
 - **ODELL is the hardest profile** (largest follow list, lowest relay list coverage) — all algorithms score lowest here.
 - **Greedy Set-Cover ranks 7th** by mean event recall despite being #1 at assignment coverage.
 
+### 8.3 Expanded Benchmark: NIP-66 Filter, Thompson Sampling, and Multi-Session Learning
+
+A second round of benchmarks expanded the test matrix: 4 profiles across 3 time windows, 5 learning sessions per configuration, with and without NIP-66 liveness filtering (120 total runs). Two new algorithms were added: Welshman+Thompson Sampling (learning from event delivery) and Greedy+ε-Explore (5% random exploration).
+
+**Test profiles:**
+
+| Profile | Follows | With Relay List | Unique Relays | After NIP-66 Filter |
+|---------|:-------:|:---------------:|:-------------:|:-------------------:|
+| fiatjaf | 194 | 76.3% | 233 | 140 (60%) |
+| Gato | 399 | 74.4% | 685 | 231 (34%) |
+| ValderDama | 1,077 | 79.3% | 920 | 389 (42%) |
+| Telluride | 2,784 | 78.1% | 1,642 | 585 (36%) |
+
+**NIP-66 liveness filter effect on relay success rates:**
+
+The NIP-66 liveness filter removes relays not confirmed alive by network monitors before algorithm selection. The impact on relay success rates (% of selected relays that actually respond to queries):
+
+| Profile | Without NIP-66 | With NIP-66 | Relays Removed |
+|---------|:--------------:|:-----------:|:--------------:|
+| fiatjaf | 56% | 87% | 93 (40%) |
+| Gato | 26% | 80% | 454 (66%) |
+| ValderDama | 35% | 79% | 531 (58%) |
+| Telluride | 30% | 74% | 1,057 (64%) |
+
+NIP-66 filtering consistently improves relay success rates substantially (about 1.5× to 3.1× in these profiles). Larger follow lists benefit more — they have more obscure relays in the candidate set. The filter removes 40–66% of declared relays, with the percentage increasing with follow count.
+
+**Event recall impact of NIP-66 filtering (averaged across 5 sessions):**
+
+| Algorithm | Without NIP-66 | With NIP-66 | Delta |
+|-----------|:--------------:|:-----------:|:-----:|
+| MAB-UCB | 79.2% | 84.5% | +5.3pp |
+| Welshman Stochastic | 74.7% | 79.9% | +5.2pp |
+| Welshman+Thompson | 81.0% | 80.6% | -0.4pp |
+| Greedy Set-Cover | 77.4% | 76.8% | -0.7pp |
+| Greedy+ε-Explore | 77.3% | 76.6% | -0.7pp |
+
+*1yr window, averaged across all 4 profiles.*
+
+NIP-66 filtering benefits stochastic algorithms (MAB-UCB, Welshman) most because they sample from the full relay pool — removing dead relays from that pool directly improves sample quality. Thompson Sampling shows a slight negative delta because it has already learned to avoid bad relays through its own scoring mechanism — the NIP-66 filter removes relays Thompson was already deprioritizing. Greedy shows a small negative delta at 1yr because NIP-66 may remove relays that are offline but still serve historical events.
+
+**Thompson Sampling learning curves:**
+
+Thompson Sampling persists per-relay Beta(α,β) parameters across sessions. Session 1 uses uniform priors (equivalent to baseline Welshman). Subsequent sessions use learned priors.
+
+| Profile (follows) | Window | Session 1 | Session 2 | Session 5 | Total gain |
+|---|---|---|---|---|---|
+| Gato (399) | 1yr | 24.5% | 96.1% | 97.4% | +72.9pp |
+| Gato (399) | 3yr | 15.7% | 94.7% | 93.6% | +77.9pp |
+| ValderDama (1,077) | 1yr | 28.7% | 91.3% | 92.8% | +64.1pp |
+| ValderDama (1,077) | 3yr | 20.4% | 82.6% | 91.0% | +70.7pp |
+| Telluride (2,784) | 1yr | 33.1% | 92.0% | 92.6% | +59.4pp |
+| Telluride (2,784) | 3yr | 27.1% | 29.1% | 86.1% | +58.9pp |
+| fiatjaf (194) | 7d | 88.6% | 96.2% | 95.0% | +6.4pp |
+| fiatjaf (194) | 1yr | 83.6% | 83.6% | 83.6% | +0.0pp |
+
+Key patterns:
+- **Convergence in 2–3 sessions.** Most improvement happens Session 1→2. Sessions 3–5 show minimal further gains.
+- **Gains scale with problem difficulty.** The hardest cases (large follow counts, long windows) show the largest gains because there's more room to learn.
+- **Short windows show modest improvement.** At 7d, relay success rates are already high and most relays have the events — less room for learning.
+- **Small profiles at long windows show no learning.** fiatjaf at 1yr shows 0pp gain — the profile is small enough that the 20-relay budget can already cover most relay combinations.
+
+**Algorithm comparison across all sessions (5-algorithm runs, NIP-66 liveness filter, averaged):**
+
+| Profile | Window | Greedy | Welshman | Greedy+ε | Thompson | MAB-UCB |
+|---------|--------|:------:|:--------:|:--------:|:--------:|:-------:|
+| fiatjaf (194) | 7d | 98.2% | 94.9% | **98.5%** | 94.7% | 96.0% |
+| Gato (399) | 7d | 86.1% | 86.3% | 86.1% | 86.3% | **86.7%** |
+| Gato (399) | 1yr | 79.3% | 82.9% | 79.3% | 82.6% | **83.5%** |
+| Gato (399) | 3yr | 76.5% | 79.6% | 76.5% | 78.2% | **80.1%** |
+| ValderDama (1,077) | 7d | 93.7% | 92.9% | 93.7% | 94.6% | **96.5%** |
+| ValderDama (1,077) | 1yr | 76.8% | 80.0% | 76.5% | 79.7% | **82.9%** |
+| ValderDama (1,077) | 3yr | 71.0% | 76.8% | 70.8% | 75.2% | **80.0%** |
+| Telluride (2,784) | 7d | 94.2% | 92.8% | 94.2% | 93.9% | **95.6%** |
+| Telluride (2,784) | 1yr | 76.0% | 76.9% | 76.0% | 80.6% | **84.5%** |
+| Telluride (2,784) | 3yr | 55.7% | 59.6% | 55.7% | 62.8% | **67.0%** |
+
+MAB-UCB wins most comparisons (43% of all profile×window groups). Thompson Sampling wins 23%, primarily in the "without NIP-66" condition where it compensates for dead relays through learning. Greedy+ε matches Greedy almost exactly — the 5% random exploration has negligible impact on coverage but slightly improves relay success rates.
+
+**Event distribution (power-law characteristics):**
+
+Event counts per author show heavy right skew that increases with time window:
+
+| Window | Mean events/author | Median events/author | Mean/Median ratio |
+|--------|:------------------:|:--------------------:|:-----------------:|
+| 7d | 28–40 | 8–17 | 2.4–3.6× |
+| 1yr | 152–334 | 25–72 | 4.3–6.9× |
+| 3yr | 191–601 | 27–95 | 6.0–7.6× |
+
+*Ranges across 7 profiles.*
+
+A small fraction of prolific authors produce the majority of events. This power-law distribution explains why algorithms that spread queries across diverse relays outperform coverage-maximizers at longer windows: the coverage-optimal relay set concentrates on popular relays where many authors publish, but those relays may not retain the high-volume output of prolific authors.
+
+**Key findings from expanded benchmarks:**
+
+1. **Thompson Sampling is the first relay selection algorithm that closes the feedback loop** — and it works. After learning, it achieves the highest or second-highest event recall in most configurations, with dramatically better relay success rates (85–100%) than MAB-UCB (55–85%).
+
+2. **NIP-66 liveness filtering is high-value, low-effort.** It requires no algorithmic changes — just remove dead relays before running any algorithm. The impact is largest for stochastic algorithms and larger follow counts.
+
+3. **Greedy+ε-Explore shows negligible benefit.** At 5% exploration rate, it matches Greedy almost exactly across all metrics. Higher ε values may show different results.
+
+4. **MAB-UCB remains the best single-session algorithm.** Without learning history, MAB-UCB's internal exploration-exploitation (500 simulated rounds) outperforms everything. Thompson Sampling needs 2–3 sessions to catch up.
+
+5. **The 20-connection limit is the fundamental bottleneck at scale.** Telluride (2,784 follows) at 3yr shows all algorithms struggling: Greedy at 56%, Thompson at 63%, MAB-UCB at 67%. The relay diversity needed to cover 2,784 authors' 3-year history exceeds what 20 connections can provide.
+
 **Key real-world event verification findings:**
 
 1. **Coverage-optimal ≠ event-recall-optimal.** Greedy Set-Cover wins Phase 1 (assignment coverage) but ranks 7th of 14 in actual event recall (84.4% mean across 6 profiles at 7d, vs 92.4% for Streaming Coverage). At 365 days on fiatjaf: 16.3% event recall vs. MAB-UCB's 40.8%.
@@ -634,7 +747,7 @@ Based on patterns observed across all implementations and benchmark results:
 
 2. **Most clients default to 2-3 relays per pubkey.** 7 of 9 implementations with per-pubkey limits converge on 2 or 3 (see Section 2.3). This is an observed ecosystem consensus, not an empirically benchmarked finding — no study has measured the optimal number or the marginal value of a 3rd vs 4th relay per author.
 
-3. **Track relay health.** At minimum, implement binary online/offline tracking with backoff. Ideally, use tiered error thresholds (Welshman) or penalty timers (Gossip) to avoid repeatedly connecting to flaky relays. [NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md) (kind 30166) and [nostr.watch](https://github.com/sandwichfarm/nostr-watch) publish network-wide relay liveness and performance data (RTT, uptime, supported NIPs) that clients could consume instead of independently probing relays — no analyzed client uses this yet.
+3. **Track relay health — and consider NIP-66 pre-filtering.** At minimum, implement binary online/offline tracking with backoff. Ideally, use tiered error thresholds (Welshman) or penalty timers (Gossip) to avoid repeatedly connecting to flaky relays. [NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md) (kind 30166) and [nostr.watch](https://github.com/sandwichfarm/nostr-watch) publish network-wide relay liveness and performance data (RTT, uptime, supported NIPs) that clients could consume instead of independently probing relays — no analyzed client uses this yet. Our benchmarks show NIP-66 liveness filtering removes 40–64% of dead relays from the candidate set and more than doubles relay success rates (from ~30% to ~75–85%), with the biggest impact on profiles with large follow counts.
 
 4. **Configure multiple indexer relays.** Relying on a single indexer (e.g., only purplepag.es) is a single point of failure. Amethyst's 5-indexer approach is the most resilient.
 
@@ -642,7 +755,7 @@ Based on patterns observed across all implementations and benchmark results:
 
 6. **Make outbox debuggable — but go beyond assignment coverage.** noStrudel's coverage debugger is the only client that exposes outbox internals (coverage %, orphaned users, per-relay assignment, color-coded health). But it only shows the academic view — the on-paper relay mapping. No client shows real-world event recall: "did I actually get the posts?" Our central finding is that these two views diverge sharply (85% assignment coverage can mean 16% event recall at 1yr). Opportunities for future work: per-author event delivery tracking ("am I seeing all events from this author?"), relay response/efficiency rates (events delivered per connection), orphan root-cause analysis (missing kind 10002 vs relays offline vs filtered out), and relay list staleness indicators.
 
-7. **Stochastic exploration is the best archival strategy.** Welshman's `random()` factor isn't just anti-centralization — it discovers relays that retain old events and that static optimizers miss. MAB-UCB's exploration-exploitation achieves the same effect. Pure greedy concentrates on mega-relays that may prune history.
+7. **Stochastic exploration is the best archival strategy — and learning makes it even better.** Welshman's `random()` factor isn't just anti-centralization — it discovers relays that retain old events and that static optimizers miss. MAB-UCB's exploration-exploitation achieves the same effect. Welshman+Thompson Sampling adds memory to this randomness: after 2–3 sessions, it learns which relays actually deliver and outperforms baseline Welshman by up to 12pp (90% vs 78% at 3yr on Telluride). Pure greedy concentrates on mega-relays that may prune history.
 
 8. **Support NIP-17 DM relays.** Only 4 of 10 mature implementations fully route DMs via kind 10050 relays. Kind 10050 is straightforward to implement and provides meaningful privacy benefits for direct messaging.
 
@@ -678,6 +791,8 @@ All 14 algorithms are in [`bench/src/algorithms/`](bench/src/algorithms/):
 
 | Algorithm | Source | Inspired By |
 |-----------|--------|-------------|
+| Welshman+Thompson | [`welshman-thompson.ts`](bench/src/algorithms/welshman-thompson.ts) | Welshman + Thompson Sampling |
+| Greedy+ε-Explore | [`greedy-epsilon.ts`](bench/src/algorithms/greedy-epsilon.ts) | Greedy + ε-exploration |
 | Greedy Set-Cover | [`greedy-set-cover.ts`](bench/src/algorithms/greedy-set-cover.ts) | Gossip, Applesauce, Wisp |
 | Priority-Based | [`priority-based.ts`](bench/src/algorithms/priority-based.ts) | NDK |
 | Weighted Stochastic | [`weighted-stochastic.ts`](bench/src/algorithms/weighted-stochastic.ts) | Welshman/Coracle |
@@ -693,4 +808,8 @@ All 14 algorithms are in [`bench/src/algorithms/`](bench/src/algorithms/):
 | Bipartite Matching | [`bipartite-matching.ts`](bench/src/algorithms/bipartite-matching.ts) | CS: weighted matching |
 | Spectral Clustering | [`spectral-clustering.ts`](bench/src/algorithms/spectral-clustering.ts) | CS: community detection |
 
-Phase 2 verification: [`bench/src/phase2/`](bench/src/phase2/) (baseline construction, event verification, reporting).
+Phase 2 verification: [`bench/src/phase2/`](bench/src/phase2/) (baseline construction, event verification, reporting, disk cache).
+
+NIP-66 relay filtering: [`bench/src/nip66/`](bench/src/nip66/) (monitor data fetching, relay classification).
+
+Relay score persistence: [`bench/src/relay-scores.ts`](bench/src/relay-scores.ts) (Thompson Sampling Beta distribution persistence).

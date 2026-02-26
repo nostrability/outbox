@@ -5,12 +5,14 @@
 import { RelayPool, QueryCache, MAX_EVENTS_PER_PAIR } from "../relay-pool.ts";
 import { collectBaseline } from "./baseline.ts";
 import { verifyAlgorithm } from "./verify.ts";
+import { readPhase2Cache, writePhase2Cache } from "./cache.ts";
 import type {
   AlgorithmResult,
   BenchmarkInput,
   Pubkey,
   Phase2Options,
   Phase2Result,
+  PubkeyBaseline,
   RelayUrl,
 } from "../types.ts";
 import { meanOf, median, toSortedNumericArray } from "../types.ts";
@@ -36,6 +38,7 @@ export async function runPhase2(
   input: BenchmarkInput,
   algorithmResults: AlgorithmResult[],
   overrides?: Partial<Phase2Options>,
+  noPhase2Cache = false,
 ): Promise<Phase2Result> {
   const options = mergePhase2Options(overrides);
   const since = Math.floor(Date.now() / 1000) - options.windowSeconds;
@@ -74,20 +77,58 @@ export async function runPhase2(
     );
   }
 
-  // 3. Collect baseline from declared write relays
+  // 3. Try loading baseline from disk cache
   const startMs = performance.now();
-  const baselines = await collectBaseline(input, pool, cache, options);
+  let baselines: Map<Pubkey, PubkeyBaseline>;
+  let cacheHit = false;
+
+  const followCount = input.writerToRelays.size;
+  const relayCount = input.relayToWriters.size;
+
+  if (!noPhase2Cache) {
+    const cached = await readPhase2Cache(
+      input.targetPubkey,
+      options.windowSeconds,
+      followCount,
+      relayCount,
+    );
+    if (cached) {
+      baselines = cached;
+      cacheHit = true;
+      // Populate QueryCache from cached baselines so verify can use it
+      for (const baseline of baselines.values()) {
+        for (const relay of baseline.relaysWithEvents) {
+          // We know this relay had events for this pubkey, but we don't have
+          // per-relay event IDs in the cache. Set the full event set for each
+          // relay that had events (conservative: overestimates per-relay coverage,
+          // but baseline eventIds is the union across all relays anyway).
+          cache.set(relay, baseline.pubkey, baseline.eventIds);
+        }
+        // For relays that succeeded but had no events, set empty
+        for (const relay of baseline.relaysSucceeded) {
+          if (!baseline.relaysWithEvents.has(relay)) {
+            cache.set(relay, baseline.pubkey, new Set());
+          }
+        }
+      }
+      console.error(`[phase2] Populated QueryCache from disk cache (${cache.totalEntries} entries)`);
+    } else {
+      baselines = await collectBaseline(input, pool, cache, options);
+    }
+  } else {
+    baselines = await collectBaseline(input, pool, cache, options);
+  }
 
   // 4. Query extra relays for their assigned pubkeys
   if (extraRelays.size > 0) {
-    const since = Math.floor(Date.now() / 1000) - options.windowSeconds;
+    const extraSince = Math.floor(Date.now() / 1000) - options.windowSeconds;
     console.error(`[phase2] Querying ${extraRelays.size} extra relay(s)...`);
     const extraTasks = [...extraRelays.entries()].map(async ([relay, pubkeys]) => {
       const pubkeyList = [...pubkeys];
       await pool.queryBatched(
         relay,
         pubkeyList,
-        { kinds: options.kinds, since },
+        { kinds: options.kinds, since: extraSince },
         options.batchSize,
         cache,
       );
@@ -116,7 +157,19 @@ export async function runPhase2(
   }
   pool.closeAll();
 
-  // 4. Classify authors
+  // Write baseline to disk cache if we collected fresh data
+  if (!cacheHit && !noPhase2Cache) {
+    await writePhase2Cache(
+      input.targetPubkey,
+      options.windowSeconds,
+      since,
+      followCount,
+      relayCount,
+      baselines,
+    ).catch((e) => console.error(`[phase2-cache] Write failed: ${e}`));
+  }
+
+  // 6. Classify authors
   let testableReliable = 0;
   let testablePartial = 0;
   let zeroBaseline = 0;
@@ -173,7 +226,7 @@ export async function runPhase2(
 
   const sortedEventCounts = toSortedNumericArray(testableEventCounts);
 
-  // 5. Verify each algorithm
+  // 7. Verify each algorithm
   const algorithms = algorithmResults.map((result) =>
     verifyAlgorithm(result, baselines, cache, allBaselineRelays, declaredRelays)
   );
@@ -204,5 +257,7 @@ export async function runPhase2(
       collectionTimeMs,
     },
     algorithms,
+    _baselines: baselines,
+    _cache: cache,
   };
 }

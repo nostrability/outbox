@@ -27,6 +27,8 @@ import { streamingCoverage } from "./streaming-coverage.ts";
 import { bipartiteMatching } from "./bipartite-matching.ts";
 import { spectralClustering } from "./spectral-clustering.ts";
 import { hybridGreedyExplore } from "./hybrid-greedy-explore.ts";
+import { greedyEpsilon } from "./greedy-epsilon.ts";
+import { welshmanThompson } from "./welshman-thompson.ts";
 
 export interface AlgorithmEntry {
   id: string;
@@ -160,6 +162,22 @@ export const ALGORITHM_REGISTRY: AlgorithmEntry[] = [
     nativeCap: true,
     stochastic: true,
     defaults: {},
+  },
+  {
+    id: "greedy-epsilon",
+    name: "Greedy+ε-Explore",
+    fn: greedyEpsilon,
+    nativeCap: true,
+    stochastic: true,
+    defaults: { maxConnections: 20, maxRelaysPerUser: 2 },
+  },
+  {
+    id: "welshman-thompson",
+    name: "Welshman+Thompson",
+    fn: welshmanThompson,
+    nativeCap: false,
+    stochastic: true,
+    defaults: { relayLimit: 3 },
   },
 ];
 
