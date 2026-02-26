@@ -103,6 +103,7 @@ export function monitorCachePath(cacheDir = NIP66_CACHE_DIR): string {
 
 export async function readNip66MonitorCache(
   cacheDir = NIP66_CACHE_DIR,
+  ttlMs = NIP66_TTL_MS,
 ): Promise<Map<RelayUrl, Nip66RelayData> | null> {
   try {
     const raw = await Deno.readTextFile(monitorCachePath(cacheDir));
@@ -112,7 +113,7 @@ export async function readNip66MonitorCache(
     if (envelope.source === "synthetic") return null; // defense-in-depth
 
     const age = Date.now() - envelope.fetchedAt;
-    if (age > NIP66_TTL_MS) return null;
+    if (age > ttlMs) return null;
 
     const map = new Map<RelayUrl, Nip66RelayData>();
     for (const entry of envelope.relays) {
@@ -166,9 +167,11 @@ export async function writeNip66MonitorCache(
  *
  * Returns a merged map. If both sources fail, returns empty map (caller skips filter).
  */
-export async function fetchNip66MonitorData(): Promise<Map<RelayUrl, Nip66RelayData>> {
+export async function fetchNip66MonitorData(
+  ttlMs?: number,
+): Promise<Map<RelayUrl, Nip66RelayData>> {
   // 1. Try monitor cache (rejects synthetic)
-  const cached = await readNip66MonitorCache();
+  const cached = await readNip66MonitorCache(NIP66_CACHE_DIR, ttlMs ?? NIP66_TTL_MS);
   if (cached && cached.size > 0) {
     console.error(`[nip66] Using cached monitor data (${cached.size} relays)`);
     return cached;
@@ -195,7 +198,8 @@ export async function fetchNip66MonitorData(): Promise<Map<RelayUrl, Nip66RelayD
       `[nip66] Fetched NIP-66 data for ${nostrData.size} relays via Nostr` +
         (httpOnly > 0 ? ` + ${httpOnly} via HTTP API (${merged.size} total)` : ""),
     );
-    await writeNip66MonitorCache(merged, "nostr").catch((e) =>
+    const source = nostrData.size > 0 ? "nostr" : "http-api" as const;
+    await writeNip66MonitorCache(merged, source).catch((e) =>
       console.error(`[nip66] Monitor cache write failed: ${e}`),
     );
   }
@@ -219,18 +223,21 @@ function parseNip66Event(event: NostrEvent): Nip66RelayData | null {
       case "d":
         relayUrl = tag[1] ?? null;
         break;
-      case "rtt-open":
-        rttOpenMs = tag[1] ? parseInt(tag[1], 10) : null;
-        if (rttOpenMs !== null && isNaN(rttOpenMs)) rttOpenMs = null;
+      case "rtt-open": {
+        const v = tag[1] ? parseInt(tag[1], 10) : NaN;
+        rttOpenMs = isNaN(v) || v < 0 ? null : v;
         break;
-      case "rtt-read":
-        rttReadMs = tag[1] ? parseInt(tag[1], 10) : null;
-        if (rttReadMs !== null && isNaN(rttReadMs)) rttReadMs = null;
+      }
+      case "rtt-read": {
+        const v = tag[1] ? parseInt(tag[1], 10) : NaN;
+        rttReadMs = isNaN(v) || v < 0 ? null : v;
         break;
-      case "rtt-write":
-        rttWriteMs = tag[1] ? parseInt(tag[1], 10) : null;
-        if (rttWriteMs !== null && isNaN(rttWriteMs)) rttWriteMs = null;
+      }
+      case "rtt-write": {
+        const v = tag[1] ? parseInt(tag[1], 10) : NaN;
+        rttWriteMs = isNaN(v) || v < 0 ? null : v;
         break;
+      }
       case "N": {
         const nip = tag[1] ? parseInt(tag[1], 10) : NaN;
         if (!isNaN(nip)) supportedNips.push(nip);
@@ -301,8 +308,9 @@ async function fetchFromNostrRelays(): Promise<Map<RelayUrl, Nip66RelayData>> {
   console.error(`[nip66] Connecting to ${NIP66_SOURCE_RELAYS.length} relays for kind 30166 events...`);
 
   for (const relayUrl of NIP66_SOURCE_RELAYS) {
+    let conn: Awaited<ReturnType<typeof connectToRelay>> | null = null;
     try {
-      const conn = await connectToRelay(relayUrl);
+      conn = await connectToRelay(relayUrl);
 
       if (conn.errors.length > 0 || !conn.ws || conn.ws.readyState !== WebSocket.OPEN) {
         console.error(`[nip66] ${relayUrl}: connection failed (${conn.errors.join(", ")})`);
@@ -346,10 +354,10 @@ async function fetchFromNostrRelays(): Promise<Map<RelayUrl, Nip66RelayData>> {
           existing.lastSeenAt = parsed.lastSeenAt;
         }
       }
-
-      closeRelay(conn);
     } catch (err) {
       console.error(`[nip66] ${relayUrl}: error - ${err}`);
+    } finally {
+      if (conn) closeRelay(conn);
     }
   }
 

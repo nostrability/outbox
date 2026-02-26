@@ -220,7 +220,7 @@ async function main(): Promise<void> {
 
   // NIP-66 liveness filter: remove dead relays before algorithm runs
   if (opts.nip66Filter) {
-    const nip66Data = await fetchNip66MonitorData();
+    const nip66Data = await fetchNip66MonitorData(opts.nip66TtlMs);
 
     if (nip66Data.size > 0) {
       const { knownAlive, unknown, onionPreserved, parseFailedPreserved } =
@@ -289,7 +289,7 @@ async function runDefault(
   // Load Thompson Sampling priors (if available from previous sessions)
   const hasThompson = algorithms.some((a) => a.id === "welshman-thompson");
   let relayScoreDB = hasThompson && opts.verify
-    ? loadRelayScores(input.targetPubkey, opts.verifyWindow)
+    ? loadRelayScores(input.targetPubkey, opts.verifyWindow, opts.nip66Filter || undefined)
     : null;
   const relayPriors = relayScoreDB ? getRelayPriors(relayScoreDB) : undefined;
 
@@ -383,6 +383,12 @@ async function runDefault(
           ...entry.defaults,
           maxConnections,
         };
+        if (opts.relaysPerUser !== undefined) {
+          params.maxRelaysPerUser = opts.relaysPerUser;
+          params.relayGoalPerAuthor = opts.relaysPerUser;
+          params.relayLimit = opts.relaysPerUser;
+          params.writeLimit = opts.relaysPerUser;
+        }
         // Inject Thompson Sampling priors for the verify run too
         if (entry.id === "welshman-thompson" && relayPriors) {
           params.relayPriors = relayPriors;
@@ -415,9 +421,9 @@ async function runDefault(
     if (hasThompson && phase2Result._baselines && phase2Result._cache) {
       const thompsonIdx = algorithms.findIndex((a) => a.id === "welshman-thompson");
       if (thompsonIdx >= 0) {
-        const thompsonResult = regimeAResults[thompsonIdx];
+        const thompsonResult = verifyResults[thompsonIdx];
         if (!relayScoreDB) {
-          relayScoreDB = loadRelayScores(input.targetPubkey, opts.verifyWindow);
+          relayScoreDB = loadRelayScores(input.targetPubkey, opts.verifyWindow, opts.nip66Filter || undefined);
         }
         relayScoreDB = updateRelayScores(
           relayScoreDB,
@@ -427,7 +433,7 @@ async function runDefault(
           phase2Result._baselines,
           phase2Result._cache as QueryCache,
         );
-        await saveRelayScores(relayScoreDB);
+        await saveRelayScores(relayScoreDB, opts.nip66Filter || undefined);
 
         // Print learning state summary
         const entries = Object.values(relayScoreDB.relays);
@@ -531,7 +537,9 @@ async function runSweep(
   await runDefault(input, algorithms, opts, seed, runs, showTable, showJson);
 }
 
-main().catch((err) => {
+main().then(() => {
+  Deno.exit(0);
+}).catch((err) => {
   console.error("Fatal error:", err);
   Deno.exit(1);
 });

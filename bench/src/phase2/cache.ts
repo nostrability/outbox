@@ -165,8 +165,14 @@ export async function writePhase2Cache(
 
   // Write-to-temp-then-rename for crash safety
   const path = cacheFilePath(pubkey, windowSeconds, followCount, relayCount);
-  const tmp = path + ".tmp";
-  await Deno.writeTextFile(tmp, JSON.stringify(envelope));
-  await Deno.rename(tmp, path);
+  const dir = path.substring(0, path.lastIndexOf("/"));
+  const tmp = await Deno.makeTempFile({ dir });
+  try {
+    await Deno.writeTextFile(tmp, JSON.stringify(envelope));
+    await Deno.rename(tmp, path);
+  } catch (e) {
+    await Deno.remove(tmp).catch(() => {});
+    throw e;
+  }
   console.error(`[phase2-cache] Cached baseline to ${path}`);
 }

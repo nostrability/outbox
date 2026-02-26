@@ -32,7 +32,7 @@ The relay that's "best on paper" isn't always the one that delivers events. Gree
 
 ### 2. Dead relay filtering saves your connection budget
 
-NIP-66 publishes relay liveness data. Filtering out dead relays before running any algorithm means you stop wasting connections on relays that will never respond. The benefit is **efficiency** — fewer wasted slots in your 20-connection budget — not a coverage guarantee. Event recall impact is mixed: stochastic algorithms gain +5pp, but Thompson Sampling and Greedy show negligible or slightly negative impact (NIP-66 may remove "offline" relays that still serve historical events from disk).
+NIP-66 publishes relay liveness data. Filtering out dead relays before running any algorithm means you stop wasting connections on relays that will never respond. The benefit is **efficiency** — fewer wasted slots in your 20-connection budget — not a coverage guarantee. Event recall impact is roughly neutral: stochastic algorithms gain ~+5pp, while Thompson Sampling and Greedy show negligible or slightly negative impact (likely noise from stochastic selection variance and intermittently available relays).
 
 **What to do:** Fetch NIP-66 monitor data (kind 30166), classify relays as online/offline/dead, exclude dead ones before relay selection ([code below](#nip-66-pre-filter)).
 
@@ -46,7 +46,7 @@ NIP-66 publishes relay liveness data. Filtering out dead relays before running a
 
 ### 3. Randomness > determinism for anything beyond real-time
 
-Greedy set-cover gets 94% event recall at 7 days but crashes to 16% at 1 year. Welshman's stochastic scoring (`quality * (1 + log(weight)) * random()`) gets 38% at 1 year — 2.4x better — by spreading queries across relays that happen to keep old posts.
+Greedy set-cover gets 93% event recall at 7 days but crashes to 16% at 1 year (fiatjaf profile). Welshman's stochastic scoring (`quality * (1 + log(weight)) * random()`) gets 38% at 1 year — 2.3× better — by spreading queries across relays that happen to keep old posts.
 
 **What to do:** If you use greedy set-cover, switch to stochastic scoring. If you already use Welshman, upgrade to Thompson Sampling for even better results.
 
@@ -66,15 +66,15 @@ A few prolific authors produce most events (mean/median ratio: 7.6:1 at 3 years)
 
 These are the algorithms a nostr dev might actually use or encounter:
 
-| Algorithm | Used by | 7d recall | 1yr recall | Relay success% | Verdict |
-|---|---|:---:|:---:|:---:|---|
-| **Greedy Set-Cover** | Gossip, Applesauce, Wisp | 94% | 77% | ~70% | Best on-paper coverage; degrades for history |
-| **Welshman Stochastic** | Coracle | 93% | 80% | ~65% | Best deployed client for archival access |
-| **Welshman+Thompson** | *not yet deployed* | 94% | 81% | ~90% | Upgrade path for Coracle — learns from delivery |
-| **MAB-UCB** | *not yet deployed* | 97% | 85% | ~70% | Best single-session algorithm (the ceiling) |
-| **Direct Mapping** | Amethyst (feeds) | 88% | — | — | Simplest baseline — use all declared write relays |
+| Algorithm | Used by | 7d recall | 1yr recall | Verdict |
+|---|---|:---:|:---:|---|
+| **Greedy Set-Cover** | Gossip, Applesauce, Wisp | 93% | 77% | Best on-paper coverage; degrades for history |
+| **Welshman Stochastic** | Coracle | 92% | 80% | Best deployed client for archival access |
+| **Welshman+Thompson** | *not yet deployed* | 92% | 81% | Upgrade path for Coracle — learns from delivery |
+| **MAB-UCB** | *not yet deployed* | 94% | 84% | Benchmark ceiling (500 simulated rounds per selection — not practical to ship) |
+| **Direct Mapping** | Amethyst (feeds) | 88% | — | Simplest baseline — use all declared write relays |
 
-*Multi-profile means with NIP-66 liveness filtering, averaged across 4 profiles. Thompson/MAB after 5 learning sessions.*
+*Multi-profile means with NIP-66 liveness filtering, averaged across 4 profiles (3 for 1yr). Thompson/MAB after 5 learning sessions.*
 
 <details>
 <summary>All 16 algorithms</summary>

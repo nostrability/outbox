@@ -19,13 +19,14 @@ const CACHE_DIR = ".cache";
 const SCHEMA_VERSION = 1;
 const DECAY_FACTOR = 0.95; // exponential decay per session
 
-function scorePath(pubkeyPrefix: string, window: number): string {
-  return `${CACHE_DIR}/relay_scores_${pubkeyPrefix}_${window}.json`;
+function scorePath(pubkeyPrefix: string, window: number, filterMode?: string): string {
+  const suffix = filterMode ? `_${filterMode}` : "";
+  return `${CACHE_DIR}/relay_scores_${pubkeyPrefix}_${window}${suffix}.json`;
 }
 
-export function loadRelayScores(pubkey: string, windowSeconds: number): RelayScoreDB {
+export function loadRelayScores(pubkey: string, windowSeconds: number, filterMode?: string): RelayScoreDB {
   const prefix = pubkey.slice(0, 16);
-  const path = scorePath(prefix, windowSeconds);
+  const path = scorePath(prefix, windowSeconds, filterMode);
 
   try {
     const raw = Deno.readTextFileSync(path);
@@ -96,8 +97,9 @@ export function updateRelayScores(
       const relayEventCount = relayEvents ? relayEvents.size : 0;
       const baselineCount = baseline.eventIds.size;
 
-      // Fractional success/failure
-      const delivered = relayEventCount / baselineCount;
+      // Fractional success/failure (clamp to [0,1] — relay can return
+      // events not in baseline if baseline was incomplete)
+      const delivered = Math.min(relayEventCount / baselineCount, 1);
       entry.alpha += delivered;
       entry.beta += (1 - delivered);
       entry.totalEvents += relayEventCount;
@@ -118,13 +120,18 @@ export function updateRelayScores(
   return db;
 }
 
-export async function saveRelayScores(db: RelayScoreDB): Promise<void> {
+export async function saveRelayScores(db: RelayScoreDB, filterMode?: string): Promise<void> {
   await Deno.mkdir(CACHE_DIR, { recursive: true });
   const prefix = db.pubkey.slice(0, 16);
-  const path = scorePath(prefix, db.windowSeconds);
-  const tmp = path + ".tmp";
-  await Deno.writeTextFile(tmp, JSON.stringify(db, null, 2));
-  await Deno.rename(tmp, path);
+  const path = scorePath(prefix, db.windowSeconds, filterMode);
+  const tmp = await Deno.makeTempFile({ dir: CACHE_DIR });
+  try {
+    await Deno.writeTextFile(tmp, JSON.stringify(db, null, 2));
+    await Deno.rename(tmp, path);
+  } catch (e) {
+    await Deno.remove(tmp).catch(() => {});
+    throw e;
+  }
   console.error(`[relay-scores] Saved to ${path}`);
 }
 

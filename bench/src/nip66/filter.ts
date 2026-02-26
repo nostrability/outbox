@@ -7,9 +7,9 @@
  * - "liveness": NIP-66 + nostr.watch HTTP API union (default when flag is bare)
  */
 
-import type { Nip66RelayData, RelayUrl } from "../types.ts";
+import type { Nip66FilterMode, Nip66RelayData, RelayUrl } from "../types.ts";
 
-export type Nip66FilterMode = false | "strict" | "liveness";
+export type { Nip66FilterMode };
 
 export function parseNip66FilterArg(value: string | undefined): Nip66FilterMode {
   if (value === undefined) return false;

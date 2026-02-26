@@ -49,7 +49,7 @@ per-pubkey limits default to 2 or 3.
 relay liveness data. No analyzed client uses this yet.
 
 The improvement is in relay success rate (fewer wasted connections), not
-necessarily in event recall. NIP-66 filtering removes 40-64% of dead relays
+necessarily in event recall. NIP-66 filtering removes 40-66% of dead relays
 and more than doubles the rate at which selected relays actually respond:
 
 | Profile (follows) | Without NIP-66 | With NIP-66 | Relays Removed |
@@ -59,17 +59,17 @@ and more than doubles the rate at which selected relays actually respond:
 | ValderDama (1,077) | 35% | 79% | 531 (58%) |
 | Telluride (2,784) | 30% | 74% | 1,057 (64%) |
 
-Event recall impact is mixed: stochastic algorithms (MAB-UCB, Welshman) gain
-+5pp because removing dead relays improves sample quality. Thompson Sampling
-shows minimal NIP-66 benefit because it already learns to avoid dead relays.
-Greedy shows a slight negative delta because NIP-66 may remove relays that
-are offline but still serve historical events from disk.
+Event recall impact is roughly neutral: stochastic algorithms (MAB-UCB,
+Welshman) gain ~+5pp because removing dead relays improves sample quality.
+Thompson Sampling and Greedy show negligible or slightly negative deltas —
+likely noise from stochastic selection variance and intermittently available
+relays rather than a systematic effect.
 
 Relay liveness is 3 states, not binary (per nostr.watch author):
 
 - **Online** — recently seen. Include normally.
 - **Offline** — not seen recently, may come back. Deprioritize but don't
-  exclude — an offline relay may still have historical events you need.
+  exclude.
 - **Dead** — probably never coming back. Exclude.
 
 At minimum, track health locally: binary online/offline with exponential
@@ -78,10 +78,12 @@ excluded), or penalty timers (Gossip: 15s-10min per failure reason).
 
 ### 4. Measure actual delivery
 
-No analyzed client tracks per-author event coverage. In practice: for each
-followed author, periodically query a second relay and compare event counts
-against what your primary outbox relay returned. When gaps are detected, add
-a fallback relay automatically. This should be invisible to the user.
+NIP-66 monitors check relay liveness, but no analyzed client verifies
+per-author delivery — "did this relay return events for author X?" True
+completeness isn't measurable (no relay has everything), but you can detect
+systematic gaps: for each followed author, periodically query a second relay
+and compare against what your outbox relays returned. When gaps are detected,
+add a fallback relay automatically. This should be invisible to the user.
 
 ```typescript
 async function checkDelivery(author: string, outboxRelays: string[]) {
@@ -122,8 +124,8 @@ Every analyzed client picks relays statelessly — recompute from NIP-65 data
 each time, with no memory of which relays actually delivered events.
 
 Welshman+Thompson Sampling adds learning to Welshman's existing stochastic
-scoring. After 2-3 sessions, it outperforms baseline Welshman and Greedy
-at long windows and large follow counts (120 benchmark runs across 4
+scoring. After 2-3 sessions, it consistently outperforms Greedy and matches
+or exceeds baseline Welshman at long windows (120 benchmark runs across 4
 profiles, 3 time windows, 5 sessions). MAB-UCB still wins overall, but
 requires 500 simulated rounds per selection:
 
