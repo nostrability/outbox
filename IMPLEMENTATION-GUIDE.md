@@ -8,22 +8,26 @@ Detailed recommendations for adding or upgrading outbox relay selection in your 
 What's your starting point?
 │
 ├─ No outbox yet?
-│  └─ Start here → hardcode relay.damus.io + nos.lol (61% 7d recall)
+│  └─ Start here → hardcode relay.damus.io + nos.lol (8% 1yr recall)
 │     then upgrade to basic outbox when ready
 │
-├─ Maximum coverage (real-time feeds)?
-│  ├─ Need connection minimization? → Greedy Set-Cover (84% 7d)
-│  ├─ Need zero-config library?     → Priority-Based / NDK (83% 7d)
-│  └─ Simplicity over optimization? → Direct Mapping (88% 7d, but unlimited connections)
+├─ Basic outbox (real-time feeds)?
+│  ├─ Need connection minimization? → Greedy Set-Cover (16% 1yr, 84% 7d)
+│  ├─ Need zero-config library?     → Priority-Based / NDK (16% 1yr, 83% 7d)
+│  └─ Simplicity over optimization? → Direct Mapping (30% 1yr, unlimited connections)
 │
 ├─ Historical event recall (archival, search)?
 │  ├─ Can persist state across sessions? → Welshman+Thompson Sampling (81% 1yr)
-│  └─ Stateless?                         → Weighted Stochastic / Welshman (24% 1yr)
+│  └─ Stateless?                         → Filter Decomposition (25% 1yr) or
+│                                          Weighted Stochastic / Welshman (24% 1yr)
 │
 └─ Anti-centralization (distribute relay load)?
    ├─ Via scoring?       → Weighted Stochastic (log dampening + random)
    └─ Via explicit skip? → Greedy Coverage Sort (skipTopRelays, but -20% recall)
 ```
+
+*All recall numbers are 1yr, 6-profile means. At 7d most algorithms cluster at 83-84% —
+the differences only emerge at longer windows where relay retention becomes the binding constraint.*
 
 Key tradeoff: **coverage-optimal ≠ event-recall-optimal.** Greedy set-cover
 wins assignment coverage (23/26 profiles) but drops to 16% event recall at 1yr

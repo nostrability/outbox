@@ -10,15 +10,15 @@
 
 Each technique adds incremental value. You don't need to implement everything at once:
 
-| Step | What you do | 7d recall | 1yr recall | Effort |
+| Step | What you do | 1yr recall | 7d recall | Effort |
 |:---:|---|:---:|:---:|---|
-| 0 | **Hardcode big relays** (damus + nos.lol) | 61% | 8% | Zero |
-| 1 | **Basic outbox** (greedy set-cover from NIP-65 data) | 84% | 16% | Medium — ~200 LOC, fetch relay lists + implement set-cover |
-| 2 | **Stochastic scoring** (Welshman's `random()` factor) | 83% | 24% | Low — ~50 LOC, replace greedy with weighted random |
-| 3 | **Filter dead relays** (NIP-66 liveness data) | +5pp efficiency | neutral | Low — ~30 LOC, fetch kind 30166, exclude dead relays |
-| 4 | **Learn from delivery** (Thompson Sampling) | 92% | 81% | Low — ~80 LOC + DB table, replace `random()` with `sampleBeta()` |
+| 0 | **Hardcode big relays** (damus + nos.lol) | 8% | 61% | Zero |
+| 1 | **Basic outbox** (greedy set-cover from NIP-65 data) | 16% | 84% | Medium — ~200 LOC, fetch relay lists + implement set-cover |
+| 2 | **Stochastic scoring** (Welshman's `random()` factor) | 24% | 83% | Low — ~50 LOC, replace greedy with weighted random |
+| 3 | **Filter dead relays** (NIP-66 liveness data) | neutral | +5pp efficiency | Low — ~30 LOC, fetch kind 30166, exclude dead relays |
+| 4 | **Learn from delivery** (Thompson Sampling) | 81% | 92% | Low — ~80 LOC + DB table, replace `random()` with `sampleBeta()` |
 
-*Steps 2→4 are incremental — each builds on the previous. Step 3 (NIP-66) can be added at any point. Going from step 0 to step 4 takes your 7d recall from 61% to 92% and your 1yr recall from 8% to 81%. All values are 6-profile means except Thompson (4-profile mean, 5 learning sessions).*
+*Steps 2→4 are incremental — each builds on the previous. Step 3 (NIP-66) can be added at any point. Going from step 0 to step 4 takes your 1yr recall from 8% to 81% (and 7d from 61% to 92%). All values are 6-profile means except Thompson (4-profile mean, 5 learning sessions). 1yr recall is the more informative metric — 7d masks relay retention problems that dominate real-world performance.*
 
 ## Already using a client library?
 
@@ -85,7 +85,7 @@ NIP-66 publishes relay liveness data. Filtering out dead relays before running a
 
 ### 3. Randomness > determinism for anything beyond real-time
 
-Greedy set-cover gets 84% event recall at 7 days but crashes to 16% at 1 year (6-profile means). Why? Relays prune old events to manage storage, and popular high-volume relays prune more aggressively. A few prolific authors produce most events (mean/median ratio: 7.6:1 at 3 years) — greedy concentrates on popular relays where many authors publish, but those relays can't retain the high-volume output. Welshman's stochastic scoring (`quality * (1 + log(weight)) * random()`) gets 24% at 1 year — 1.5× better — by spreading queries across smaller relays that retain history longer. Filter Decomposition (rust-nostr) does even better at 25% by preserving per-author relay diversity. Note: stochastic results have meaningful run-to-run variance (±2–8pp depending on profile size) — the advantage is real but noisy on any single run.
+At 1 year, greedy set-cover gets only 16% event recall. Welshman's stochastic scoring (`quality * (1 + log(weight)) * random()`) gets 24% — 1.5× better. Filter Decomposition (rust-nostr) does even better at 25% by preserving per-author relay diversity. (All 6-profile means.) Why? Relays prune old events to manage storage, and popular high-volume relays prune more aggressively. A few prolific authors produce most events (mean/median ratio: 7.6:1 at 3 years) — greedy concentrates on popular relays where many authors publish, but those relays can't retain the high-volume output. Stochastic selection discovers smaller relays that keep history longer. At 7 days all algorithms cluster at 83-84% — the differences only emerge at longer windows. Note: stochastic results have meaningful run-to-run variance (±2–8pp depending on profile size) — the advantage is real but noisy on any single run.
 
 **What to do:** If you use greedy set-cover, switch to stochastic scoring. If you already use Welshman, upgrade to Thompson Sampling for even better results. Don't optimize purely for "covers the most authors" — factor in whether the relay actually retains events long-term.
 
@@ -99,24 +99,24 @@ All algorithms reach within 1-2% of their unlimited ceiling at 20 relays. Raw da
 
 All deployed client algorithms plus key experimental ones:
 
-| Algorithm | Used by | 7d recall | 1yr recall | Verdict |
+| Algorithm | Used by | 1yr recall | 7d recall | Verdict |
 |---|---|:---:|:---:|---|
-| **Greedy Set-Cover** | Gossip, Applesauce, Wisp | 84% | 16% | Best on-paper coverage; degrades sharply for history |
-| **NDK Priority** | NDK | 83% | 16% | Similar to Greedy; connected > selected > popular |
-| **Welshman Stochastic** | Coracle | 83% | 24% | Best stateless deployed algorithm for archival — 1.5× Greedy at 1yr |
-| **Coverage Sort** | Nostur | 65% | 16% | Skip-top-relays heuristic costs 5-12% coverage |
-| **Filter Decomposition** | rust-nostr | 77% | 25% | Per-author top-N write relays; strong at long windows |
-| **Welshman+Thompson** | *not yet deployed* | 92% | 81% | Upgrade path for Coracle — learns from delivery |
+| **Welshman+Thompson** | *not yet deployed* | 81% | 92% | Upgrade path for Coracle — learns from delivery |
+| **Filter Decomposition** | rust-nostr | 25% | 77% | Per-author top-N write relays; strong at long windows |
+| **Welshman Stochastic** | Coracle | 24% | 83% | Best stateless deployed algorithm for archival — 1.5× Greedy at 1yr |
+| **Greedy Set-Cover** | Gossip, Applesauce, Wisp | 16% | 84% | Best on-paper coverage; degrades sharply for history |
+| **NDK Priority** | NDK | 16% | 83% | Similar to Greedy; connected > selected > popular |
+| **Coverage Sort** | Nostur | 16% | 65% | Skip-top-relays heuristic costs 5-12% coverage |
 
 **Baselines** (for comparison, not recommendations):
 
-| Baseline | 7d recall | 1yr recall | What it is |
+| Baseline | 1yr recall | 7d recall | What it is |
 |---|:---:|:---:|---|
-| Direct Mapping\*\* | 88% | 30% | All declared write relays — unlimited connections |
-| Big Relays | 61% | 8% | Just damus+nos.lol — the "do nothing" baseline |
-| Primal Aggregator\*\*\* | 32% | 1% | Single caching relay — 100% assignment but low actual recall |
+| Direct Mapping\*\* | 30% | 88% | All declared write relays — unlimited connections |
+| Big Relays | 8% | 61% | Just damus+nos.lol — the "do nothing" baseline |
+| Primal Aggregator\*\*\* | 1% | 32% | Single caching relay — 100% assignment but low actual recall |
 
-*7d and 1yr recall: 6-profile means from cross-profile benchmarks (Section 8.2 of [OUTBOX-REPORT.md](OUTBOX-REPORT.md)). All testable-reliable authors, 20-connection cap except Direct Mapping. Thompson = 4-profile mean with NIP-66, 5 learning sessions. Stochastic algorithms have run-to-run variance of ±2–8pp depending on profile size (see [variance analysis](OUTBOX-REPORT.md#82-approximating-real-world-conditions-event-verification)).*
+*1yr and 7d recall: 6-profile means from cross-profile benchmarks (Section 8.2 of [OUTBOX-REPORT.md](OUTBOX-REPORT.md)). All testable-reliable authors, 20-connection cap except Direct Mapping. Thompson = 4-profile mean with NIP-66, 5 learning sessions. Stochastic algorithms have run-to-run variance of ±2–8pp depending on profile size (see [variance analysis](OUTBOX-REPORT.md#82-approximating-real-world-conditions-event-verification)).*
 
 *\*\*Direct Mapping uses unlimited connections (all declared write relays, typically 50-200+). Its high recall reflects connection count, not algorithmic superiority.*
 
