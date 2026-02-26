@@ -8,6 +8,8 @@
 
 *Produced for [nostrability#69](https://github.com/niclas-pfeifer/nostrability/issues/69)*
 
+*Benchmark data collected February 2026. Relay state changes continuously — results are a snapshot of network conditions at benchmark time. Relay availability, retention policies, and event counts will differ on re-run. Relative algorithm rankings should be stable; absolute recall percentages will vary.*
+
 ---
 
 ## Executive Summary
@@ -401,6 +403,10 @@ Nostur provides a more limited "outbox preview" UI that shows which additional r
 5. **Relay list propagation latency** -- How long after publishing a kind 10002 update do indexers and clients see it?
 6. **Relay hint accuracy** -- How often do relay hints in event tags actually point to relays that have the referenced event?
 7. **Long-tail analysis** -- What fraction of users are on relays used by <10 pubkeys? How does coverage differ for long-tail vs. mainstream users?
+8. **Greedy+ε-exploration at higher ε values** -- showed negligible benefit at ε=0.05 in our benchmarks; higher values may be needed.
+9. **Sliding window for learning** -- only use the last N observations per relay, or exponentially decay old ones. Relay quality changes over time.
+10. **Per-author event recall as reward** -- current reward is binary (is this author covered?). Better: how many of this author's events did this relay actually deliver?
+11. **Contextual features** -- use NIP-11 capabilities, NIP-66 health data, paid vs free as features for estimating new relay quality without exploring.
 
 ---
 
@@ -563,6 +569,8 @@ ILP, Streaming Coverage, and Spectral Clustering frequently hit the theoretical 
 - Authors classified as **testable-reliable** (events found + ≥50% declared relays responded), **testable-partial** (<50% responded), **zero-baseline** (no events, relays responded), or **unreliable** (no events, relays unresponsive)
 - Events per (relay, author) pair capped at 10,000 to eliminate recency bias
 - 14 algorithms tested across 6 time windows (7d to 3 years)
+
+**Baseline limitations:** The baseline is a lower bound, not ground truth. If a relay is down or slow during the baseline query, events stored there are missed — making the baseline incomplete and all recall percentages conservative. Relay success rates during baseline construction range from 31% (ODELL, 1,199 relays) to 55% (fiatjaf, 234 relays), meaning 45-69% of declared relays did not respond. The "testable-reliable" author filter (≥50% declared relays responded) mitigates this by excluding authors whose baseline is likely incomplete, but some undercount is inherent. All recall percentages in this report should be read as "at least X%" rather than exact values.
 
 **Relay diagnostics (cross-profile):** Success rates range from 31% (ODELL, 1,199 relays) to 47% (hodlbod, 489 relays) — inversely correlated with relay count because larger follow lists include more obscure relays. Failures are structural (deterministic per relay, not transient): 12 relays fail across all 6 profiles (NIP-42 auth-required, WoT-gated, or queries blocked). `filter.nostr.wine/*` personal relays are the largest single source of CLOSED messages (5–22 per profile). ~50% of authors with relay lists are "testable-reliable" (events retrievable from declared relays) — this ratio is a network constant across all profiles (47–52%).
 
@@ -804,7 +812,7 @@ A small fraction of prolific authors produce the majority of events. This power-
 **Key real-world event verification findings:**
 
 *Practitioner takeaways:*
-1. **Coverage-optimal ≠ event-recall-optimal.** Greedy Set-Cover wins Phase 1 (assignment coverage) but ranks 4th among practitioner algorithms in actual event recall (84.4% vs Direct Mapping's 87.9%). At 365 days on fiatjaf: 16.3% event recall.
+1. **Coverage-optimal ≠ event-recall-optimal.** Greedy Set-Cover wins Phase 1 (assignment coverage) but at 1yr drops to 16% event recall (6-profile mean) while Filter Decomposition (25%) and Welshman Stochastic (24%) retain more history through relay diversity.
 
 2. **Welshman's `random()` factor helps for archival.** The stochastic factor in ``quality * (1 + log(weight)) * random()`` spreads queries across more relays over time. At 1 year: 24% mean recall across 6 profiles (1.5× Greedy's 16%). Filter Decomposition (25%) edges it out through per-author relay diversity. Welshman's fiatjaf-specific result (37.8%) was an outlier — cross-profile means are more representative.
 
