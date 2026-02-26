@@ -150,6 +150,9 @@ export class RelayPool {
         const batch = pubkeys.slice(i, i + batchSize);
         const subId = `p2-${this.subCounter++}`;
 
+        // Check for rate limiting before each batch
+        const prevRateLimitCount = this._rateLimitNotices.length;
+
         // Use the low-level subscribe pattern from fetch.ts
         const events = await this.subscribeWithTimeout(pooled, subId, {
           kinds: filter.kinds,
@@ -163,6 +166,12 @@ export class RelayPool {
           const pk = event.pubkey as Pubkey;
           const arr = eventsPerPubkey.get(pk);
           if (arr) arr.push(event);
+        }
+
+        // Rate-limit backoff: if we got 5+ new rate-limit notices, pause
+        if (this._rateLimitNotices.length > prevRateLimitCount + 5) {
+          console.error(`[pool] Rate limiting detected on ${relay}, pausing 30s...`);
+          await new Promise(r => setTimeout(r, 30000));
         }
       }
 

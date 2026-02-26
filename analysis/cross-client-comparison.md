@@ -98,7 +98,7 @@ Browser clients (noStrudel, Welshman, Nosotros) face practical WebSocket limits 
 
 - **Hashtag/geohash routing** — No pubkey to look up for `#t` or `#g` filtered events. No mechanism for relays to advertise topic specialization.
 - **Relay capability discovery** — Beyond NIP-11's `supported_nips`, relays cannot advertise coverage, retention policies, or performance characteristics.
-- **No client measures actual per-author delivery** — The most important missing metric. noStrudel shows assignment coverage but not event recall.
+- **No client cross-checks per-author delivery** — NIP-66 monitors check relay liveness, but no client verifies "did this relay actually return events for author X?" noStrudel shows assignment coverage but not whether those assignments produced events.
 - **Replaceable vs regular events treated identically** — For replaceable events (kind 0, 3, 10002), a single copy from any relay suffices. Only Welshman routes "indexed kinds" to indexers as a special case.
 - **Cross-heuristic conflict resolution** — When declared relays disagree with observed evidence (e.g., declared relay dead for a month vs undeclared relay delivering events), implementations use ad hoc priority rules.
 
