@@ -855,8 +855,8 @@ The algorithm is a direct upgrade path for rust-nostr: same per-author structure
 |---|:---:|:---:|:---:|:---:|
 | fiatjaf (194) | **39.0%** evt / **80.4%** auth | 37.0% / 78.6% | 25.5% / 72.5% | 24.7% / 72.5% |
 | Gato (399) | 20.6% / **89.5%** | **22.5%** / 87.4% | 13.1% / 78.4% | 14.5% / 75.5% |
-| ODELL (1,079) | 29.1% / 79.7% | **30.5%** / **82.7%** | 21.6% / 72.7% | 18.2% / 74.1% |
-| Telluride (2,747) | **38.6%** / 81.4% | **38.6%** / **84.2%** | 32.3% / 75.5% | 30.3% / 74.7% |
+| ODELL (1,779) | 29.1% / 79.7% | **30.5%** / **82.7%** | 21.6% / 72.7% | 18.2% / 74.1% |
+| Telluride (2,784) | **38.6%** / 81.4% | **38.6%** / **84.2%** | 32.3% / 75.5% | 30.3% / 74.7% |
 
 **Per-author median recall (1yr, cap@20):**
 
@@ -864,8 +864,8 @@ The algorithm is a direct upgrade path for rust-nostr: same per-author structure
 |---|:---:|:---:|:---:|:---:|
 | fiatjaf (194) | **39.4%** | 18.7% | 0.0% | 0.0% |
 | Gato (399) | 97.9% | **98.5%** | 87.5% | 83.3% |
-| ODELL (1,079) | 55.0% | **64.0%** | 35.0% | 17.0% |
-| Telluride (2,747) | 77.6% | **82.4%** | 60.6% | 52.0% |
+| ODELL (1,779) | 55.0% | **64.0%** | 35.0% | 17.0% |
+| Telluride (2,784) | 77.6% | **82.4%** | 60.6% | 52.0% |
 
 **Per-profile improvement over baseline Filter Decomposition (1yr event recall):**
 
@@ -873,15 +873,34 @@ The algorithm is a direct upgrade path for rust-nostr: same per-author structure
 |---|:---:|:---:|:---:|:---:|
 | fiatjaf (194) | 39.0% | 25.5% | +13.5pp | +53% |
 | Gato (399) | 20.6% | 13.1% | +7.5pp | +57% |
-| ODELL (1,079) | 29.1% | 21.6% | +7.5pp | +35% |
-| Telluride (2,747) | 38.6% | 32.3% | +6.3pp | +20% |
+| ODELL (1,779) | 29.1% | 21.6% | +7.5pp | +35% |
+| Telluride (2,784) | 38.6% | 32.3% | +6.3pp | +20% |
 | **4-profile mean** | **31.8%** | **23.1%** | **+8.7pp** | **+38%** |
+
+**5-session learning comparison (1yr event recall, cap@20, NIP-66 filtered, per-algorithm score DBs):**
+
+| Profile (follows) | FD+Thompson | Welshman+Thompson | Gap |
+|---|:---:|:---:|:---:|
+| fiatjaf (194) | 75.1% | 82.0% | -6.9pp |
+| Gato (399) | 91.9% | 95.5% | -3.6pp |
+| ODELL (1,779) | 85.3% | 90.5% | -5.2pp |
+| Telluride (2,784) | 83.4% | 89.5% | -6.1pp |
+| **4-profile mean** | **83.9%** | **89.4%** | **-5.5pp** |
+
+**FD+Thompson session progression (1yr event recall):**
+
+| Profile (follows) | S1 | S2 | S3 | S4 | S5 |
+|---|:---:|:---:|:---:|:---:|:---:|
+| fiatjaf (194) | 16.5% | 63.8% | 75.1% | 75.1% | 75.1% |
+| Gato (399) | 37.9% | 84.4% | 88.9% | 92.3% | 91.9% |
+| ODELL (1,779) | 17.5% | 59.1% | 77.5% | 80.3% | 85.3% |
+| Telluride (2,784) | 17.1% | 54.4% | 78.2% | 81.5% | 83.4% |
 
 **Key findings:**
 
-1. **Both Thompson variants far exceed their stateless baselines.** FD+Thompson averages 31.8% event recall vs Filter Decomposition's 23.1% at 1yr — a +38% relative improvement from a single session of learning. Welshman+Thompson averages ~32% vs Weighted Stochastic's ~22% (+45% relative). No multi-session convergence needed; the gain is immediate.
+1. **Both Thompson variants far exceed their stateless baselines.** FD+Thompson averages 31.8% event recall from a single session vs Filter Decomposition's 23.1% at 1yr — a +38% relative improvement. After 5 learning sessions, FD+Thompson reaches 83.9% (a 2.6× improvement over session 1). Welshman+Thompson reaches 89.4%. Most gains arrive in sessions 2-3; sessions 4-5 provide diminishing returns.
 
-2. **Welshman+Thompson wins at larger follow counts.** The `(1 + log(weight))` popularity factor helps at 1,000+ follows — the popularity signal correctly identifies relays where events are more likely to survive. FD+Thompson wins on fiatjaf's small graph where popularity bias over-concentrates on relays that prune old events.
+2. **Welshman+Thompson leads by 5-7pp at all profile sizes after convergence.** The `(1 + log(weight))` popularity factor provides a consistent advantage — the popularity signal helps identify relays that retain events across all follow-count scales, not just large graphs. The gap is narrowest on Gato (3.6pp) and widest on fiatjaf (6.9pp).
 
 3. **Median recall tells a different story.** FD+Thompson's 39.4% median on fiatjaf (vs 18.7% for Welshman+Thompson) shows more equitable per-author coverage — fewer authors with zero recall. At larger scales, Welshman+Thompson's median advantage (64% vs 55% on ODELL) reflects better overall delivery.
 
@@ -901,7 +920,7 @@ Based on patterns observed across all implementations and benchmark results:
 
 4. **Configure multiple indexer relays.** Relying on a single indexer (e.g., only purplepag.es) is a single point of failure. Amethyst's 5-indexer approach is the most resilient.
 
-5. **Handle misconfigured kind 10002.** At minimum, filter out known-bad relay entries. Blocklists for aggregator relays (feeds.nostr.band, filter.nostr.wine) and special-purpose relays prevent wasted connections.
+5. **Handle misconfigured kind 10002.** NIP-65 relay list pollution is a widespread problem: users put purplepages, NWC relays, blastrs, proxies, and read-only feed relays into their outbox relay list because clients only expose a single relay configuration. As [vitorpamplona notes](https://github.com/nostr-protocol/nips/pull/2243#issuecomment-2695456282): "NIP-65 lists are for everybody else to find your content or to send content to you (tagging). They are not the place to put any other relay that you are using in any client." At minimum, filter out known-bad relay entries. Blocklists for aggregator relays (feeds.nostr.band, filter.nostr.wine), special-purpose relays (purplepag.es, NWC endpoints), and blast/proxy relays prevent wasted connections on relays that have no user content.
 
 6. **Make outbox debuggable — but go beyond assignment coverage.** noStrudel's coverage debugger is the only client that exposes outbox internals (coverage %, orphaned users, per-relay assignment, color-coded health). But it only shows the academic view — the on-paper relay mapping. NIP-66 monitors check relay liveness, but no client verifies per-author delivery — "did this relay return events for author X?" Our central finding is that these two views diverge sharply (85% assignment coverage can mean 16% event recall at 1yr). True completeness isn't measurable (no relay has everything — if indexers were complete, you'd skip outbox entirely), but cross-checking catches systematic gaps: a relay that's supposed to serve an author but consistently returns nothing. Opportunities for future work: per-author delivery cross-checks against independent relays, relay response/efficiency rates (events delivered per connection), orphan root-cause analysis (missing kind 10002 vs relays offline vs filtered out), and relay list staleness indicators.
 

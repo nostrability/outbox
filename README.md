@@ -16,9 +16,9 @@ Each technique adds incremental value. You don't need to implement everything at
 | 1 | **Basic outbox** (greedy set-cover from NIP-65 data) | 16% | 84% | Medium — ~200 LOC, fetch relay lists + implement set-cover |
 | 2 | **Stochastic scoring** (Welshman's `random()` factor) | 24% | 83% | Low — ~50 LOC, replace greedy with weighted random |
 | 3 | **Filter dead relays** (NIP-66 liveness data) | neutral | +5pp efficiency | Low — ~30 LOC, fetch kind 30166, exclude dead relays |
-| 4 | **Learn from delivery** (Thompson Sampling) | 81% | 92% | Low — ~80 LOC + DB table, replace `random()` with `sampleBeta()` |
+| 4 | **Learn from delivery** (Thompson Sampling) | 84-89% | 92% | Low — ~80 LOC + DB table, replace `random()` with `sampleBeta()` |
 
-*Step 2 is an alternative to Step 1 — replace greedy with stochastic, don't stack them. Steps 3 (NIP-66 filtering) and 4 (Thompson Sampling) are incremental enhancements that apply to either Step 1 or Step 2. Going from Step 0 to Step 4 takes your 1yr recall from 8% to 81% (and 7d from 61% to 92%). All values are 6-profile means except Thompson (4-profile mean, 5 learning sessions). 1yr recall is the more informative metric — 7d masks relay retention problems that dominate real-world performance.*
+*Step 2 is an alternative to Step 1 — replace greedy with stochastic, don't stack them. Steps 3 (NIP-66 filtering) and 4 (Thompson Sampling) are incremental enhancements that apply to either Step 1 or Step 2. Going from Step 0 to Step 4 takes your 1yr recall from 8% to 84-89% (and 7d from 61% to 92%). All values are 6-profile means except Thompson (4-profile mean with NIP-66, 5 learning sessions; FD+Thompson=84%, Welshman+Thompson=89%). 1yr recall is the more informative metric — 7d masks relay retention problems that dominate real-world performance.*
 
 ## Already using a client library?
 
@@ -103,8 +103,8 @@ All deployed client algorithms plus key experimental ones:
 
 | Algorithm | Used by | 1yr recall | 7d recall | Verdict |
 |---|---|:---:|:---:|---|
-| **Welshman+Thompson** | *not yet deployed* | 81% | 92% | Upgrade path for Coracle — learns from delivery |
-| **FD+Thompson** | *not yet deployed* | 32% | 97% | Upgrade path for rust-nostr — +38% over baseline FD from learning |
+| **Welshman+Thompson** | *not yet deployed* | 89% | 92% | Upgrade path for Coracle — learns from delivery |
+| **FD+Thompson** | *not yet deployed* | 84% | 97% | Upgrade path for rust-nostr — learns from delivery |
 | **Filter Decomposition** | rust-nostr | 25% | 77% | Per-author top-N write relays; strong at long windows |
 | **Welshman Stochastic** | Coracle | 24% | 83% | Best stateless deployed algorithm for archival — 1.5× Greedy at 1yr |
 | **Greedy Set-Cover** | Gossip, Applesauce, Wisp | 16% | 84% | Best on-paper coverage; degrades sharply for history |
@@ -119,7 +119,7 @@ All deployed client algorithms plus key experimental ones:
 | Big Relays | 8% | 61% | Just damus+nos.lol — the "do nothing" baseline |
 | Primal Aggregator\*\*\* | 1% | 32% | Single caching relay — 100% assignment but low actual recall |
 
-*1yr and 7d recall: 6-profile means from cross-profile benchmarks (Section 8.2 of [OUTBOX-REPORT.md](OUTBOX-REPORT.md)). All testable-reliable authors, 20-connection cap except Direct Mapping. Thompson = 4-profile mean with NIP-66, 5 learning sessions. FD+Thompson = 4-profile single-run mean (32% 1yr vs baseline FD's 23% = +38% relative improvement from learning). Stochastic algorithms have run-to-run variance of ±2–8pp depending on profile size (see [variance analysis](OUTBOX-REPORT.md#82-approximating-real-world-conditions-event-verification)).*
+*1yr and 7d recall: 6-profile means from cross-profile benchmarks (Section 8.2 of [OUTBOX-REPORT.md](OUTBOX-REPORT.md)). All testable-reliable authors, 20-connection cap except Direct Mapping. Thompson = 4-profile mean with NIP-66, 5 learning sessions (FD+Thompson=84%, Welshman+Thompson=89%). Both Thompson variants converge within 2-3 sessions. Stochastic algorithms have run-to-run variance of ±2–8pp depending on profile size (see [variance analysis](OUTBOX-REPORT.md#82-approximating-real-world-conditions-event-verification)).*
 
 *\*\*Direct Mapping uses unlimited connections (all declared write relays, typically 50-200+). Its high recall reflects connection count, not algorithmic superiority.*
 
@@ -251,17 +251,17 @@ const selected = scored.sort((a, b) => b.score - a.score)
 
 Same `sampleBeta()`, same stats table, same update loop as [Thompson Sampling above](#thompson-sampling). The only difference: no `(1 + Math.log(weight))` multiplier. This avoids biasing toward popular relays that many authors declare but that prune aggressively — scoring purely from observed delivery.
 
-**1yr cross-profile results (cap@20, single run):**
+**1yr cross-profile results after 5 learning sessions (cap@20, NIP-66 filtered):**
 
-| Profile (follows) | FD+Thompson | Filter Decomp (baseline) | Gain |
+| Profile (follows) | FD+Thompson | Welshman+Thompson | Gap |
 |---|:---:|:---:|:---:|
-| fiatjaf (194) | **39.0%** | 25.5% | +13.5pp (+53%) |
-| Gato (399) | **20.6%** | 13.1% | +7.5pp (+57%) |
-| ODELL (1,079) | **29.1%** | 21.6% | +7.5pp (+35%) |
-| Telluride (2,747) | **38.6%** | 32.3% | +6.3pp (+20%) |
-| **4-profile mean** | **31.8%** | **23.1%** | **+8.7pp (+38%)** |
+| fiatjaf (194) | 75.1% | 82.0% | -6.9pp |
+| Gato (399) | 91.9% | 95.5% | -3.6pp |
+| ODELL (1,779) | 85.3% | 90.5% | -5.2pp |
+| Telluride (2,784) | 83.4% | 89.5% | -6.1pp |
+| **4-profile mean** | **83.9%** | **89.4%** | **-5.5pp** |
 
-*FD+Thompson adds +8.7pp event recall on average from a single session of learning. The gain is largest on small graphs where lexicographic ordering wastes slots on pruning-heavy relays. Welshman+Thompson is competitive at larger follow counts where the popularity signal helps — see [Section 8.4](OUTBOX-REPORT.md#84-fdthompson-filter-decomposition-with-thompson-sampling) for the full comparison.*
+*Both algorithms converge within 2-3 sessions (FD+Thompson session 1 = 22%, session 3 = 80%, session 5 = 84%). Welshman+Thompson leads by 5-7pp at all profile sizes after convergence — the popularity weight provides a consistent advantage. See [Section 8.4](OUTBOX-REPORT.md#84-fdthompson-filter-decomposition-with-thompson-sampling) for the full comparison including session progression.*
 
 ### NIP-66 pre-filter
 

@@ -18,8 +18,8 @@ What's your starting point?
 │
 ├─ Historical event recall (archival, search)?
 │  ├─ Can persist state across sessions?
-│  │  ├─ Using Welshman/Coracle?  → Welshman+Thompson Sampling (81% 1yr)
-│  │  └─ Using rust-nostr?        → FD+Thompson (32% 1yr single-session)
+│  │  ├─ Using Welshman/Coracle?  → Welshman+Thompson Sampling (89% 1yr)
+│  │  └─ Using rust-nostr?        → FD+Thompson (84% 1yr after 5 sessions)
 │  └─ Stateless?                  → Filter Decomposition (25% 1yr) or
 │                                   Weighted Stochastic / Welshman (24% 1yr)
 │
@@ -71,10 +71,11 @@ See [README.md § Thompson Sampling](README.md#thompson-sampling) for complete c
 
 **For rust-nostr / Filter Decomposition users:** FD+Thompson is a variant that fits
 Filter Decomposition's per-author structure directly. It replaces lexicographic relay
-ordering with `sampleBeta(α, β)` scoring — no popularity weight. At 1yr (single session,
-cap@20), FD+Thompson averages 31.8% event recall vs baseline FD's 23.1% — a **+38%
-relative improvement** (+8.7pp absolute) from a single session of learning across 4
-profiles. The gain is largest on small graphs (+53% relative for fiatjaf/194 follows).
+ordering with `sampleBeta(α, β)` scoring — no popularity weight. After 5 learning
+sessions (cap@20, NIP-66 filtered), FD+Thompson reaches **83.9% event recall** at 1yr
+vs baseline FD's 23.1% — converging within 2-3 sessions. Welshman+Thompson leads by
+~5pp (89.4%) due to the popularity weight, but FD+Thompson is a drop-in upgrade for
+existing rust-nostr code with no structural changes needed.
 See [README.md § FD+Thompson](README.md#fdthompson-for-rust-nostr) for code.
 
 ### 2. Pre-filter relays with NIP-66

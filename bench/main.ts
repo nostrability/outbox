@@ -27,6 +27,9 @@ import {
   getRelayPriors,
 } from "./src/relay-scores.ts";
 import { QueryCache } from "./src/relay-pool.ts";
+import { enrichWithRelayHints } from "./src/hint-enrichment.ts";
+import type { HintMap } from "./src/hint-enrichment.ts";
+import { probeHintRelays } from "./src/phase2/hint-probe.ts";
 import type {
   AlgorithmMetrics,
   AlgorithmParams,
@@ -66,6 +69,7 @@ Options:
   --verify-window <sec>     Phase 2 time window in seconds (default: 86400)
   --verify-windows <list>   Comma-separated windows (e.g., 604800,31536000)
   --verify-concurrency <n>  Phase 2 max concurrent connections (default: 20)
+  --enrich-hints            Enrich relay sets with p-tag relay hints from kind-1 events
   --nip66-filter <mode>     NIP-66 liveness filter: liveness (default), strict
   --nip66-ttl <ms>          NIP-66 cache TTL override in ms
   --no-cache                Skip cache
@@ -93,7 +97,7 @@ function parseCliOptions(): CliOptions {
       "nip66-filter",
       "nip66-ttl",
     ],
-    boolean: ["sweep", "fast", "full-assignments", "no-cache", "no-phase2-cache", "verbose", "verify", "help"],
+    boolean: ["sweep", "fast", "full-assignments", "no-cache", "no-phase2-cache", "verbose", "verify", "enrich-hints", "help"],
     default: {
       algorithms: "all",
       runs: "10",
@@ -146,6 +150,7 @@ function parseCliOptions(): CliOptions {
     fullAssignments: !!args["full-assignments"],
     noCache: !!args["no-cache"],
     noPhase2Cache: !!args["no-phase2-cache"],
+    enrichHints: !!args["enrich-hints"],
     verbose: !!args.verbose,
     verify: !!args.verify,
     verifyWindow: parseInt(args["verify-window"]!, 10),
@@ -262,6 +267,19 @@ async function main(): Promise<void> {
     }
   }
 
+  // Relay hint enrichment: add relays from p-tag hints
+  let hintMap: HintMap | undefined;
+  if (opts.enrichHints) {
+    const indexerRelays = opts.indexers.length
+      ? opts.indexers
+      : ["wss://purplepag.es", "wss://relay.damus.io", "wss://nos.lol"];
+    const beforeRelays = input.relayToWriters.size;
+    const beforeAuthors = input.writerToRelays.size;
+    const enrichResult = await enrichWithRelayHints(input, indexerRelays);
+    hintMap = enrichResult.hintMap;
+    console.log(`Relays: ${beforeRelays} → ${input.relayToWriters.size} | Authors with relays: ${beforeAuthors} → ${input.writerToRelays.size}`);
+  }
+
   // Get algorithms
   const algorithms = getAlgorithms(opts.algorithms);
 
@@ -269,9 +287,9 @@ async function main(): Promise<void> {
     if (opts.maxConnections !== undefined) {
       console.log("Warning: --sweep overrides --max-connections");
     }
-    await runSweep(input, algorithms, opts, seed, runs, showTable, showJson);
+    await runSweep(input, algorithms, opts, seed, runs, showTable, showJson, hintMap);
   } else {
-    await runDefault(input, algorithms, opts, seed, runs, showTable, showJson);
+    await runDefault(input, algorithms, opts, seed, runs, showTable, showJson, hintMap);
   }
 }
 
@@ -283,19 +301,27 @@ async function runDefault(
   runs: number,
   showTable: boolean,
   showJson: boolean,
+  hintMap?: HintMap,
 ): Promise<void> {
   const maxConnections = opts.maxConnections ?? 20;
 
-  // Load Thompson Sampling priors (if available from previous sessions)
+  // Load per-algorithm Thompson Sampling priors (if available from previous sessions)
   const THOMPSON_IDS = new Set(["welshman-thompson", "fd-thompson"]);
   const hasThompson = algorithms.some((a) => THOMPSON_IDS.has(a.id));
-  let relayScoreDB = hasThompson && opts.verify
-    ? loadRelayScores(input.targetPubkey, opts.verifyWindow, opts.nip66Filter || undefined)
-    : null;
-  const relayPriors = relayScoreDB ? getRelayPriors(relayScoreDB) : undefined;
+  const thompsonDBs = new Map<string, ReturnType<typeof loadRelayScores>>();
+  const thompsonPriors = new Map<string, Map<string, { alpha: number; beta: number }>>();
 
-  if (relayPriors && relayPriors.size > 0) {
-    console.log(`\nThompson Sampling: loaded ${relayPriors.size} relay priors (session ${relayScoreDB!.sessionCount})`);
+  if (hasThompson && opts.verify) {
+    for (const entry of algorithms) {
+      if (!THOMPSON_IDS.has(entry.id)) continue;
+      const db = loadRelayScores(input.targetPubkey, opts.verifyWindow, opts.nip66Filter || undefined, entry.id);
+      thompsonDBs.set(entry.id, db);
+      const priors = getRelayPriors(db);
+      if (priors.size > 0) {
+        thompsonPriors.set(entry.id, priors);
+        console.log(`\nThompson Sampling [${entry.id}]: loaded ${priors.size} relay priors (session ${db.sessionCount})`);
+      }
+    }
   }
 
   // Regime A: Fixed connections
@@ -314,9 +340,9 @@ async function runDefault(
       params.writeLimit = opts.relaysPerUser;
     }
 
-    // Inject Thompson Sampling priors
-    if (THOMPSON_IDS.has(entry.id) && relayPriors) {
-      params.relayPriors = relayPriors;
+    // Inject per-algorithm Thompson Sampling priors
+    if (THOMPSON_IDS.has(entry.id) && thompsonPriors.has(entry.id)) {
+      params.relayPriors = thompsonPriors.get(entry.id);
     }
 
     if (entry.stochastic) {
@@ -390,9 +416,9 @@ async function runDefault(
           params.relayLimit = opts.relaysPerUser;
           params.writeLimit = opts.relaysPerUser;
         }
-        // Inject Thompson Sampling priors for the verify run too
-        if (THOMPSON_IDS.has(entry.id) && relayPriors) {
-          params.relayPriors = relayPriors;
+        // Inject per-algorithm Thompson Sampling priors for the verify run too
+        if (THOMPSON_IDS.has(entry.id) && thompsonPriors.has(entry.id)) {
+          params.relayPriors = thompsonPriors.get(entry.id);
         }
         const rng = mulberry32(0);
         const singleResult = runAlgorithm(entry, input, params, rng);
@@ -418,27 +444,29 @@ async function runDefault(
       printPhase2Table(phase2Result);
     }
 
-    // Thompson Sampling learning: update relay scores from Phase 2 results
+    // Thompson Sampling learning: update relay scores from Phase 2 results (per-algorithm)
     if (hasThompson && phase2Result._baselines && phase2Result._cache) {
-      // Learn from the first Thompson algorithm found
-      const thompsonIdx = algorithms.findIndex((a) => THOMPSON_IDS.has(a.id));
-      if (thompsonIdx >= 0) {
-        const thompsonResult = verifyResults[thompsonIdx];
-        if (!relayScoreDB) {
-          relayScoreDB = loadRelayScores(input.targetPubkey, opts.verifyWindow, opts.nip66Filter || undefined);
-        }
-        relayScoreDB = updateRelayScores(
-          relayScoreDB,
-          algorithms[thompsonIdx].id,
+      for (let i = 0; i < algorithms.length; i++) {
+        const entry = algorithms[i];
+        if (!THOMPSON_IDS.has(entry.id)) continue;
+
+        const thompsonResult = verifyResults[i];
+        let db = thompsonDBs.get(entry.id) ??
+          loadRelayScores(input.targetPubkey, opts.verifyWindow, opts.nip66Filter || undefined, entry.id);
+
+        db = updateRelayScores(
+          db,
+          entry.id,
           thompsonResult.relayAssignments,
           thompsonResult.pubkeyAssignments,
           phase2Result._baselines,
           phase2Result._cache as QueryCache,
         );
-        await saveRelayScores(relayScoreDB, opts.nip66Filter || undefined);
+        thompsonDBs.set(entry.id, db);
+        await saveRelayScores(db, opts.nip66Filter || undefined, entry.id);
 
         // Print learning state summary
-        const entries = Object.values(relayScoreDB.relays);
+        const entries = Object.values(db.relays);
         const meanAlpha = entries.length > 0
           ? entries.reduce((s, e) => s + e.alpha, 0) / entries.length
           : 1;
@@ -448,13 +476,25 @@ async function runDefault(
         const strongPreference = entries.filter((e) => e.alpha > 5).length;
         const learnedToAvoid = entries.filter((e) => e.beta > 5).length;
 
-        console.log(`\nThompson Sampling learning state:`);
-        console.log(`  Session: ${relayScoreDB.sessionCount}`);
+        console.log(`\nThompson Sampling [${entry.id}] learning state:`);
+        console.log(`  Session: ${db.sessionCount}`);
         console.log(`  Relays with observations: ${entries.length}`);
         console.log(`  Mean prior α: ${meanAlpha.toFixed(1)}, β: ${meanBeta.toFixed(1)}`);
         console.log(`  Relays with strong preference (α>5): ${strongPreference}`);
         console.log(`  Relays learned to avoid (β>5): ${learnedToAvoid}`);
       }
+    }
+
+    // Hint Tier 2: probe hint relays for uncovered authors
+    if (hintMap && phase2Result._baselines && phase2Result._cache) {
+      await probeHintRelays(
+        phase2Result._baselines,
+        phase2Result._cache as QueryCache,
+        verifyResults,
+        phase2Result.algorithms,
+        hintMap,
+        { kinds: [1], windowSeconds: opts.verifyWindow, maxConcurrentConns: opts.verifyConcurrency },
+      );
     }
   }
 
@@ -487,6 +527,7 @@ async function runSweep(
   runs: number,
   showTable: boolean,
   showJson: boolean,
+  hintMap?: HintMap,
 ): Promise<void> {
   const budgets = opts.fast ? SWEEP_BUDGETS_FAST : SWEEP_BUDGETS_FULL;
   const sweepRows: SweepRow[] = [];
@@ -536,7 +577,7 @@ async function runSweep(
 
   // Also run default regime for full metrics at default cap
   console.log("");
-  await runDefault(input, algorithms, opts, seed, runs, showTable, showJson);
+  await runDefault(input, algorithms, opts, seed, runs, showTable, showJson, hintMap);
 }
 
 main().then(() => {

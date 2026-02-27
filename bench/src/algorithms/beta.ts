@@ -9,6 +9,15 @@ function rngPos(rng: () => number): number {
  * Returns a value in [0, 1].
  */
 export function sampleBeta(alpha: number, beta: number, rng: () => number): number {
+  if (
+    !Number.isFinite(alpha) || !Number.isFinite(beta) ||
+    alpha <= 0 || beta <= 0
+  ) {
+    throw new RangeError(
+      `sampleBeta requires alpha > 0 and beta > 0, got alpha=${alpha}, beta=${beta}`,
+    );
+  }
+
   // For alpha=1, beta=1 (uniform prior), just return rng()
   if (alpha === 1 && beta === 1) return rng();
 
@@ -40,6 +49,12 @@ export function sampleBeta(alpha: number, beta: number, rng: () => number): numb
  * Sample from a Gamma(shape, 1) distribution using Marsaglia and Tsang's method.
  */
 function sampleGamma(shape: number, rng: () => number): number {
+  if (!Number.isFinite(shape) || shape <= 0) {
+    throw new RangeError(
+      `sampleGamma requires shape > 0, got shape=${shape}`,
+    );
+  }
+
   if (shape < 1) {
     // Boost: Gamma(shape) = Gamma(shape+1) * U^(1/shape)
     return sampleGamma(shape + 1, rng) * Math.pow(rngPos(rng), 1 / shape);
