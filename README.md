@@ -18,7 +18,7 @@ Each technique adds incremental value. You don't need to implement everything at
 | 3 | **Filter dead relays** (NIP-66 liveness data) | neutral | +5pp efficiency | Low — ~30 LOC, fetch kind 30166, exclude dead relays |
 | 4 | **Learn from delivery** (Thompson Sampling) | 81% | 92% | Low — ~80 LOC + DB table, replace `random()` with `sampleBeta()` |
 
-*Steps 2→4 are incremental — each builds on the previous. Step 3 (NIP-66) can be added at any point. Going from step 0 to step 4 takes your 1yr recall from 8% to 81% (and 7d from 61% to 92%). All values are 6-profile means except Thompson (4-profile mean, 5 learning sessions). 1yr recall is the more informative metric — 7d masks relay retention problems that dominate real-world performance.*
+*Step 2 is an alternative to Step 1 — replace greedy with stochastic, don't stack them. Steps 3 (NIP-66 filtering) and 4 (Thompson Sampling) are incremental enhancements that apply to either Step 1 or Step 2. Going from Step 0 to Step 4 takes your 1yr recall from 8% to 81% (and 7d from 61% to 92%). All values are 6-profile means except Thompson (4-profile mean, 5 learning sessions). 1yr recall is the more informative metric — 7d masks relay retention problems that dominate real-world performance.*
 
 ## Already using a client library?
 
@@ -89,11 +89,13 @@ At 1 year, greedy set-cover gets only 16% event recall. Welshman's stochastic sc
 
 **What to do:** If you use greedy set-cover, switch to stochastic scoring. If you already use Welshman, upgrade to Thompson Sampling for even better results. Don't optimize purely for "covers the most authors" — factor in whether the relay actually retains events long-term.
 
-### 4. 20 relay connections is enough — NIP-65 adoption is the real ceiling
+### 4. 20 relay connections is enough — relay history is the real ceiling
 
-All algorithms reach within 1-2% of their unlimited ceiling at 20 relays. Raw data shows 20-44% of follows have no relay list — but [dead account analysis](bench/NIP66-COMPARISON-REPORT.md#5-dead-account-analysis) reveals ~85% of those are accounts with no posts in 2+ years (or ever). The real NIP-65 adoption gap among active users is ~3-5%.
+All algorithms reach within 1-2% of their unlimited ceiling at 20 relays. NIP-65 adoption is not the bottleneck — only ~3-5% of active users lack relay lists ([dead account analysis](bench/NIP66-COMPARISON-REPORT.md#5-dead-account-analysis) shows the raw 20-44% "missing" rate is mostly accounts with no posts in 2+ years).
 
-**What to do:** Cap at 20 connections. The "missing relay list" problem is smaller than it looks — most of it is dead accounts, not active users who forgot to publish NIP-65. For the ~3-5% of active follows without relay lists, use fallback strategies (relay hints from tags, indexer queries, hardcoded popular relays).
+The real ceiling is **historical relay discovery**: relays retain 77% of events at 1 year, but algorithms only achieve 24% recall — because NIP-65 lists reflect where users write *now*, not where they wrote a year ago. See [issue #21](https://github.com/nostrability/outbox/issues/21) for the full analysis and proposed protocol-level fixes.
+
+**What to do:** Cap at 20 connections. For the ~3-5% of active follows without relay lists, use fallback strategies (relay hints from tags, indexer queries, hardcoded popular relays).
 
 ## Algorithm quick reference
 

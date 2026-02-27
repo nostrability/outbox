@@ -13,9 +13,7 @@ import type {
  */
 const BIG_RELAY_URLS = [
   "wss://relay.damus.io",
-  "wss://relay.damus.io/",
   "wss://nos.lol",
-  "wss://nos.lol/",
 ];
 
 export function bigRelaysBaseline(

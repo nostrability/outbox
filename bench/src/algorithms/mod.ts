@@ -193,7 +193,7 @@ export const ALGORITHM_REGISTRY: AlgorithmEntry[] = [
     id: "big-relays",
     name: "Big Relays (damus+nos.lol)",
     fn: bigRelaysBaseline,
-    nativeCap: true,
+    nativeCap: false,
     stochastic: false,
     defaults: {},
   },
