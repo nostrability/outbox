@@ -287,7 +287,8 @@ async function runDefault(
   const maxConnections = opts.maxConnections ?? 20;
 
   // Load Thompson Sampling priors (if available from previous sessions)
-  const hasThompson = algorithms.some((a) => a.id === "welshman-thompson");
+  const THOMPSON_IDS = new Set(["welshman-thompson", "fd-thompson"]);
+  const hasThompson = algorithms.some((a) => THOMPSON_IDS.has(a.id));
   let relayScoreDB = hasThompson && opts.verify
     ? loadRelayScores(input.targetPubkey, opts.verifyWindow, opts.nip66Filter || undefined)
     : null;
@@ -314,7 +315,7 @@ async function runDefault(
     }
 
     // Inject Thompson Sampling priors
-    if (entry.id === "welshman-thompson" && relayPriors) {
+    if (THOMPSON_IDS.has(entry.id) && relayPriors) {
       params.relayPriors = relayPriors;
     }
 
@@ -390,7 +391,7 @@ async function runDefault(
           params.writeLimit = opts.relaysPerUser;
         }
         // Inject Thompson Sampling priors for the verify run too
-        if (entry.id === "welshman-thompson" && relayPriors) {
+        if (THOMPSON_IDS.has(entry.id) && relayPriors) {
           params.relayPriors = relayPriors;
         }
         const rng = mulberry32(0);
@@ -419,7 +420,8 @@ async function runDefault(
 
     // Thompson Sampling learning: update relay scores from Phase 2 results
     if (hasThompson && phase2Result._baselines && phase2Result._cache) {
-      const thompsonIdx = algorithms.findIndex((a) => a.id === "welshman-thompson");
+      // Learn from the first Thompson algorithm found
+      const thompsonIdx = algorithms.findIndex((a) => THOMPSON_IDS.has(a.id));
       if (thompsonIdx >= 0) {
         const thompsonResult = verifyResults[thompsonIdx];
         if (!relayScoreDB) {
@@ -427,7 +429,7 @@ async function runDefault(
         }
         relayScoreDB = updateRelayScores(
           relayScoreDB,
-          "welshman-thompson",
+          algorithms[thompsonIdx].id,
           thompsonResult.relayAssignments,
           thompsonResult.pubkeyAssignments,
           phase2Result._baselines,

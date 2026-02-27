@@ -31,6 +31,7 @@ import { greedyEpsilon } from "./greedy-epsilon.ts";
 import { welshmanThompson } from "./welshman-thompson.ts";
 import { jumbleCoveragePruning } from "./jumble.ts";
 import { bigRelaysBaseline } from "./big-relays.ts";
+import { fdThompson } from "./fd-thompson.ts";
 
 export interface AlgorithmEntry {
   id: string;
@@ -188,6 +189,14 @@ export const ALGORITHM_REGISTRY: AlgorithmEntry[] = [
     nativeCap: false,
     stochastic: false,
     defaults: {},
+  },
+  {
+    id: "fd-thompson",
+    name: "FD+Thompson",
+    fn: fdThompson,
+    nativeCap: false,
+    stochastic: true,
+    defaults: { writeLimit: 3 },
   },
   {
     id: "big-relays",

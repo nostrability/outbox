@@ -8,33 +8,32 @@ import type {
 import { sampleBeta } from "./beta.ts";
 
 /**
- * Welshman + Thompson Sampling
+ * Filter Decomposition + Thompson Sampling
  *
- * Same structure as Weighted Stochastic (Welshman/Coracle), but replaces
- * the uniform rng() with a Beta distribution sample per relay, where the
- * Beta parameters come from historical delivery performance.
+ * Same per-author structure as Filter Decomposition (rust-nostr): select up
+ * to N write relays per author, no global optimization. But instead of
+ * lexicographic ordering, rank relays by Beta-sampled scores from delivery
+ * history.
  *
- * Cold start (no priors): sampleBeta(1, 1) = uniform, equivalent to baseline Welshman.
- * Warm start: relays that historically delivered well get higher samples.
+ * Key difference from Welshman+Thompson: no popularity weight (1 + log(weight)).
+ * Score = sampleBeta(alpha, beta) only. This avoids biasing toward high-volume
+ * relays that prune aggressively — learning purely from delivery.
+ *
+ * Cold start: sampleBeta(1,1) = uniform random, equivalent to random selection.
+ * Warm start: relays that delivered well get higher Beta parameters.
  */
-export function welshmanThompson(
+export function fdThompson(
   input: BenchmarkInput,
   params: AlgorithmParams,
   rng: () => number,
 ): AlgorithmResult {
   const start = performance.now();
-  const relayLimit = params.relayLimit ?? params.maxRelaysPerUser ?? 3;
+  const writeLimit = params.writeLimit ?? params.relayLimit ?? 3;
   const relayPriors = params.relayPriors;
 
   const relayAssignments = new Map<RelayUrl, Set<Pubkey>>();
   const pubkeyAssignments = new Map<Pubkey, Set<RelayUrl>>();
   const orphanedPubkeys = new Set<Pubkey>();
-
-  // Precompute relay weights (number of follows that write to each relay)
-  const relayWeight = new Map<RelayUrl, number>();
-  for (const [relay, writers] of input.relayToWriters) {
-    relayWeight.set(relay, writers.size);
-  }
 
   let priorsUsed = 0;
   const priorsTotal = relayPriors ? relayPriors.size : 0;
@@ -46,29 +45,26 @@ export function welshmanThompson(
       continue;
     }
 
-    // Score each relay
+    // Score each relay purely by Beta sample (no popularity weight)
     const scored: { relay: RelayUrl; score: number }[] = [];
     for (const relay of authorRelays) {
-      const weight = relayWeight.get(relay) ?? 1;
       const prior = relayPriors?.get(relay);
       const sample = prior
         ? sampleBeta(prior.alpha, prior.beta, rng)
         : sampleBeta(1, 1, rng); // uniform = rng()
 
       if (prior) priorsUsed++;
-
-      const score = (1 + Math.log(weight)) * sample;
-      scored.push({ relay, score });
+      scored.push({ relay, score: sample });
     }
 
-    // Sort by score descending, tie-break by URL ascending
+    // Sort by score descending, tie-break by URL ascending (deterministic)
     scored.sort((a, b) => {
       if (a.score !== b.score) return b.score - a.score;
       return a.relay < b.relay ? -1 : a.relay > b.relay ? 1 : 0;
     });
 
     // Select top N
-    const limit = Math.min(relayLimit, scored.length);
+    const limit = Math.min(writeLimit, scored.length);
     const selected = new Set<RelayUrl>();
 
     for (let i = 0; i < limit; i++) {
@@ -85,13 +81,13 @@ export function welshmanThompson(
 
   const notes: string[] = [];
   if (relayPriors && relayPriors.size > 0) {
-    notes.push(`Thompson Sampling: ${priorsTotal} relay priors loaded, ${priorsUsed} prior lookups used`);
+    notes.push(`FD+Thompson: ${priorsTotal} relay priors loaded, ${priorsUsed} prior lookups used`);
   } else {
-    notes.push("Thompson Sampling: cold start (uniform priors)");
+    notes.push("FD+Thompson: cold start (uniform priors)");
   }
 
   return {
-    name: "Welshman+Thompson",
+    name: "FD+Thompson",
     relayAssignments,
     pubkeyAssignments,
     orphanedPubkeys,
