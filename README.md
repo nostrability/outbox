@@ -3,8 +3,39 @@
 ## If you read nothing else
 
 1. **Filter dead relays first** ([NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md)) — 40-66% of declared relays are dead. Removing them stops you wasting connection budget on relays that will never respond (success rate goes from ~30% to ~75%). Zero algorithmic changes needed.
-2. **Add randomness to relay selection** — deterministic algorithms (greedy set-cover) pick the same popular relays every time. Those relays prune old events. Stochastic selection discovers relays that keep history. 2.5x better recall at 1 year.
+2. **Add randomness to relay selection** — deterministic algorithms (greedy set-cover) pick the same popular relays every time. Those relays prune old events. Stochastic selection discovers relays that keep history. 1.5× better recall at 1 year across 6 profiles.
 3. **Learn from what relays actually return** — no client tracks "did this relay deliver events?" Track it, feed it back into selection, and your relay picks improve by 60-70pp after 2-3 sessions ([Thompson Sampling](#thompson-sampling)).
+
+## What each step buys you
+
+Each technique adds incremental value. You don't need to implement everything at once:
+
+| Step | What you do | 1yr recall | 7d recall | Effort |
+|:---:|---|:---:|:---:|---|
+| 0 | **Hardcode big relays** (damus + nos.lol) | 8% | 61% | Zero |
+| 1 | **Basic outbox** (greedy set-cover from NIP-65 data) | 16% | 84% | Medium — ~200 LOC, fetch relay lists + implement set-cover |
+| 2 | **Stochastic scoring** (Welshman's `random()` factor) | 24% | 83% | Low — ~50 LOC, replace greedy with weighted random |
+| 3 | **Filter dead relays** (NIP-66 liveness data) | neutral | +5pp efficiency | Low — ~30 LOC, fetch kind 30166, exclude dead relays |
+| 4 | **Learn from delivery** (Thompson Sampling) | 81% | 92% | Low — ~80 LOC + DB table, replace `random()` with `sampleBeta()` |
+
+*Steps 2→4 are incremental — each builds on the previous. Step 3 (NIP-66) can be added at any point. Going from step 0 to step 4 takes your 1yr recall from 8% to 81% (and 7d from 61% to 92%). All values are 6-profile means except Thompson (4-profile mean, 5 learning sessions). 1yr recall is the more informative metric — 7d masks relay retention problems that dominate real-world performance.*
+
+## Already using a client library?
+
+If you're building on an existing library, here's where you stand and what to do next:
+
+| If you use… | You're at step… | Next upgrade | Details |
+|---|:---:|---|---|
+| **Welshman/Coracle** | 2 (stochastic) | Add Thompson Sampling — replace `random()` with `sampleBeta()` | [analysis/clients/welshman-coracle.md](analysis/clients/welshman-coracle.md) |
+| **NDK** | 1 (priority-based) | Add stochastic factor, then Thompson | [analysis/clients/ndk-applesauce-nostrudel.md](analysis/clients/ndk-applesauce-nostrudel.md) |
+| **Applesauce/noStrudel** | 1 (greedy set-cover) | Add stochastic factor, then Thompson | [analysis/clients/ndk-applesauce-nostrudel.md](analysis/clients/ndk-applesauce-nostrudel.md) |
+| **Gossip** | 1 (greedy set-cover) | Add stochastic factor or Thompson | [analysis/clients/gossip.md](analysis/clients/gossip.md) |
+| **rust-nostr** | 1 (filter decomp) | Already strong at 1yr (25%); add Thompson for further gains | [analysis/clients/rust-nostr-voyage-nosotros-wisp-shopstr.md](analysis/clients/rust-nostr-voyage-nosotros-wisp-shopstr.md) |
+| **Amethyst** | 1 (direct mapping) | Add NIP-66 filtering — unlimited connections already give high recall | [analysis/clients/amethyst.md](analysis/clients/amethyst.md) |
+| **Nostur** | 1 (coverage sort) | Remove skipTopRelays, add stochastic factor | [analysis/clients/nostur-yakihonne-notedeck.md](analysis/clients/nostur-yakihonne-notedeck.md) |
+| **Nothing yet** | 0 | Start with big relays (damus + nos.lol), then add basic outbox | [IMPLEMENTATION-GUIDE.md](IMPLEMENTATION-GUIDE.md) |
+
+*Each link goes to a per-client cheat sheet with specific code paths, current behavior, and upgrade recommendations.*
 
 ## The problem in one sentence
 
@@ -12,23 +43,29 @@ Your relay picker optimizes for "who publishes where" on paper, but the relay th
 
 ## What we tested
 
-16 relay selection algorithms (8 extracted from real clients, 8 experimental), tested against 4 real Nostr profiles (194-2,784 follows), across 3 time windows (7 days to 3 years), with and without NIP-66 liveness filtering. 120 benchmark runs total (4 profiles × 3 windows × 5 sessions × 2 NIP-66 modes). Assignment coverage was also tested across 26 profiles. Every algorithm connected to real relays and queried for real events.
+16 relay selection algorithms (8 extracted from real clients, 8 experimental), tested against 6 real Nostr profiles (194-2,784 follows), across 6 time windows (7 days to 3 years), with and without NIP-66 liveness filtering. Every algorithm connected to real relays and queried for real events.
 
 Full methodology: [OUTBOX-REPORT.md](OUTBOX-REPORT.md) | Reproduce results: [Benchmark-recreation.md](Benchmark-recreation.md) | Produced for [nostrability#69](https://github.com/niclas-pfeifer/nostrability/issues/69)
+
+*Benchmark data collected February 2026. Relay state changes continuously — relative algorithm rankings should be stable; absolute recall percentages will vary on re-run.*
 
 ## What matters for app devs
 
 ### 1. Learning beats static optimization
 
-The relay that's "best on paper" isn't always the one that delivers events. Greedy set-cover (used by Gossip, Applesauce, Wisp) wins on-paper relay assignments but ranks 7th at actually retrieving events.
+The relay that's "best on paper" isn't always the one that delivers events. Greedy set-cover (used by Gossip, Applesauce, Wisp) wins on-paper relay assignments but drops to 16% event recall at 1 year — while algorithms with randomness or per-author diversity reach 24-25%. This is inherent to the algorithm: greedy set-cover is a static, one-shot computation — it picks relays based on declared write lists and never learns whether those relays actually delivered.*
 
-**What to do:** Track which relays return events. Feed that data back into selection. Thompson Sampling does this with a few dozen lines of code on top of Welshman/Coracle's existing algorithm ([code below](#thompson-sampling)).
+**What to do:** Track which relays return events. Feed that data back into selection. Thompson Sampling does this with ~80 lines of code on top of Welshman/Coracle's existing algorithm ([code below](#thompson-sampling)).
+
+*\*Greedy set-cover solves "which relays cover the most authors?" but the answer doesn't change between sessions. A relay that failed to deliver events last time gets picked again next time if it still covers the most authors on paper. Learning algorithms (Thompson, MAB) update their beliefs after each session.*
 
 | Profile (follows) | Window | Before learning | After 2-3 sessions | Gain |
 |---|---|---|---|---|
 | Gato (399) | 1yr | 24.5% | 97.4% | **+72.9pp** |
 | ValderDama (1,077) | 3yr | 20.4% | 91.0% | **+70.7pp** |
 | Telluride (2,784) | 1yr | 33.1% | 92.6% | **+59.4pp** |
+
+*Note: Small profiles (<200 follows) may see minimal gains — the 20-relay budget already covers most combinations.*
 
 ### 2. Dead relay filtering saves your connection budget
 
@@ -48,35 +85,42 @@ NIP-66 publishes relay liveness data. Filtering out dead relays before running a
 
 ### 3. Randomness > determinism for anything beyond real-time
 
-Greedy set-cover gets 93% event recall at 7 days but crashes to 16% at 1 year (fiatjaf profile). Welshman's stochastic scoring (`quality * (1 + log(weight)) * random()`) gets 38% at 1 year — 2.3× better — by spreading queries across relays that happen to keep old posts.
+At 1 year, greedy set-cover gets only 16% event recall. Welshman's stochastic scoring (`quality * (1 + log(weight)) * random()`) gets 24% — 1.5× better. Filter Decomposition (rust-nostr) does even better at 25% by preserving per-author relay diversity. (All 6-profile means.) Why? Relays prune old events to manage storage, and popular high-volume relays prune more aggressively. A few prolific authors produce most events (mean/median ratio: 7.6:1 at 3 years) — greedy concentrates on popular relays where many authors publish, but those relays can't retain the high-volume output. Stochastic selection discovers smaller relays that keep history longer. At 7 days all algorithms cluster at 83-84% — the differences only emerge at longer windows. Note: stochastic results have meaningful run-to-run variance (±2–8pp depending on profile size) — the advantage is real but noisy on any single run.
 
-**What to do:** If you use greedy set-cover, switch to stochastic scoring. If you already use Welshman, upgrade to Thompson Sampling for even better results.
+**What to do:** If you use greedy set-cover, switch to stochastic scoring. If you already use Welshman, upgrade to Thompson Sampling for even better results. Don't optimize purely for "covers the most authors" — factor in whether the relay actually retains events long-term.
 
 ### 4. 20 relay connections is enough — NIP-65 adoption is the real ceiling
 
-All algorithms reach within 1-2% of their unlimited ceiling at 20 relays. But 20-44% of follows have no relay list at all. More NIP-65 adoption helps far more than better algorithms.
+All algorithms reach within 1-2% of their unlimited ceiling at 20 relays. Raw data shows 20-44% of follows have no relay list — but [dead account analysis](bench/NIP66-COMPARISON-REPORT.md#5-dead-account-analysis) reveals ~85% of those are accounts with no posts in 2+ years (or ever). The real NIP-65 adoption gap among active users is ~3-5%.
 
-**What to do:** Cap at 20 connections. Invest effort in fallback strategies for users without relay lists (hardcoded popular relays, relay hints from tags, indexer queries).
-
-### 5. Event volume follows a power law — this is why stochastic wins
-
-A few prolific authors produce most events (mean/median ratio: 7.6:1 at 3 years). Greedy concentrates on popular relays where many authors publish, but those relays may not retain the high-volume output of prolific posters. Stochastic approaches discover the relays that do.
-
-**What to do:** Don't optimize purely for "covers the most authors." Factor in whether the relay actually retains events long-term.
+**What to do:** Cap at 20 connections. The "missing relay list" problem is smaller than it looks — most of it is dead accounts, not active users who forgot to publish NIP-65. For the ~3-5% of active follows without relay lists, use fallback strategies (relay hints from tags, indexer queries, hardcoded popular relays).
 
 ## Algorithm quick reference
 
-These are the algorithms a nostr dev might actually use or encounter:
+All deployed client algorithms plus key experimental ones:
 
-| Algorithm | Used by | 7d recall | 1yr recall | Verdict |
+| Algorithm | Used by | 1yr recall | 7d recall | Verdict |
 |---|---|:---:|:---:|---|
-| **Greedy Set-Cover** | Gossip, Applesauce, Wisp | 93% | 77% | Best on-paper coverage; degrades for history |
-| **Welshman Stochastic** | Coracle | 92% | 80% | Best deployed client for archival access |
-| **Welshman+Thompson** | *not yet deployed* | 92% | 81% | Upgrade path for Coracle — learns from delivery |
-| **MAB-UCB** | *not yet deployed* | 94% | 84% | Benchmark ceiling (500 simulated rounds per selection — not practical to ship) |
-| **Direct Mapping** | Amethyst (feeds) | 88% | — | Simplest baseline — use all declared write relays |
+| **Welshman+Thompson** | *not yet deployed* | 81% | 92% | Upgrade path for Coracle — learns from delivery |
+| **Filter Decomposition** | rust-nostr | 25% | 77% | Per-author top-N write relays; strong at long windows |
+| **Welshman Stochastic** | Coracle | 24% | 83% | Best stateless deployed algorithm for archival — 1.5× Greedy at 1yr |
+| **Greedy Set-Cover** | Gossip, Applesauce, Wisp | 16% | 84% | Best on-paper coverage; degrades sharply for history |
+| **NDK Priority** | NDK | 16% | 83% | Similar to Greedy; connected > selected > popular |
+| **Coverage Sort** | Nostur | 16% | 65% | Skip-top-relays heuristic costs 5-12% coverage |
 
-*Multi-profile means with NIP-66 liveness filtering, averaged across 4 profiles (3 for 1yr). Thompson/MAB after 5 learning sessions.*
+**Baselines** (for comparison, not recommendations):
+
+| Baseline | 1yr recall | 7d recall | What it is |
+|---|:---:|:---:|---|
+| Direct Mapping\*\* | 30% | 88% | All declared write relays — unlimited connections |
+| Big Relays | 8% | 61% | Just damus+nos.lol — the "do nothing" baseline |
+| Primal Aggregator\*\*\* | 1% | 32% | Single caching relay — 100% assignment but low actual recall |
+
+*1yr and 7d recall: 6-profile means from cross-profile benchmarks (Section 8.2 of [OUTBOX-REPORT.md](OUTBOX-REPORT.md)). All testable-reliable authors, 20-connection cap except Direct Mapping. Thompson = 4-profile mean with NIP-66, 5 learning sessions. Stochastic algorithms have run-to-run variance of ±2–8pp depending on profile size (see [variance analysis](OUTBOX-REPORT.md#82-approximating-real-world-conditions-event-verification)).*
+
+*\*\*Direct Mapping uses unlimited connections (all declared write relays, typically 50-200+). Its high recall reflects connection count, not algorithmic superiority.*
+
+*\*\*\*Primal's low recall may reflect a benchmark methodology limitation (querying a caching aggregator as if it were a standard relay) rather than a definitive measure of aggregator quality. App devs using Primal should test against their own use cases.*
 
 <details>
 <summary>All 16 algorithms</summary>
@@ -94,18 +138,23 @@ These are the algorithms a nostr dev might actually use or encounter:
 | Primal Aggregator | Primal | Single aggregator relay |
 | Popular+Random | — | Top popular + random fill |
 
-**Experimental (benchmarked, not in any client):**
+**Experimental — actionable** (not yet in any client, but deployable):
 
 | Algorithm | Strategy |
 |---|---|
 | Welshman+Thompson | Welshman scoring with `sampleBeta(α,β)` instead of `random()` — learns from delivery |
 | Greedy+ε-Explore | Greedy with 5% chance of picking a random relay instead of the best |
-| ILP Optimal | Brute-force best answer (slow). Upper bound for comparison |
-| Bipartite Matching | Prioritizes relays serving hard-to-reach pubkeys |
-| Spectral Clustering | Groups relays by author overlap, picks one per group |
-| MAB-UCB | Learns which relays add the most new coverage over 500 simulated rounds |
-| Streaming Coverage | Single pass: keep K best relays, swap if a new one improves coverage |
-| Stochastic Greedy | Greedy but samples random subsets each step instead of scanning all |
+
+**Academic** (benchmark ceilings only — not practical for real clients):
+
+| Algorithm | Strategy | Why not practical |
+|---|---|---|
+| ILP Optimal | Brute-force best answer | NP-hard, requires solver, exponential worst-case |
+| MAB-UCB | 500 simulated rounds of explore/exploit | Too slow — defines ceiling, not shippable |
+| Bipartite Matching | Weighted matching for hard-to-reach pubkeys | O(V²E), complex, marginal gains |
+| Spectral Clustering | Eigendecomposition of relay-author matrix | Requires linear algebra library |
+| Streaming Coverage | Single-pass submodular maximization | Marginal gains over simpler greedy |
+| Stochastic Greedy | Random subset sampling per step | Worse than standard greedy at this scale |
 
 **Full benchmark data:** [OUTBOX-REPORT.md Section 8](OUTBOX-REPORT.md#8-benchmark-results)
 
@@ -115,7 +164,7 @@ These are the algorithms a nostr dev might actually use or encounter:
 
 ### Thompson Sampling
 
-Replace `random()` in Welshman's scoring with `sampleBeta(successes, failures)` per relay. This keeps the beneficial randomness, adds learning, and is a few dozen lines of code:
+Replace `random()` in Welshman's scoring with `sampleBeta(successes, failures)` per relay. This keeps the beneficial randomness, adds learning, and is ~80 lines of code:
 
 ```typescript
 // Current Welshman (stateless):
@@ -141,6 +190,39 @@ CREATE TABLE relay_stats (
   events_expected INTEGER DEFAULT 0,
   last_selected_at INTEGER
 );
+```
+
+The full integration loop:
+
+```typescript
+// On app startup:
+const relayStats = await db.loadRelayStats(); // {relay → (delivered, expected)}
+
+// When building a feed subscription:
+function selectRelays(candidates: RelayCandidate[], budget: number): string[] {
+  const scored = candidates.map(r => {
+    const stats = relayStats.get(r.url) ?? { delivered: 0, expected: 0 };
+    const alpha = stats.delivered + 1;  // Beta prior: successes + 1
+    const beta = stats.expected - stats.delivered + 1;  // failures + 1
+    return {
+      url: r.url,
+      score: r.quality * (1 + Math.log(r.weight)) * sampleBeta(alpha, beta)
+    };
+  });
+  return scored.sort((a, b) => b.score - a.score).slice(0, budget).map(r => r.url);
+}
+
+// After receiving events, update stats:
+function updateStats(selectedRelays: string[], eventsPerRelay: Map<string, number>) {
+  for (const relay of selectedRelays) {
+    const stats = relayStats.get(relay) ?? { delivered: 0, expected: 0 };
+    const delivered = eventsPerRelay.get(relay) ?? 0;
+    stats.delivered += delivered > 0 ? 1 : 0;  // binary: did it deliver anything?
+    stats.expected += 1;
+    relayStats.set(relay, stats);
+  }
+  db.saveRelayStats(relayStats);  // persist for next session
+}
 ```
 
 ### NIP-66 pre-filter

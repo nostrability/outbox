@@ -1,48 +1,75 @@
 # Implementation Guide
 
-How to implement the three things from the [README](README.md): dead relay filtering,
-learning-based selection, and delivery verification.
-
-See [OUTBOX-REPORT.md](OUTBOX-REPORT.md) for full benchmark data.
+Detailed recommendations for adding or upgrading outbox relay selection in your app. For the summary, see [README.md](README.md). For full benchmark data, see [OUTBOX-REPORT.md](OUTBOX-REPORT.md).
 
 ## Choosing an Algorithm
 
 ```
-What matters most?
+What's your starting point?
 │
-├─ Maximum coverage (real-time feeds)?
-│  ├─ Need connection minimization? → Greedy Set-Cover
-│  ├─ Need zero-config library?     → Priority-Based (NDK)
-│  └─ Simplicity over optimization? → Direct Mapping
+├─ No outbox yet?
+│  └─ Start here → hardcode relay.damus.io + nos.lol (8% 1yr recall)
+│     then upgrade to basic outbox when ready
+│
+├─ Basic outbox (real-time feeds)?
+│  ├─ Need connection minimization? → Greedy Set-Cover (16% 1yr, 84% 7d)
+│  ├─ Need zero-config library?     → Priority-Based / NDK (16% 1yr, 83% 7d)
+│  └─ Simplicity over optimization? → Direct Mapping (30% 1yr, unlimited connections)
 │
 ├─ Historical event recall (archival, search)?
-│  ├─ Can persist state across sessions? → Welshman+Thompson Sampling
-│  ├─ State within single session?       → MAB-UCB
-│  └─ Stateless?                         → Weighted Stochastic (Welshman/Coracle)
+│  ├─ Can persist state across sessions? → Welshman+Thompson Sampling (81% 1yr)
+│  └─ Stateless?                         → Filter Decomposition (25% 1yr) or
+│                                          Weighted Stochastic / Welshman (24% 1yr)
 │
 └─ Anti-centralization (distribute relay load)?
    ├─ Via scoring?       → Weighted Stochastic (log dampening + random)
-   └─ Via explicit skip? → Greedy Coverage Sort (skipTopRelays)
+   └─ Via explicit skip? → Greedy Coverage Sort (skipTopRelays, but -20% recall)
 ```
 
+*All recall numbers are 1yr, 6-profile means. At 7d most algorithms cluster at 83-84% —
+the differences only emerge at longer windows where relay retention becomes the binding constraint.*
+
 Key tradeoff: **coverage-optimal ≠ event-recall-optimal.** Greedy set-cover
-wins assignment coverage (23/26 profiles) but ranks 7th at actual event
-retrieval. Stochastic approaches discover relays that retain history.
+wins assignment coverage (23/26 profiles) but drops to 16% event recall at 1yr
+while stochastic approaches reach 24%. Algorithms that spread queries discover
+relays that retain history.
 
-## Recommendations
+## Recommendations (ordered by impact)
 
-### 1. Cap at 20 connections
+### 1. Learn from what actually works
 
-All algorithms reach within 1-2% of their unlimited ceiling by 20
-connections. Greedy at 10 already achieves 93-97% of its unlimited coverage.
+**Impact: +60-70pp event recall after 2-3 sessions**
 
-### 2. Target 2-3 relays per author
+Every analyzed client picks relays statelessly — recompute from NIP-65 data
+each time, with no memory of which relays actually delivered events.
 
-1 relay = fragile (relay goes down or silently drops a write, you lose events).
-2 = redundancy. 3+ = diminishing returns. 7 of 9 implementations with
-per-pubkey limits default to 2 or 3.
+Welshman+Thompson Sampling adds learning to Welshman's existing stochastic
+scoring. After 2-3 sessions, it consistently outperforms Greedy and matches
+or exceeds baseline Welshman at long windows (120 benchmark runs across 4
+profiles, 3 time windows, 5 sessions):
 
-### 3. Pre-filter relays with NIP-66
+| Profile (follows) | Window | Greedy | Welshman | Thompson (learned) |
+|---|---|---|---|---|
+| Telluride (2,784) | 3yr | 56% | 60% | **63%** |
+| ValderDama (1,077) | 3yr | 71% | 77% | **75%** |
+| Gato (399) | 1yr | 79% | 83% | **83%** |
+
+Thompson converges in 2-3 sessions. The biggest gains appear at long windows
+and large follow counts, where the relay selection problem is hardest. Small
+profiles (<200 follows) may see minimal gains — the 20-relay budget already
+covers most combinations.
+
+**Why Welshman's `random()` already works well:** `random()` = sampling from
+Beta(1,1), the "I know nothing" prior. Thompson Sampling replaces this with
+Beta(successes, failures) — the "I've observed this relay" posterior. The
+upgrade preserves randomness, adds memory, and is ~80 lines of code on top
+of what Coracle already ships.
+
+See [README.md § Thompson Sampling](README.md#thompson-sampling) for complete code including the full integration loop (startup → score → select → observe → persist).
+
+### 2. Pre-filter relays with NIP-66
+
+**Impact: 1.5-3× better relay success rates, 39% faster feed loads**
 
 [NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md) (kind
 30166) and [nostr.watch](https://github.com/sandwichfarm/nostr-watch) publish
@@ -59,12 +86,6 @@ and more than doubles the rate at which selected relays actually respond:
 | ValderDama (1,077) | 35% | 79% | 531 (58%) |
 | Telluride (2,784) | 30% | 74% | 1,057 (64%) |
 
-Event recall impact is roughly neutral: stochastic algorithms (MAB-UCB,
-Welshman) gain ~+5pp because removing dead relays improves sample quality.
-Thompson Sampling and Greedy show negligible or slightly negative deltas —
-likely noise from stochastic selection variance and intermittently available
-relays rather than a systematic effect.
-
 Relay liveness is 3 states, not binary (per nostr.watch author):
 
 - **Online** — recently seen. Include normally.
@@ -76,7 +97,11 @@ At minimum, track health locally: binary online/offline with exponential
 backoff (Amethyst), tiered error thresholds (Welshman: 1/min, 3/hr, 10/day =
 excluded), or penalty timers (Gossip: 15s-10min per failure reason).
 
-### 4. Measure actual delivery
+See [README.md § NIP-66 pre-filter](README.md#nip-66-pre-filter) for code.
+
+### 3. Measure actual delivery
+
+**Impact: catches systematic gaps invisible to relay health checks**
 
 NIP-66 monitors check relay liveness, but no analyzed client verifies
 per-author delivery — "did this relay return events for author X?" True
@@ -85,21 +110,26 @@ systematic gaps: for each followed author, periodically query a second relay
 and compare against what your outbox relays returned. When gaps are detected,
 add a fallback relay automatically. This should be invisible to the user.
 
-```typescript
-async function checkDelivery(author: string, outboxRelays: string[]) {
-  const fromOutbox = await queryEvents(outboxRelays, { authors: [author], limit: 50 });
-  const fromIndexer = await queryEvents(["wss://relay.nostr.band"], { authors: [author], limit: 50 });
-  const missing = fromIndexer.filter(e => !fromOutbox.has(e.id));
-  if (missing.length > 5) {
-    addFallbackRelay(author, fromIndexer.bestRelay);
-  }
-}
-```
+See [README.md § Delivery check](README.md#delivery-check-self-healing) for code.
 
-### 5. Handle missing relay lists gracefully
+### 4. Cap at 20 connections
 
-20-44% of followed users lack kind 10002. Options (most clients combine
-several):
+All algorithms reach within 1-2% of their unlimited ceiling by 20
+connections. Greedy at 10 already achieves 93-97% of its unlimited coverage.
+
+### 5. Target 2-3 relays per author
+
+1 relay = fragile (relay goes down or silently drops a write, you lose events).
+2 = redundancy. 3+ = diminishing returns. 7 of 9 implementations with
+per-pubkey limits default to 2 or 3.
+
+### 6. Handle missing relay lists gracefully
+
+On paper, 20-44% of followed users lack kind 10002 — but [dead account
+analysis](bench/NIP66-COMPARISON-REPORT.md#5-dead-account-analysis) shows
+~85% of those are accounts with no posts in 2+ years. The real NIP-65 adoption
+gap among active users is ~3-5%. Options for handling missing relay lists
+(most clients combine several):
 
 - **Fallback to hardcoded popular relays** — relay.damus.io, nos.lol,
   relay.primal.net (most clients do this)
@@ -108,7 +138,7 @@ several):
 - **Track which relays deliver events** per author (Gossip, rust-nostr,
   Voyage, Amethyst, Nosotros all do this as a secondary signal)
 
-### 6. Diversify bootstrap relays
+### 7. Diversify bootstrap relays
 
 8/13 analyzed clients hardcode relay.damus.io. 6/13 depend on purplepag.es
 for indexing. Consider diversifying:
@@ -117,87 +147,6 @@ for indexing. Consider diversifying:
 |------|---------|
 | Bootstrap | relay.damus.io, nos.lol, relay.primal.net |
 | Indexer | purplepag.es, indexer.coracle.social, user.kindpag.es, directory.yabu.me |
-
-### 7. Learn from what actually works
-
-Every analyzed client picks relays statelessly — recompute from NIP-65 data
-each time, with no memory of which relays actually delivered events.
-
-Welshman+Thompson Sampling adds learning to Welshman's existing stochastic
-scoring. After 2-3 sessions, it consistently outperforms Greedy and matches
-or exceeds baseline Welshman at long windows (120 benchmark runs across 4
-profiles, 3 time windows, 5 sessions). MAB-UCB still wins overall, but
-requires 500 simulated rounds per selection:
-
-```typescript
-// Current Welshman (stateless):
-const score = quality * (1 + Math.log(weight)) * Math.random();
-
-// With Thompson Sampling (learns from delivery):
-function sampleBeta(a: number, b: number): number {
-  const x = gammaVariate(a);
-  return x / (x + gammaVariate(b));
-}
-const alpha = stats.eventsDelivered + 1;
-const beta = stats.eventsExpected - stats.eventsDelivered + 1;
-const score = quality * (1 + Math.log(weight)) * sampleBeta(alpha, beta);
-```
-
-| Profile (follows) | Window | Greedy | Welshman | Thompson (learned) | MAB-UCB |
-|---|---|---|---|---|---|
-| Telluride (2,784) | 3yr | 56% | 60% | **63%** | 67% |
-| ValderDama (1,077) | 3yr | 71% | 77% | **75%** | 80% |
-| Gato (399) | 1yr | 79% | 83% | **83%** | 84% |
-
-Thompson converges in 2-3 sessions. The biggest gains appear at long windows
-and large follow counts, where the relay selection problem is hardest.
-
-In practice, a learning relay selector is periodic rebalancing with memory:
-
-```
-On startup:
-  Load per-relay stats from DB: {relay → (times_selected, events_delivered)}
-
-Every N minutes (one "round"):
-  1. Score each candidate relay using stats + exploration bonus
-  2. Pick top K relays by score
-  3. Swap connections if the selected set changed
-  4. Observe: count events received per relay for followed authors
-  5. Update stats, persist to DB
-```
-
-Minimal schema:
-
-```sql
-CREATE TABLE relay_stats (
-  relay_url TEXT PRIMARY KEY,
-  times_selected INTEGER DEFAULT 0,
-  events_delivered INTEGER DEFAULT 0,
-  events_expected INTEGER DEFAULT 0,
-  last_selected_at INTEGER,
-  last_event_at INTEGER
-);
-```
-
-**Why Welshman's `random()` already works well:** `random()` = sampling from
-Beta(1,1), the "I know nothing" prior. Thompson Sampling replaces this with
-Beta(successes, failures) — the "I've observed this relay" posterior. The
-upgrade preserves randomness, adds memory, and is a few dozen lines of code
-on top of what Coracle already ships.
-
-## Improvement Opportunities
-
-Building on [§7](#7-learn-from-what-actually-works):
-
-- **Greedy+ε-exploration** showed negligible benefit at ε=0.05 in our
-  benchmarks — higher values may be needed.
-- **Sliding window for MAB** — only use the last N observations per relay,
-  or exponentially decay old ones. Relay quality changes over time.
-- **Per-author event recall as reward** — current reward is binary (is this
-  author covered?). Better: how many of this author's events did this relay
-  actually deliver?
-- **Contextual features** — use NIP-11 capabilities, NIP-66 health data,
-  paid vs free as features for estimating new relay quality without exploring.
 
 ## Further Reading
 

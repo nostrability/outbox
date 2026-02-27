@@ -13,7 +13,7 @@
 
 ## How It Works
 
-Welshman is a stateless Router library; all relay knowledge comes from injected callbacks. It creates RouterScenario instances that build weighted Selection arrays from scenarios (FromPubkeys for outbox reads, ForUser for inbox, PublishEvent for writes, etc.), merges them by summing weights per relay, then scores with `quality * (1 + log(weight)) * random()`. Top N relays selected per scenario. The `random()` factor means two identical queries may hit different relay sets — this stochastic variation distributes load and, as benchmarks show, accidentally produces the best archival event recall among deployed client algorithms (37.8% at 1yr). Coracle configures Welshman with static default, indexer, search, and signer relay lists via environment variables.
+Welshman is a stateless Router library; all relay knowledge comes from injected callbacks. It creates RouterScenario instances that build weighted Selection arrays from scenarios (FromPubkeys for outbox reads, ForUser for inbox, PublishEvent for writes, etc.), merges them by summing weights per relay, then scores with `quality * (1 + log(weight)) * random()`. Top N relays selected per scenario. The `random()` factor means two identical queries may hit different relay sets — this stochastic variation distributes load and, as benchmarks show, produces the best archival event recall among deployed client algorithms (37.8% at 1yr). Coracle configures Welshman with static default, indexer, search, and signer relay lists via environment variables.
 
 ## Notable
 

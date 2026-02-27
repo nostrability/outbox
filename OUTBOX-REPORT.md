@@ -8,6 +8,8 @@
 
 *Produced for [nostrability#69](https://github.com/niclas-pfeifer/nostrability/issues/69)*
 
+*Benchmark data collected February 2026. Relay state changes continuously — results are a snapshot of network conditions at benchmark time. Relay availability, retention policies, and event counts will differ on re-run. Relative algorithm rankings should be stable; absolute recall percentages will vary.*
+
 ---
 
 ## Executive Summary
@@ -38,7 +40,7 @@ We analyzed outbox implementations in 15 codebases spanning 5 languages (Rust, T
 
 7. **Academic coverage ≠ real-world event recall.** Event verification against real relays shows that algorithms optimizing for assignment coverage don't necessarily win at actual event retrieval. At 1 year, MAB-UCB achieves 40.8% event recall vs. Greedy Set-Cover's 16.3%. The relay that *should* have the event often doesn't — due to retention policies, downtime, or access restrictions. Stochastic exploration discovers relays that retain historical events.
 
-8. **Welshman's `random()` is accidentally brilliant for archival.** The stochastic factor in ``quality * (1 + log(weight)) * random()`` spreads queries across relays over time, achieving the best long-window event recall (37.8% at 1 year) among deployed client algorithms. MAB-UCB (not yet in any client) beats it at 40.8%.
+8. **Welshman's `random()` is brilliant for archival.** The stochastic factor in ``quality * (1 + log(weight)) * random()`` spreads queries across relays over time, achieving 24% mean event recall at 1 year across 6 profiles — 1.5× better than Greedy's 16%. Filter Decomposition (rust-nostr) edges it out at 25% through per-author relay diversity.
 
 ---
 
@@ -401,6 +403,10 @@ Nostur provides a more limited "outbox preview" UI that shows which additional r
 5. **Relay list propagation latency** -- How long after publishing a kind 10002 update do indexers and clients see it?
 6. **Relay hint accuracy** -- How often do relay hints in event tags actually point to relays that have the referenced event?
 7. **Long-tail analysis** -- What fraction of users are on relays used by <10 pubkeys? How does coverage differ for long-tail vs. mainstream users?
+8. **Greedy+ε-exploration at higher ε values** -- showed negligible benefit at ε=0.05 in our benchmarks; higher values may be needed.
+9. **Sliding window for learning** -- only use the last N observations per relay, or exponentially decay old ones. Relay quality changes over time.
+10. **Per-author event recall as reward** -- current reward is binary (is this author covered?). Better: how many of this author's events did this relay actually deliver?
+11. **Contextual features** -- use NIP-11 capabilities, NIP-66 health data, paid vs free as features for estimating new relay quality without exploring.
 
 ---
 
@@ -470,82 +476,89 @@ We built a benchmark tool ([`bench/`](bench/)) that simulates relay selection al
 
 **Client-derived algorithms at 20 connections:**
 
-| User (follows) | Ceiling | Greedy | NDK | Welshman | Nostur | rust-nostr | Direct |
-|----------------|--------:|-------:|----:|---------:|-------:|-----------:|-------:|
-| ODELL (1,779) | 76.6% | **75.3%** | 74.9% | 73.7% | 66.4% | 69.8% | 74.1% |
-| Derek Ross (1,328) | 80.8% | **79.6%** | 79.3% | 78.2% | 69.8% | 73.9% | 78.5% |
-| pablof7z (1,050) | 67.7% | **66.4%** | 66.1% | 65.7% | 60.9% | 62.0% | 65.8% |
-| Gigi (1,033) | 67.2% | **66.2%** | 65.7% | 65.2% | 58.4% | 62.1% | 64.9% |
-| jb55 (943) | 69.2% | **68.1%** | 67.7% | 67.1% | 63.6% | 64.4% | 66.7% |
-| verbiricha (938) | 82.2% | **80.3%** | 78.8% | 79.6% | 71.4% | 75.5% | 79.7% |
-| miljan (811) | 76.4% | **75.2%** | 74.8% | 73.9% | 66.2% | 68.1% | 74.0% |
-| Calle (718) | 69.8% | **68.2%** | 66.6% | 67.7% | 61.0% | 63.8% | 62.7% |
-| jack (694) | 56.1% | **55.3%** | **55.3%** | 54.3% | 50.7% | 51.6% | 54.3% |
-| Karnage (581) | 88.5% | **87.6%** | 87.4% | 87.1% | 76.6% | 81.2% | 86.2% |
-| NVK (502) | 65.7% | **64.9%** | **64.9%** | 64.1% | 61.4% | 59.2% | 63.7% |
-| hodlbod (442) | 87.1% | **84.8%** | 83.0% | 83.9% | 75.1% | 80.1% | 83.0% |
-| Alex Gleason (434) | 84.3% | **83.4%** | 82.7% | 82.6% | 74.2% | 78.1% | 82.7% |
-| Semisol (421) | 87.2% | **85.0%** | 84.8% | 84.8% | 81.0% | 82.2% | 84.6% |
-| Martti Malmi (395) | 72.4% | **71.6%** | 70.9% | 70.4% | 66.1% | 67.6% | 70.6% |
-| hzrd149 (388) | 84.0% | **82.7%** | 82.2% | 81.4% | 74.7% | 77.6% | 81.7% |
-| Kieran (377) | 80.4% | **79.3%** | 79.0% | 78.5% | 75.1% | 74.3% | 78.5% |
-| Preston Pysh (369) | 52.3% | **51.8%** | **51.8%** | 51.4% | 50.7% | 49.9% | 50.9% |
-| Tony Giorgio (361) | 72.0% | 70.6% | **71.2%** | 70.1% | 67.3% | 67.3% | 69.8% |
-| Snowden (354) | 63.0% | **62.7%** | 62.4% | 61.8% | 59.3% | 59.0% | 61.9% |
-| Vitor (240) | 82.5% | **80.8%** | 80.4% | 80.6% | 72.1% | 76.7% | 80.4% |
-| Dilger (233) | 80.3% | 76.8% | 76.4% | **77.0%** | 70.8% | 73.0% | 75.5% |
-| Lyn Alden (226) | 67.3% | **67.3%** | **67.3%** | 66.2% | 63.7% | 61.1% | 65.0% |
-| fiatjaf (194) | 76.3% | **75.3%** | **75.3%** | 73.2% | 61.9% | 71.1% | 71.6% |
-| Ben Arc (137) | 70.8% | **69.3%** | **69.3%** | 66.7% | 62.8% | 62.8% | 67.2% |
-| Rabble (105) | 90.5% | **90.5%** | **90.5%** | 89.5% | 75.2% | 85.7% | 88.6% |
+| User (follows) | Primal | BigRelays | Ceiling | Greedy | NDK | Welshman | Nostur | rust-nostr | Direct |
+|----------------|-------:|----------:|--------:|-------:|----:|---------:|-------:|-----------:|-------:|
+| ODELL (1,779) | 100%* | 64.1% | 76.6% | **75.3%** | 74.9% | 73.7% | 66.4% | 69.8% | 74.1% |
+| Derek Ross (1,328) | 100%* | 69.3% | 80.8% | **79.6%** | 79.3% | 78.2% | 69.8% | 73.9% | 78.5% |
+| pablof7z (1,050) | 100%* | 57.6% | 67.7% | **66.4%** | 66.1% | 65.7% | 60.9% | 62.0% | 65.8% |
+| Gigi (1,033) | 100%* | 57.9% | 67.2% | **66.2%** | 65.7% | 65.2% | 58.4% | 62.1% | 64.9% |
+| jb55 (943) | 100%* | 59.8% | 69.2% | **68.1%** | 67.7% | 67.1% | 63.6% | 64.4% | 66.7% |
+| verbiricha (938) | 100%* | 70.5% | 82.2% | **80.3%** | 78.8% | 79.6% | 71.4% | 75.5% | 79.7% |
+| miljan (811) | 100%* | 62.0% | 76.4% | **75.2%** | 74.8% | 73.9% | 66.2% | 68.1% | 74.0% |
+| Calle (718) | 100%* | 54.9% | 69.8% | **68.2%** | 66.6% | 67.7% | 61.0% | 63.8% | 62.7% |
+| jack (694) | 100%* | 46.5% | 56.1% | **55.3%** | **55.3%** | 54.3% | 50.7% | 51.6% | 54.3% |
+| Karnage (581) | 100%* | 75.1% | 88.5% | **87.6%** | 87.4% | 87.1% | 76.6% | 81.2% | 86.2% |
+| NVK (502) | 100%* | 54.0% | 65.7% | **64.9%** | **64.9%** | 64.1% | 61.4% | 59.2% | 63.7% |
+| hodlbod (442) | 100%* | 74.7% | 87.1% | **84.8%** | 83.0% | 83.9% | 75.1% | 80.1% | 83.0% |
+| Alex Gleason (434) | 100%* | 59.3% | 84.3% | **83.4%** | 82.7% | 82.6% | 74.2% | 78.1% | 82.7% |
+| Semisol (421) | 100%* | 72.6% | 87.2% | **85.0%** | 84.8% | 84.8% | 81.0% | 82.2% | 84.6% |
+| Martti Malmi (395) | 100%* | 62.9% | 72.4% | **71.6%** | 70.9% | 70.4% | 66.1% | 67.6% | 70.6% |
+| hzrd149 (388) | 100%* | 74.0% | 84.0% | **82.7%** | 82.2% | 81.4% | 74.7% | 77.6% | 81.7% |
+| Kieran (377) | 100%* | 71.4% | 80.4% | **79.3%** | 79.0% | 78.5% | 75.1% | 74.3% | 78.5% |
+| Preston Pysh (369) | 100%* | 45.8% | 52.3% | **51.8%** | **51.8%** | 51.4% | 50.7% | 49.9% | 50.9% |
+| Tony Giorgio (361) | 100%* | 63.7% | 72.0% | 70.6% | **71.2%** | 70.1% | 67.3% | 67.3% | 69.8% |
+| Snowden (354) | 100%* | 58.2% | 63.0% | **62.7%** | 62.4% | 61.8% | 59.3% | 59.0% | 61.9% |
+| Vitor (240) | 100%* | 68.3% | 82.5% | **80.8%** | 80.4% | 80.6% | 72.1% | 76.7% | 80.4% |
+| Dilger (233) | 100%* | 63.1% | 80.3% | 76.8% | 76.4% | **77.0%** | 70.8% | 73.0% | 75.5% |
+| Lyn Alden (226) | 100%* | 53.7% | 67.3% | **67.3%** | **67.3%** | 66.2% | 63.7% | 61.1% | 65.0% |
+| fiatjaf (194) | 100%* | 63.4% | 76.3% | **75.3%** | **75.3%** | 73.2% | 61.9% | 71.1% | 71.6% |
+| Ben Arc (137) | 100%* | 59.9% | 70.8% | **69.3%** | **69.3%** | 66.7% | 62.8% | 62.8% | 67.2% |
+| Rabble (105) | 100%* | 76.9% | 90.5% | **90.5%** | **90.5%** | 89.5% | 75.2% | 85.7% | 88.6% |
 
 Greedy Set-Cover wins 23 of 26 profiles. NDK ties on 7. Welshman wins 1 (Dilger). NDK wins 1 outright (Tony Giorgio).
 
-**CS-inspired algorithms vs. Greedy (20 connections):**
+\*"Primal" = Primal Aggregator, routes all queries to `wss://relay.primal.net`. 100% assignment coverage by definition (centralized, not outbox model). "BigRelays" = coverage from just `wss://relay.damus.io` + `wss://nos.lol` (% of follows who declare either as a write relay).
 
-| User (follows) | Ceiling | Greedy | ILP | Bipartite | Streaming | Spectral | MAB | StochGrdy |
-|----------------|--------:|-------:|----:|----------:|----------:|---------:|----:|----------:|
-| ODELL (1,779) | 76.6% | 75.3% | **75.5%** | 75.3% | 75.4% | 75.4% | 75.0% | 73.9% |
-| Derek Ross (1,328) | 80.8% | 79.6% | **80.0%** | 79.9% | 79.9% | 79.9% | 79.2% | 78.9% |
-| pablof7z (1,050) | 67.7% | 66.4% | **66.9%** | 66.7% | 66.6% | 66.4% | 65.7% | 65.7% |
-| Gigi (1,033) | 67.2% | 66.2% | **66.7%** | **66.7%** | 66.5% | 66.6% | 66.2% | 65.9% |
-| jb55 (943) | 69.2% | 68.1% | **68.6%** | **68.6%** | **68.6%** | 68.5% | 67.9% | 67.7% |
-| verbiricha (938) | 82.2% | 80.3% | **80.6%** | 80.3% | 80.4% | 80.5% | 79.7% | 80.1% |
-| miljan (811) | 76.4% | 75.2% | **76.1%** | 75.6% | **76.1%** | 76.0% | 75.3% | 75.1% |
-| Calle (718) | 69.8% | 68.2% | **69.1%** | 68.7% | **69.1%** | 69.0% | 67.5% | 68.0% |
-| jack (694) | 56.1% | 55.3% | **56.1%** | 55.7% | **56.1%** | 56.0% | 54.9% | 54.8% |
-| Karnage (581) | 88.5% | 87.6% | **88.5%** | 88.2% | **88.5%** | **88.5%** | 86.5% | 87.4% |
-| NVK (502) | 65.7% | 64.9% | **65.7%** | 65.3% | **65.7%** | **65.7%** | 63.5% | 64.7% |
-| hodlbod (442) | 87.1% | 84.8% | **86.0%** | 85.5% | **86.0%** | 85.9% | 84.6% | 84.3% |
-| Alex Gleason (434) | 84.3% | 83.4% | **84.3%** | 83.6% | **84.3%** | **84.3%** | 78.1% | 82.6% |
-| Semisol (421) | 87.2% | 85.0% | **87.2%** | 86.4% | **87.2%** | 86.9% | 85.0% | 85.0% |
-| Martti Malmi (395) | 72.4% | 71.6% | **72.4%** | 72.0% | **72.4%** | **72.4%** | 69.6% | 70.6% |
-| hzrd149 (388) | 84.0% | 82.7% | **84.0%** | 83.4% | **84.0%** | **84.0%** | 82.1% | 82.0% |
-| Kieran (377) | 80.4% | 79.3% | **80.4%** | 80.1% | **80.4%** | **80.4%** | 78.7% | 79.0% |
-| Preston Pysh (369) | 52.3% | 51.8% | **52.3%** | 52.2% | **52.3%** | **52.3%** | 51.0% | 51.5% |
-| Tony Giorgio (361) | 72.0% | 70.6% | **72.0%** | 71.6% | **72.0%** | **72.0%** | 70.3% | 70.4% |
-| Snowden (354) | 63.0% | 62.7% | **63.0%** | 62.9% | **63.0%** | **63.0%** | 60.1% | 61.9% |
-| Vitor (240) | 82.5% | 80.8% | **82.5%** | 81.4% | **82.5%** | **82.5%** | 79.9% | 80.8% |
-| Dilger (233) | 80.3% | 76.8% | **80.3%** | 79.4% | **80.3%** | **80.3%** | 77.4% | 77.1% |
-| Lyn Alden (226) | 67.3% | **67.3%** | **67.3%** | 67.0% | **67.3%** | **67.3%** | 64.0% | 66.4% |
-| fiatjaf (194) | 76.3% | 75.3% | **76.3%** | 75.9% | **76.3%** | **76.3%** | 72.3% | 73.4% |
-| Ben Arc (137) | 70.8% | 69.3% | **70.8%** | 70.6% | **70.8%** | **70.8%** | 66.9% | 67.9% |
-| Rabble (105) | 90.5% | **90.5%** | **90.5%** | **90.5%** | **90.5%** | **90.5%** | 86.0% | 89.8% |
+**Academic algorithms vs. Greedy baseline (20 connections) — benchmark ceilings only:**
 
-ILP, Streaming Coverage, and Spectral Clustering frequently hit the theoretical ceiling. Greedy Set-Cover leaves 1-4% on the table. MAB-UCB and Stochastic Greedy trade coverage for exploration.
+| User (follows) | Primal | BigRelays | Ceiling | Greedy | ILP | Bipartite | Streaming | Spectral | MAB | StochGrdy |
+|----------------|-------:|----------:|--------:|-------:|----:|----------:|----------:|---------:|----:|----------:|
+| ODELL (1,779) | 100%* | 64.1% | 76.6% | 75.3% | **75.5%** | 75.3% | 75.4% | 75.4% | 75.0% | 73.9% |
+| Derek Ross (1,328) | 100%* | 69.3% | 80.8% | 79.6% | **80.0%** | 79.9% | 79.9% | 79.9% | 79.2% | 78.9% |
+| pablof7z (1,050) | 100%* | 57.6% | 67.7% | 66.4% | **66.9%** | 66.7% | 66.6% | 66.4% | 65.7% | 65.7% |
+| Gigi (1,033) | 100%* | 57.9% | 67.2% | 66.2% | **66.7%** | **66.7%** | 66.5% | 66.6% | 66.2% | 65.9% |
+| jb55 (943) | 100%* | 59.8% | 69.2% | 68.1% | **68.6%** | **68.6%** | **68.6%** | 68.5% | 67.9% | 67.7% |
+| verbiricha (938) | 100%* | 70.5% | 82.2% | 80.3% | **80.6%** | 80.3% | 80.4% | 80.5% | 79.7% | 80.1% |
+| miljan (811) | 100%* | 62.0% | 76.4% | 75.2% | **76.1%** | 75.6% | **76.1%** | 76.0% | 75.3% | 75.1% |
+| Calle (718) | 100%* | 54.9% | 69.8% | 68.2% | **69.1%** | 68.7% | **69.1%** | 69.0% | 67.5% | 68.0% |
+| jack (694) | 100%* | 46.5% | 56.1% | 55.3% | **56.1%** | 55.7% | **56.1%** | 56.0% | 54.9% | 54.8% |
+| Karnage (581) | 100%* | 75.1% | 88.5% | 87.6% | **88.5%** | 88.2% | **88.5%** | **88.5%** | 86.5% | 87.4% |
+| NVK (502) | 100%* | 54.0% | 65.7% | 64.9% | **65.7%** | 65.3% | **65.7%** | **65.7%** | 63.5% | 64.7% |
+| hodlbod (442) | 100%* | 74.7% | 87.1% | 84.8% | **86.0%** | 85.5% | **86.0%** | 85.9% | 84.6% | 84.3% |
+| Alex Gleason (434) | 100%* | 59.3% | 84.3% | 83.4% | **84.3%** | 83.6% | **84.3%** | **84.3%** | 78.1% | 82.6% |
+| Semisol (421) | 100%* | 72.6% | 87.2% | 85.0% | **87.2%** | 86.4% | **87.2%** | 86.9% | 85.0% | 85.0% |
+| Martti Malmi (395) | 100%* | 62.9% | 72.4% | 71.6% | **72.4%** | 72.0% | **72.4%** | **72.4%** | 69.6% | 70.6% |
+| hzrd149 (388) | 100%* | 74.0% | 84.0% | 82.7% | **84.0%** | 83.4% | **84.0%** | **84.0%** | 82.1% | 82.0% |
+| Kieran (377) | 100%* | 71.4% | 80.4% | 79.3% | **80.4%** | 80.1% | **80.4%** | **80.4%** | 78.7% | 79.0% |
+| Preston Pysh (369) | 100%* | 45.8% | 52.3% | 51.8% | **52.3%** | 52.2% | **52.3%** | **52.3%** | 51.0% | 51.5% |
+| Tony Giorgio (361) | 100%* | 63.7% | 72.0% | 70.6% | **72.0%** | 71.6% | **72.0%** | **72.0%** | 70.3% | 70.4% |
+| Snowden (354) | 100%* | 58.2% | 63.0% | 62.7% | **63.0%** | 62.9% | **63.0%** | **63.0%** | 60.1% | 61.9% |
+| Vitor (240) | 100%* | 68.3% | 82.5% | 80.8% | **82.5%** | 81.4% | **82.5%** | **82.5%** | 79.9% | 80.8% |
+| Dilger (233) | 100%* | 63.1% | 80.3% | 76.8% | **80.3%** | 79.4% | **80.3%** | **80.3%** | 77.4% | 77.1% |
+| Lyn Alden (226) | 100%* | 53.7% | 67.3% | **67.3%** | **67.3%** | 67.0% | **67.3%** | **67.3%** | 64.0% | 66.4% |
+| fiatjaf (194) | 100%* | 63.4% | 76.3% | 75.3% | **76.3%** | 75.9% | **76.3%** | **76.3%** | 72.3% | 73.4% |
+| Ben Arc (137) | 100%* | 59.9% | 70.8% | 69.3% | **70.8%** | 70.6% | **70.8%** | **70.8%** | 66.9% | 67.9% |
+| Rabble (105) | 100%* | 76.9% | 90.5% | **90.5%** | **90.5%** | **90.5%** | **90.5%** | **90.5%** | 86.0% | 89.8% |
+
+ILP, Streaming Coverage, and Spectral Clustering frequently hit the theoretical ceiling — confirming that Greedy Set-Cover leaves only 1-4% on the table. These academic algorithms validate the practitioner results but are not themselves deployable (see "Why not practical" in the appendix).
 
 "Ceiling" = NIP-65 adoption rate (% of follows with any valid write relay). No algorithm can exceed this.
 
-**Key academic coverage findings:**
+\*"Primal" = Primal Aggregator, routes all queries to `wss://relay.primal.net`. 100% assignment coverage by definition (centralized, not outbox model). "BigRelays" = coverage from just `wss://relay.damus.io` + `wss://nos.lol` (% of follows who declare either as a write relay).
 
+**Key coverage findings:**
+
+*Practitioner takeaways:*
 1. **Greedy Set-Cover wins 23 of 26 profiles** among client-derived algorithms (ties NDK on 7, loses to Welshman on 1, loses to NDK on 1).
-2. **ILP and Streaming Coverage hit the theoretical ceiling** on most profiles with ≤500 follows, using fewer than 20 connections. The coverage gap between Greedy and optimal is 1-4%.
-3. **Rankings are remarkably stable** regardless of follow count or NIP-65 adoption rate: Greedy > NDK (~0-2% behind) > Welshman (~1-3%) > Direct (~3-5%) > Filter Decomposition (~3-5%) > Coverage Sort (~5-12%).
-4. **Nostur's skip-top-relays heuristic costs 5-12%** of coverage. Popular relays are popular because many authors publish there.
-5. **20 connections is nearly sufficient.** Greedy at 10 connections already achieves 93-97% of its unlimited coverage.
-6. **NIP-65 adoption is the real bottleneck.** 10-48% of follows lack any relay list. Better algorithms cannot fix missing data.
-7. **MAB-UCB trades coverage for exploration.** It underperforms Greedy by 0-3% on assignment coverage, but this exploration pays off in real-world event recall.
-8. **Concentration is the tradeoff.** Greedy has the highest Gini coefficient (0.77) -- a few relays handle most traffic. Stochastic approaches spread load more evenly (Gini 0.39-0.51) at the cost of lower coverage.
+2. **Rankings are remarkably stable** regardless of follow count or NIP-65 adoption rate: Greedy > NDK (~0-2% behind) > Welshman (~1-3%) > Direct (~3-5%) > Filter Decomposition (~3-5%) > Coverage Sort (~5-12%).
+3. **Nostur's skip-top-relays heuristic costs 5-12%** of coverage. Popular relays are popular because many authors publish there.
+4. **20 connections is nearly sufficient.** Greedy at 10 connections already achieves 93-97% of its unlimited coverage.
+5. **NIP-65 adoption is the real bottleneck.** 10-48% of follows lack any relay list. Better algorithms cannot fix missing data.
+6. **Concentration is the tradeoff.** Greedy has the highest Gini coefficient (0.77) -- a few relays handle most traffic. Stochastic approaches spread load more evenly (Gini 0.39-0.51) at the cost of lower coverage.
+
+*Academic observations (benchmark context only):*
+7. **ILP and Streaming Coverage hit the theoretical ceiling** on most profiles with ≤500 follows, using fewer than 20 connections. The coverage gap between Greedy and optimal is 1-4%.
+8. **MAB-UCB trades coverage for exploration.** It underperforms Greedy by 0-3% on assignment coverage, but this exploration pays off in real-world event recall (Section 8.2).
 
 ### 8.2 Approximating Real-World Conditions: Event Verification
 
@@ -557,67 +570,157 @@ ILP, Streaming Coverage, and Spectral Clustering frequently hit the theoretical 
 - Events per (relay, author) pair capped at 10,000 to eliminate recency bias
 - 14 algorithms tested across 6 time windows (7d to 3 years)
 
+**Baseline limitations:** The baseline is a lower bound, not ground truth. If a relay is down or slow during the baseline query, events stored there are missed — making the baseline incomplete and all recall percentages conservative. Relay success rates during baseline construction range from 31% (ODELL, 1,199 relays) to 55% (fiatjaf, 234 relays), meaning 45-69% of declared relays did not respond. The "testable-reliable" author filter (≥50% declared relays responded) mitigates this by excluding authors whose baseline is likely incomplete, but some undercount is inherent. All recall percentages in this report should be read as "at least X%" rather than exact values.
+
 **Relay diagnostics (cross-profile):** Success rates range from 31% (ODELL, 1,199 relays) to 47% (hodlbod, 489 relays) — inversely correlated with relay count because larger follow lists include more obscure relays. Failures are structural (deterministic per relay, not transient): 12 relays fail across all 6 profiles (NIP-42 auth-required, WoT-gated, or queries blocked). `filter.nostr.wine/*` personal relays are the largest single source of CLOSED messages (5–22 per profile). ~50% of authors with relay lists are "testable-reliable" (events retrievable from declared relays) — this ratio is a network constant across all profiles (47–52%).
 
-Event recall across time windows (fiatjaf, testable-reliable authors). Events per (relay, author) pair capped at 10,000 — this prevents a single prolific relay from dominating the baseline count and biasing recall percentages toward whichever algorithm happens to select that relay:
+**Why recall degrades with time window:** Relay retention policies are the binding constraint. Most relays prune old events to manage storage — popular high-volume relays prune more aggressively because they receive more data. A greedy algorithm that concentrates on these popular relays sees 93% recall at 7 days but 16% at 1 year: the relays it selected had the events last week, but deleted them months ago. Stochastic algorithms discover smaller relays that retain history longer because they receive less volume. This is why randomness in relay selection isn't noise — it's an archival strategy.
+
+Event recall across time windows (fiatjaf, testable-reliable authors). Events per (relay, author) pair capped at 10,000 — this prevents a single prolific relay from dominating the baseline count and biasing recall percentages toward whichever algorithm happens to select that relay.
+
+**Practitioner algorithms** (deployed or deployable in real clients):
 
 | Algorithm | 3yr | 1yr | 90d | 30d | 14d | 7d |
 |-----------|:---:|:---:|:---:|:---:|:---:|:---:|
-| **MAB-UCB** | **22.8%** | **40.8%** | **65.9%** | **74.6%** | 82.3% | 93.5% |
-| ILP Optimal | 21.3% | 38.1% | 60.3% | 70.9% | 83.2% | 98.0% |
-| Bipartite Matching | 21.2% | 38.0% | 60.3% | 71.0% | 83.3% | 98.0% |
-| Streaming Coverage | 21.2% | 37.9% | 59.8% | 69.9% | 81.7% | 97.5% |
-| Spectral Clustering | 21.2% | 37.9% | 59.8% | 69.9% | 81.7% | 97.5% |
-| Welshman Stochastic | 21.1% | 37.8% | 59.7% | 68.6% | 82.8% | 93.2% |
-| Stochastic Greedy | 12.6%\* | 11.6% | 23.9% | 43.3% | 56.8% | 67.1% |
+| **Welshman Stochastic** | **21.1%** | **37.8%** | **59.7%** | 68.6% | 82.8% | 93.2% |
 | NDK Priority | 11.2% | 18.7% | 36.1% | 61.4% | 76.5% | 92.3% |
 | Filter Decomposition | 10.6% | 19.0% | 39.0% | 63.1% | 77.5% | 88.1% |
 | Greedy Set-Cover | 9.8% | 16.3% | 35.8% | 61.8% | 77.5% | 93.5% |
-| Direct Mapping | 9.4% | 16.8% | 38.5% | 63.9% | 79.9% | 89.9% |
+| Direct Mapping† | 9.4% | 16.8% | 38.5% | 63.9% | 79.9% | 89.9% |
 | Coverage Sort (Nostur) | 7.4% | 13.3% | 30.8% | 53.5% | 65.6% | 67.6% |
-| Popular+Random | 6.6% | 11.8% | 27.1% | 53.3% | 71.9% | 83.4% |
+| Popular+Random‡ | 6.6% | 11.8% | 27.1% | 53.3% | 71.9% | 83.4% |
+| Big Relays§ | 3.0% | 4.9% | 10.9% | 21.4% | 34.6% | 56.5% |
 | Primal Aggregator | 0.9% | 1.6% | 3.7% | 8.3% | 14.5% | 28.3% |
 
-\* Stochastic Greedy's non-monotonic 3yr > 1yr result (12.6% > 11.6%) is a data artifact: the algorithm selects ~12 relays (fewer than budget due to early convergence), and the baseline event count grows faster than the algorithm's miss rate at this window boundary.
+†Direct Mapping uses unlimited connections (all declared write relays). Other algorithms capped at 20.
+‡Popular+Random = relay.damus.io + nos.lol + 2 random relays from the candidate set.
+§Big Relays = just relay.damus.io + nos.lol with no outbox logic — the "do nothing" baseline.
 
-**Cross-profile validation (7d window, testable-reliable authors):**
+**Academic algorithms** (benchmark ceilings — not practical for real clients):
 
-To test whether patterns generalize beyond fiatjaf, event recall was measured across 6 diverse follow lists. Profile sizes range from 377 follows (Kieran) to 1,779 (ODELL):
+| Algorithm | 3yr | 1yr | 90d | 30d | 14d | 7d | Why not practical |
+|-----------|:---:|:---:|:---:|:---:|:---:|:---:|-------------------|
+| MAB-UCB | 22.8% | 40.8% | 65.9% | 74.6% | 82.3% | 93.5% | 500 simulated rounds per selection |
+| ILP Optimal | 21.3% | 38.1% | 60.3% | 70.9% | 83.2% | 98.0% | NP-hard solver, exponential worst-case |
+| Bipartite Matching | 21.2% | 38.0% | 60.3% | 71.0% | 83.3% | 98.0% | O(V²E) matching, complex implementation |
+| Streaming Coverage | 21.2% | 37.9% | 59.8% | 69.9% | 81.7% | 97.5% | Marginal gains over simpler approaches |
+| Spectral Clustering | 21.2% | 37.9% | 59.8% | 69.9% | 81.7% | 97.5% | Eigendecomposition, requires linear algebra library |
+| Stochastic Greedy | 12.6%† | 11.6% | 23.9% | 43.3% | 56.8% | 67.1% | Worse than standard greedy at this problem scale |
+
+†Stochastic Greedy's non-monotonic 3yr > 1yr result (12.6% > 11.6%) is a data artifact: the algorithm selects ~12 relays (fewer than budget due to early convergence), and the baseline event count grows faster than the algorithm's miss rate at this window boundary.
+
+The academic algorithms define performance ceilings but are not deployable: ILP requires an optimization solver and has exponential worst-case runtime. MAB-UCB runs 500 internal rounds to approximate a single relay selection. Bipartite matching, spectral clustering, and streaming coverage add implementation complexity for marginal gains over simpler practitioner algorithms. At 7d (fiatjaf), Welshman Stochastic achieves 99% of the best academic algorithm's recall. At 1yr cross-profile, the gap widens: Welshman 24% vs MAB-UCB 33% — but this gap is closable through learning (Thompson Sampling), not through more complex static algorithms.
+
+**Cross-profile validation (testable-reliable authors):**
+
+To test whether patterns generalize beyond fiatjaf, event recall was measured across 6 diverse follow lists. Profile sizes range from 377 follows (Kieran) to 1,779 (ODELL).
+
+**1yr window:**
+
+**Practitioner algorithms** (deployed or deployable in real clients):
 
 | Algorithm | fiatjaf | hodlbod | Kieran | jb55 | ODELL | Derek Ross | Mean |
 |-----------|:-------:|:-------:|:------:|:----:|:-----:|:----------:|:----:|
-| Streaming Coverage | 97.5% | 93.2% | 91.8% | 92.6% | 88.1% | 90.9% | **92.4%** |
+| **Direct Mapping**† | 16.8% | 28.9% | 21.6% | 40.1% | 38.5% | 35.6% | **30.3%** |
+| **Filter Decomposition** | 19.0% | 20.2% | 21.0% | 31.9% | 28.4% | 28.5% | **24.8%** |
+| **Welshman Stochastic** | 37.8% | 24.3% | 11.8% | 27.0% | 21.0% | 20.8% | **23.8%** |
+| **Popular+Random**‡ | 11.8% | 29.5% | 14.2% | 22.1% | 20.2% | 19.6% | **19.6%** |
+| **Coverage Sort (Nostur)** | 13.3% | 22.0% | 8.9% | 16.7% | 17.8% | 19.8% | **16.4%** |
+| **Greedy Set-Cover** | 16.3% | 14.3% | 12.4% | 20.1% | 16.0% | 18.4% | **16.3%** |
+| **NDK Priority** | 18.7% | 12.6% | 12.3% | 19.0% | 16.3% | 18.7% | **16.3%** |
+| **Big Relays**§ | 4.9% | 7.3% | 5.8% | 12.3% | 10.2% | 10.0% | **8.4%** |
+| **Primal Aggregator** | 1.6% | 0.4% | 0.2% | 0.4% | 0.7% | 0.4% | **0.6%** |
+
+†Direct Mapping uses all declared write relays with no connection cap (typically 50-200+ connections). All other algorithms are capped at 20 connections.
+‡Popular+Random = relay.damus.io + nos.lol + 2 random relays from the candidate set.
+§Big Relays = just relay.damus.io + nos.lol with no outbox logic — the "do nothing" baseline.
+
+**Academic algorithms** (benchmark ceilings — not practical for real clients):
+
+| Algorithm | fiatjaf | hodlbod | Kieran | jb55 | ODELL | Derek Ross | Mean |
+|-----------|:-------:|:-------:|:------:|:----:|:-----:|:----------:|:----:|
+| MAB-UCB | 40.8% | 41.5% | 21.4% | 39.3% | 24.7% | 32.3% | **33.3%** |
+| Streaming Coverage | 37.9% | 35.0% | 16.2% | 28.8% | 28.1% | 32.6% | **29.8%** |
+| Spectral Clustering | 37.9% | 34.0% | 15.2% | 28.6% | 21.2% | 40.5% | **29.6%** |
+| ILP Optimal | 38.1% | 31.8% | 15.1% | 23.1% | 21.2% | 29.6% | **26.5%** |
+| Bipartite Matching | 38.0% | 32.1% | 15.3% | 22.7% | 21.9% | 30.4% | **26.7%** |
+| Stochastic Greedy | 11.6% | 14.1% | 9.6% | 16.1% | 6.2% | 12.9% | **11.8%** |
+
+**7d window:**
+
+**Practitioner algorithms** (deployed or deployable in real clients):
+
+| Algorithm | fiatjaf | hodlbod | Kieran | jb55 | ODELL | Derek Ross | Mean |
+|-----------|:-------:|:-------:|:------:|:----:|:-----:|:----------:|:----:|
+| **Direct Mapping**† | 89.9% | 85.9% | 90.9% | 85.9% | 87.6% | 87.3% | **87.9%** |
+| **Greedy Set-Cover** | 93.5% | 87.6% | 84.8% | 81.0% | 77.2% | 82.5% | 84.4% |
+| **NDK Priority** | 92.3% | 82.1% | 85.2% | 81.1% | 77.2% | 82.0% | 83.3% |
+| **Welshman Stochastic** | 93.2% | 83.6% | 84.6% | 84.1% | 74.8% | 77.8% | 83.0% |
+| **Popular+Random**‡ | 83.4% | 86.8% | 84.1% | 87.0% | 76.9% | 79.7% | 83.0% |
+| **Filter Decomposition** | 88.1% | 74.7% | 81.7% | 74.0% | 71.4% | 72.1% | 77.0% |
+| **Greedy Coverage Sort** | 67.6% | 63.7% | 79.6% | 62.4% | 54.5% | 61.0% | 64.8% |
+| **Big Relays** | 56.5% | 64.4% | 69.9% | 67.4% | 45.0% | 62.3% | 60.9% |
+| **Primal Aggregator** | 28.3% | 37.3% | 34.8% | 25.2% | 33.6% | 30.2% | 31.6% |
+
+†Direct Mapping uses all declared write relays with no connection cap (typically 50-200+ connections). All other algorithms are capped at 20 connections. Its high recall reflects unlimited connections, not algorithmic superiority.
+
+‡Popular+Random = relay.damus.io + nos.lol + 2 random relays from the candidate set. A "minimum viable outbox" baseline.
+
+**Academic algorithms** (benchmark ceilings — not practical for real clients):
+
+| Algorithm | fiatjaf | hodlbod | Kieran | jb55 | ODELL | Derek Ross | Mean |
+|-----------|:-------:|:-------:|:------:|:----:|:-----:|:----------:|:----:|
+| Streaming Coverage | 97.5% | 93.2% | 91.8% | 92.6% | 88.1% | 90.9% | 92.4% |
 | ILP Optimal | 98.0% | 96.8% | 90.5% | 91.6% | 87.2% | 89.8% | 92.3% |
 | Spectral Clustering | 97.5% | 94.8% | 89.7% | 93.3% | 87.0% | 89.8% | 92.0% |
 | Bipartite Matching | 98.0% | 93.1% | 90.1% | 93.1% | 86.3% | 90.1% | 91.8% |
 | MAB-UCB | 93.5% | 92.9% | 92.5% | 92.4% | 83.0% | 90.9% | 90.9% |
-| Direct Mapping | 89.9% | 85.9% | 90.9% | 85.9% | 87.6% | 87.3% | 87.9% |
-| Greedy Set-Cover | 93.5% | 87.6% | 84.8% | 81.0% | 77.2% | 82.5% | 84.4% |
-| NDK Priority | 92.3% | 82.1% | 85.2% | 81.1% | 77.2% | 82.0% | 83.3% |
-| Welshman Stochastic | 93.2% | 83.6% | 84.6% | 84.1% | 74.8% | 77.8% | 83.0% |
-| Popular+Random | 83.4% | 86.8% | 84.1% | 87.0% | 76.9% | 79.7% | 83.0% |
-| Filter Decomposition | 88.1% | 74.7% | 81.7% | 74.0% | 71.4% | 72.1% | 77.0% |
 | Stochastic Greedy | 67.1% | 73.0% | 76.8% | 64.7% | 46.3% | 72.5% | 66.7% |
-| Greedy Coverage Sort | 67.6% | 63.7% | 79.6% | 62.4% | 54.5% | 61.0% | 64.8% |
-| Primal Aggregator | 28.3% | 37.3% | 34.8% | 25.2% | 33.6% | 30.2% | 31.6% |
+
+The ~8pp gap between the best academic algorithm (92.4%) and the best practitioner algorithm (87.9%) represents the theoretical ceiling that no simple, deployable algorithm has reached. However, Welshman+Thompson Sampling (Section 8.3) closes most of this gap through learning — achieving 92-97% after 2-3 sessions without the implementation complexity of the academic algorithms.
 
 Profile characteristics:
 
-| Profile | Follows | With Relay List | Unique Relays | Testable Authors | Baseline Events |
-|---------|:-------:|:---------------:|:-------------:|:----------------:|:---------------:|
-| fiatjaf | 194 | 87.1% | 233 | ~116 | 2,176 |
-| hodlbod | 442 | 87.1% | 489 | 191 | 5,357 |
-| Kieran | 377 | 80.4% | 404 | 156 | 3,801 |
-| jb55 | 943 | 69.2% | 725 | 305 | 8,255 |
-| ODELL | 1,779 | 76.6% | 1,199 | 661 | 19,057 |
-| Derek Ross | 1,328 | 80.8% | 1,018 | 523 | 15,240 |
+| Profile | Follows | With Relay List | Unique Relays | Testable Authors (7d) | Baseline Events (7d) | Testable Authors (1yr) | Baseline Events (1yr) |
+|---------|:-------:|:---------------:|:-------------:|:---------------------:|:--------------------:|:----------------------:|:---------------------:|
+| fiatjaf | 194 | 87.1% | 233 | ~116 | 2,176 | ~116 | ~17,000 |
+| hodlbod | 442 | 87.1% | 489 | 191 | 5,357 | 254 | 59,812 |
+| Kieran | 377 | 80.4% | 404 | 156 | 3,801 | 196 | 54,942 |
+| jb55 | 943 | 69.2% | 725 | 305 | 8,255 | 387 | 58,713 |
+| ODELL | 1,779 | 76.6% | 1,199 | 661 | 19,057 | 794 | 127,357 |
+| Derek Ross | 1,328 | 80.8% | 1,018 | 523 | 15,240 | 645 | 107,426 |
 
 Cross-profile patterns:
-- **Rankings generalize.** The top 4 algorithms are CS-inspired across all profiles (mean 91.8–92.4%).
-- **~8pp gap** between CS algorithms and the best client-derived algorithms (92% vs 84% mean).
-- **MAB-UCB is the most consistent** practical algorithm: 83–93% range, always top 5.
-- **ODELL is the hardest profile** (largest follow list, lowest relay list coverage) — all algorithms score lowest here.
-- **Greedy Set-Cover ranks 7th** by mean event recall despite being #1 at assignment coverage.
+
+*At 7d:*
+- **Direct Mapping leads at 87.9% mean** but uses unlimited connections (50-200+). Among 20-connection algorithms, Greedy/NDK/Welshman cluster at 83-84% — effectively tied.
+- **~8pp gap to academic ceiling** (92% vs 88% mean). Closable through learning: Welshman+Thompson Sampling (Section 8.3) reaches 92-97% after 2-3 sessions.
+- **Greedy Set-Cover ranks 2nd among 20-connection algorithms** but the margin is narrow — assignment coverage optimization provides modest benefit at 7d because most relays still have recent events.
+
+*At 1yr:*
+- **Filter Decomposition (rust-nostr) emerges as #2** at 24.8% mean — its per-author top-N relay strategy preserves relay diversity better than greedy approaches at longer windows.
+- **Welshman Stochastic is #3 at 23.8% mean** — still 1.5× better than Greedy (16.3%), confirming that stochastic selection helps for historical access, though less dramatically than the fiatjaf-only data suggested (2.3×).
+- **Welshman's fiatjaf result (37.8%) was an outlier.** Cross-profile mean of 23.8% is more representative. The stochastic advantage is real but profile-dependent.
+- **Greedy Set-Cover and NDK tie at 16.3%** — both deterministic algorithms degrade similarly as relay retention becomes the binding constraint.
+- **ODELL remains hardest** (largest follow list) but the pattern is consistent across all profiles.
+- **Academic algorithms define the ceiling at ~33% mean** (MAB-UCB), but even the ceiling is modest — relay retention, not algorithm choice, is the fundamental constraint at 1yr.
+
+**Variance analysis (stochastic algorithms, 1yr window):**
+
+Single-seed results can be misleading. To quantify run-to-run variability, we ran Welshman Stochastic and Popular+Random with 5 PRNG seeds (0–4) on 3 profiles at the 1yr window. Each run also encounters different baseline conditions (relay availability, response times), so the variance captures both algorithmic randomness and network noise.
+
+| Profile | Follows | Welshman seeds 0–4 | Mean ± std | P+R seeds 0–4 | Mean ± std |
+|---------|:-------:|---------------------|:----------:|----------------|:----------:|
+| fiatjaf | 194 | 37.8, 20.2, 23.3, 16.9, 25.2 | 24.7% ± 8.0pp | 11.8, 18.9, 20.1, 14.9, 23.0 | 17.7% ± 4.4pp |
+| jb55 | 655 | 27.0, 26.8, 30.5, 36.5, 27.8 | 29.7% ± 4.1pp | 22.1, 23.0, 23.7, 23.4, 22.6 | 23.0% ± 0.6pp |
+| ODELL | 1,779 | 21.0, 18.5, 17.6, 19.4, 17.0 | 18.7% ± 1.6pp | 20.2, 18.9, 18.9, 19.2, 18.3 | 19.1% ± 0.7pp |
+
+Key observations:
+- **Variance decreases with follow count.** fiatjaf (194 follows) has ±8pp Welshman std; ODELL (1,779 follows) has ±1.6pp. Larger follow lists average out per-relay randomness.
+- **fiatjaf seed 0 (37.8%) was a genuine outlier** — 1.6 standard deviations above the mean. The cross-profile table's single-seed values should be interpreted with this variance in mind.
+- **Popular+Random is remarkably stable** for larger profiles (±0.6–0.7pp for jb55/ODELL). Its randomness is limited to 2 relay slots, so most of the signal comes from the fixed Popular relays.
+- **At large follow counts, Welshman ≈ Popular+Random.** ODELL shows 18.7% vs 19.1% — within noise. The stochastic advantage is strongest for smaller, more concentrated follow lists.
+- **Baseline variability matters.** The number of testable-reliable authors varies 5-10% between runs of the same profile (e.g., jb55: 368–390), reflecting relay availability differences. This contributes to variance beyond PRNG.
 
 ### 8.3 Expanded Benchmark: NIP-66 Filter, Thompson Sampling, and Multi-Session Learning
 
@@ -719,23 +822,25 @@ A small fraction of prolific authors produce the majority of events. This power-
 
 3. **Greedy+ε-Explore shows negligible benefit.** At 5% exploration rate, it matches Greedy almost exactly across all metrics. Higher ε values may show different results.
 
-4. **MAB-UCB remains the best single-session algorithm.** Without learning history, MAB-UCB's internal exploration-exploitation (500 simulated rounds) outperforms everything. Thompson Sampling needs 2–3 sessions to catch up.
+4. **MAB-UCB remains the best single-session algorithm — but isn't shippable.** Without learning history, MAB-UCB's internal exploration-exploitation (500 simulated rounds) outperforms everything. It defines the benchmark ceiling. Thompson Sampling needs 2–3 sessions to match it but is actually deployable.
 
 5. **The 20-connection limit is the fundamental bottleneck at scale.** Telluride (2,784 follows) at 3yr shows all algorithms struggling: Greedy at 56%, Thompson at 63%, MAB-UCB at 67%. The relay diversity needed to cover 2,784 authors' 3-year history exceeds what 20 connections can provide.
 
 **Key real-world event verification findings:**
 
-1. **Coverage-optimal ≠ event-recall-optimal.** Greedy Set-Cover wins Phase 1 (assignment coverage) but ranks 7th of 14 in actual event recall (84.4% mean across 6 profiles at 7d, vs 92.4% for Streaming Coverage). At 365 days on fiatjaf: 16.3% event recall vs. MAB-UCB's 40.8%.
+*Practitioner takeaways:*
+1. **Coverage-optimal ≠ event-recall-optimal.** Greedy Set-Cover wins Phase 1 (assignment coverage) but at 1yr drops to 16% event recall (6-profile mean) while Filter Decomposition (25%) and Welshman Stochastic (24%) retain more history through relay diversity.
 
-2. **MAB-UCB is the best long-window algorithm.** Its exploration component isn't noise -- it discovers relays that happen to retain historical events. This outweighs the static optimizers that prioritize coverage density.
+2. **Welshman's `random()` factor helps for archival.** The stochastic factor in ``quality * (1 + log(weight)) * random()`` spreads queries across more relays over time. At 1 year: 24% mean recall across 6 profiles (1.5× Greedy's 16%). Filter Decomposition (25%) edges it out through per-author relay diversity. Welshman's fiatjaf-specific result (37.8%) was an outlier — cross-profile means are more representative. Variance analysis (5 seeds × 3 profiles) shows ±2–8pp run-to-run std, with variance decreasing as follow count increases.
 
-3. **Welshman's `random()` factor is accidentally brilliant.** What looks like an anti-centralization quirk (``quality * (1 + log(weight)) * random()``) turns out to be empirically the best archival strategy among existing client algorithms. At 1 year: 37.8% recall (best non-MAB, non-theoretical algorithm). MAB-UCB (not yet in any client) beats it at 40.8%. The randomness spreads queries across more relays over time, accidentally discovering which ones retain old events.
+3. **Greedy Set-Cover degrades sharply.** 84% at 7d → 16% at 1 year (6-profile means). It minimizes connections by concentrating on popular relays, but those relays don't necessarily retain old events. Algorithms that spread queries fare better long-term.
 
-4. **Greedy Set-Cover degrades sharply.** 93.5% at 7d → 16.3% at 1 year. It minimizes connections by concentrating on popular relays, but those relays don't necessarily retain old events. Algorithms that spread queries fare better long-term.
+4. **Aggregator results are surprisingly poor.** Primal achieves only 28.3% recall at 7 days and 0.9% at 3 years — worse than Popular+Random (damus + nos.lol + 2 random relays) at every window. This is unexpected for a relay that proxies many upstream relays, and may indicate a benchmark methodology limitation rather than a definitive conclusion about aggregators.
 
-5. **Aggregator results are surprisingly poor.** Primal achieves only 28.3% recall at 7 days and 0.9% at 3 years — worse than Popular+Random (damus + nos.lol + 2 random relays) at every window. This is unexpected for a relay that proxies many upstream relays, and may indicate a benchmark methodology limitation rather than a definitive conclusion about aggregators.
+5. **Author recall is more stable than event recall.** You can *find* most authors even at long windows (74-81% author recall at 1 year), but you miss most of their posts. The disparity means relay retention policies are the binding constraint, not relay selection.
 
-6. **Author recall is more stable than event recall.** You can *find* most authors even at long windows (74-81% author recall at 1 year), but you miss most of their posts. The disparity means relay retention policies are the binding constraint, not relay selection.
+*Academic context:*
+6. **The academic ceiling is ~92% at 7d** (Streaming Coverage, ILP, Spectral Clustering). The ~5-8pp gap vs the best practitioner algorithm (88%) is closable through learning (Thompson Sampling reaches 92-97% after 2-3 sessions) rather than through more complex static algorithms.
 
 ---
 
@@ -743,7 +848,7 @@ A small fraction of prolific authors produce the majority of events. This power-
 
 Based on patterns observed across all implementations and benchmark results:
 
-1. **Algorithm choice depends on use case.** CS-inspired algorithms (Streaming Coverage, Spectral Clustering) achieve 92% mean event recall across 6 profiles vs Greedy's 84% — even for real-time (7d) feeds. Greedy degrades sharply for historical access (16% recall at 1yr). Stochastic approaches (Welshman: 38% at 1yr) and adaptive exploration (MAB-UCB: 41% at 1yr) are 2–2.5x better for older events. Coverage-optimal is not event-recall-optimal.
+1. **Algorithm choice depends on use case.** Among practitioner algorithms, Greedy/NDK/Welshman cluster at 83-84% at 7d (effectively tied). At 1yr, Filter Decomposition (25%) and Welshman Stochastic (24%) lead — both 1.5× better than Greedy's 16%. Coverage-optimal is not event-recall-optimal. Academic algorithms define a ~92% ceiling at 7d, but that gap is closable through learning (Thompson Sampling) rather than algorithmic complexity.
 
 2. **Most clients default to 2-3 relays per pubkey.** 7 of 9 implementations with per-pubkey limits converge on 2 or 3 (see Section 2.3). This is an observed ecosystem consensus, not an empirically benchmarked finding — no study has measured the optimal number or the marginal value of a 3rd vs 4th relay per author.
 
@@ -787,26 +892,34 @@ Based on patterns observed across all implementations and benchmark results:
 
 ### Benchmark Algorithm Implementations
 
-All 14 algorithms are in [`bench/src/algorithms/`](bench/src/algorithms/):
+All algorithms are in [`bench/src/algorithms/`](bench/src/algorithms/).
+
+**Practitioner algorithms** (deployed or deployable):
 
 | Algorithm | Source | Inspired By |
 |-----------|--------|-------------|
-| Welshman+Thompson | [`welshman-thompson.ts`](bench/src/algorithms/welshman-thompson.ts) | Welshman + Thompson Sampling |
-| Greedy+ε-Explore | [`greedy-epsilon.ts`](bench/src/algorithms/greedy-epsilon.ts) | Greedy + ε-exploration |
 | Greedy Set-Cover | [`greedy-set-cover.ts`](bench/src/algorithms/greedy-set-cover.ts) | Gossip, Applesauce, Wisp |
 | Priority-Based | [`priority-based.ts`](bench/src/algorithms/priority-based.ts) | NDK |
 | Weighted Stochastic | [`weighted-stochastic.ts`](bench/src/algorithms/weighted-stochastic.ts) | Welshman/Coracle |
 | Greedy Coverage Sort | [`greedy-coverage-sort.ts`](bench/src/algorithms/greedy-coverage-sort.ts) | Nostur |
 | Filter Decomposition | [`filter-decomposition.ts`](bench/src/algorithms/filter-decomposition.ts) | rust-nostr |
 | Direct Mapping | [`direct-mapping.ts`](bench/src/algorithms/direct-mapping.ts) | Amethyst (feeds) |
+| Welshman+Thompson | [`welshman-thompson.ts`](bench/src/algorithms/welshman-thompson.ts) | Welshman + Thompson Sampling |
+| Greedy+ε-Explore | [`greedy-epsilon.ts`](bench/src/algorithms/greedy-epsilon.ts) | Greedy + ε-exploration |
 | Primal Aggregator | [`primal-baseline.ts`](bench/src/algorithms/primal-baseline.ts) | Baseline |
 | Popular+Random | [`popular-plus-random.ts`](bench/src/algorithms/popular-plus-random.ts) | Baseline |
-| ILP Optimal | [`ilp-optimal.ts`](bench/src/algorithms/ilp-optimal.ts) | CS: branch-and-bound |
-| Stochastic Greedy | [`stochastic-greedy.ts`](bench/src/algorithms/stochastic-greedy.ts) | CS: lazier-than-lazy greedy |
-| MAB-UCB | [`mab-relay.ts`](bench/src/algorithms/mab-relay.ts) | CS: combinatorial bandits |
-| Streaming Coverage | [`streaming-coverage.ts`](bench/src/algorithms/streaming-coverage.ts) | CS: streaming submodular max |
-| Bipartite Matching | [`bipartite-matching.ts`](bench/src/algorithms/bipartite-matching.ts) | CS: weighted matching |
-| Spectral Clustering | [`spectral-clustering.ts`](bench/src/algorithms/spectral-clustering.ts) | CS: community detection |
+| Big Relays | [`big-relays.ts`](bench/src/algorithms/big-relays.ts) | Baseline (damus + nos.lol) |
+
+**Academic algorithms** (benchmark ceilings only — not practical for real clients):
+
+| Algorithm | Source | CS Technique | Why not practical |
+|-----------|--------|--------------|-------------------|
+| ILP Optimal | [`ilp-optimal.ts`](bench/src/algorithms/ilp-optimal.ts) | Branch-and-bound | NP-hard, requires solver library |
+| MAB-UCB | [`mab-relay.ts`](bench/src/algorithms/mab-relay.ts) | Combinatorial bandits | 500 simulated rounds per selection |
+| Streaming Coverage | [`streaming-coverage.ts`](bench/src/algorithms/streaming-coverage.ts) | Streaming submodular max | Marginal gains over simpler greedy |
+| Bipartite Matching | [`bipartite-matching.ts`](bench/src/algorithms/bipartite-matching.ts) | Weighted matching | O(V²E), complex implementation |
+| Spectral Clustering | [`spectral-clustering.ts`](bench/src/algorithms/spectral-clustering.ts) | Community detection | Eigendecomposition, linear algebra dependency |
+| Stochastic Greedy | [`stochastic-greedy.ts`](bench/src/algorithms/stochastic-greedy.ts) | Lazier-than-lazy greedy | Worse than standard greedy at this scale |
 
 Phase 2 verification: [`bench/src/phase2/`](bench/src/phase2/) (baseline construction, event verification, reporting, disk cache).
 

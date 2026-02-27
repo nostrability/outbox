@@ -54,10 +54,12 @@ export function verifyAlgorithm(
     totalBaseline: number;
     totalFound: number;
     authorsWithEvents: number;
+    perAuthorRates: number[];
   } {
     let totalBaseline = 0;
     let totalFound = 0;
     let authorsWithEvents = 0;
+    const perAuthorRates: number[] = [];
 
     for (const pubkey of authors) {
       const baseline = baselines.get(pubkey)!;
@@ -67,6 +69,7 @@ export function verifyAlgorithm(
       const assignedRelays = result.pubkeyAssignments.get(pubkey);
       if (!assignedRelays || assignedRelays.size === 0) {
         // Not assigned by this algorithm — found = empty
+        perAuthorRates.push(0);
         continue;
       }
 
@@ -89,9 +92,13 @@ export function verifyAlgorithm(
 
       totalFound += intersectionCount;
       if (intersectionCount > 0) authorsWithEvents++;
+      perAuthorRates.push(
+        baseline.eventIds.size > 0 ? intersectionCount / baseline.eventIds.size : 0,
+      );
     }
 
-    return { totalBaseline, totalFound, authorsWithEvents };
+    perAuthorRates.sort((a, b) => a - b);
+    return { totalBaseline, totalFound, authorsWithEvents, perAuthorRates };
   }
 
   const headline = computeRecall(headlineSet);
@@ -147,5 +154,6 @@ export function verifyAlgorithm(
     testablePartialAuthors: partialSet.length,
     authorsWithEvents: headline.authorsWithEvents,
     outOfBaselineRelays,
+    perAuthorRecallRates: headline.perAuthorRates,
   };
 }

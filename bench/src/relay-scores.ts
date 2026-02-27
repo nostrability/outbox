@@ -18,6 +18,8 @@ import type { QueryCache } from "./relay-pool.ts";
 const CACHE_DIR = ".cache";
 const SCHEMA_VERSION = 1;
 const DECAY_FACTOR = 0.95; // exponential decay per session
+const MAX_SESSION_HISTORY = 10; // keep last N session rates for trend
+const TREND_MIN_SESSIONS = 3; // minimum sessions before computing trend
 
 function scorePath(pubkeyPrefix: string, window: number, filterMode?: string): string {
   const suffix = filterMode ? `_${filterMode}` : "";
@@ -78,6 +80,7 @@ export function updateRelayScores(
   }
 
   // Compute new observations from this session
+  const degrading: string[] = [];
   for (const [relay, pubkeys] of relayAssignments) {
     const entry: RelayScoreEntry = db.relays[relay] ?? {
       alpha: 1,
@@ -88,6 +91,9 @@ export function updateRelayScores(
     };
 
     entry.lastQueried = Date.now();
+
+    let sessionDelivered = 0;
+    let sessionExpected = 0;
 
     for (const pubkey of pubkeys) {
       const baseline = baselines.get(pubkey);
@@ -104,6 +110,22 @@ export function updateRelayScores(
       entry.beta += (1 - delivered);
       entry.totalEvents += relayEventCount;
       entry.totalExpected += baselineCount;
+
+      sessionDelivered += relayEventCount;
+      sessionExpected += baselineCount;
+    }
+
+    // Track session delivery rate
+    const sessionRate = sessionExpected > 0 ? sessionDelivered / sessionExpected : 0;
+    const history = entry.sessionRates ?? [];
+    history.push(sessionRate);
+    if (history.length > MAX_SESSION_HISTORY) history.shift();
+    entry.sessionRates = history;
+
+    // Compute trend from session history
+    entry.trend = computeTrend(history);
+    if (entry.trend === "declining" && history.length >= TREND_MIN_SESSIONS) {
+      degrading.push(relay);
     }
 
     db.relays[relay] = entry;
@@ -116,6 +138,12 @@ export function updateRelayScores(
     `[relay-scores] Updated scores for ${algorithmName}: ` +
     `${Object.keys(db.relays).length} relays, session ${db.sessionCount}`,
   );
+  if (degrading.length > 0) {
+    console.error(
+      `[relay-scores] Degrading relays (${degrading.length}): ${degrading.slice(0, 5).join(", ")}` +
+      (degrading.length > 5 ? ` (+${degrading.length - 5} more)` : ""),
+    );
+  }
 
   return db;
 }
@@ -133,6 +161,29 @@ export async function saveRelayScores(db: RelayScoreDB, filterMode?: string): Pr
     throw e;
   }
   console.error(`[relay-scores] Saved to ${path}`);
+}
+
+/**
+ * Compute trend from session rate history using simple linear regression slope.
+ * Returns "declining" if slope is significantly negative, "improving" if positive, else "stable".
+ */
+function computeTrend(rates: number[]): "improving" | "declining" | "stable" {
+  if (rates.length < TREND_MIN_SESSIONS) return "stable";
+  // Simple linear regression: slope of rate over session index
+  const n = rates.length;
+  let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+  for (let i = 0; i < n; i++) {
+    sumX += i;
+    sumY += rates[i];
+    sumXY += i * rates[i];
+    sumX2 += i * i;
+  }
+  const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+  // Threshold: >5% per-session change is significant
+  const threshold = 0.05;
+  if (slope < -threshold) return "declining";
+  if (slope > threshold) return "improving";
+  return "stable";
 }
 
 /**
