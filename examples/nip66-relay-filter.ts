@@ -33,13 +33,16 @@ const CONNECT_TIMEOUT_MS = 5000;
 export async function fetchAliveRelays(): Promise<Set<string>> {
   const alive = new Set<string>();
 
-  // Source 1: NIP-66 kind 30166 events from monitor relays
-  for (const monitorUrl of MONITOR_RELAYS) {
-    try {
-      const relays = await fetchKind30166(monitorUrl);
-      for (const url of relays) alive.add(url);
-    } catch (err) {
-      console.warn(`[nip66] ${monitorUrl}: ${err}`);
+  // Source 1: NIP-66 kind 30166 events from monitor relays (parallel)
+  const results = await Promise.allSettled(
+    MONITOR_RELAYS.map((monitorUrl) => fetchKind30166(monitorUrl)),
+  );
+  for (let i = 0; i < results.length; i++) {
+    const result = results[i];
+    if (result.status === "fulfilled") {
+      for (const url of result.value) alive.add(url);
+    } else {
+      console.warn(`[nip66] ${MONITOR_RELAYS[i]}: ${result.reason}`);
     }
   }
 
@@ -149,7 +152,8 @@ export function filterDeadRelays(
   const kept: string[] = [];
   const removed: string[] = [];
   for (const relay of candidates) {
-    if (alive.has(relay)) {
+    const normalized = normalizeUrl(relay);
+    if (normalized && alive.has(normalized)) {
       kept.push(relay);
     } else {
       removed.push(relay);

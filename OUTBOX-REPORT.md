@@ -576,7 +576,7 @@ ILP, Streaming Coverage, and Spectral Clustering frequently hit the theoretical 
 
 **Why recall degrades with time window:** Relay retention policies are the binding constraint. Most relays prune old events to manage storage — popular high-volume relays prune more aggressively because they receive more data. A greedy algorithm that concentrates on these popular relays sees 93% recall at 7 days but 16% at 1 year: the relays it selected had the events last week, but deleted them months ago. Stochastic algorithms discover smaller relays that retain history longer because they receive less volume. This is why randomness in relay selection isn't noise — it's an archival strategy.
 
-Event recall across time windows (fiatjaf, testable-reliable authors). Events per (relay, author) pair capped at 10,000 — this prevents a single prolific relay from dominating the baseline count and biasing recall percentages toward whichever algorithm happens to select that relay.
+Event recall across time windows (fiatjaf single-profile, testable-reliable authors). For 6-profile mean validation, see cross-profile section. Events per (relay, author) pair capped at 10,000 — this prevents a single prolific relay from dominating the baseline count and biasing recall percentages toward whichever algorithm happens to select that relay.
 
 **Practitioner algorithms** (deployed or deployable in real clients):
 
@@ -835,7 +835,7 @@ A small fraction of prolific authors produce the majority of events. This power-
 
 3. **Greedy Set-Cover degrades sharply.** 84% at 7d → 16% at 1 year (6-profile means). It minimizes connections by concentrating on popular relays, but those relays don't necessarily retain old events. Algorithms that spread queries fare better long-term.
 
-4. **Aggregator results are surprisingly poor.** Primal achieves only 28.3% recall at 7 days and 0.9% at 3 years — worse than Popular+Random (damus + nos.lol + 2 random relays) at every window. This is unexpected for a relay that proxies many upstream relays, and may indicate a benchmark methodology limitation rather than a definitive conclusion about aggregators.
+4. **Aggregator results are surprisingly poor.** Primal achieves only 31.6% recall at 7 days (6-profile mean) and 0.9% at 3 years (fiatjaf single-profile) — worse than Popular+Random (damus + nos.lol + 2 random relays) at every window. This is unexpected for a relay that proxies many upstream relays, and may indicate a benchmark methodology limitation rather than a definitive conclusion about aggregators.
 
 5. **Author recall is more stable than event recall.** You can *find* most authors even at long windows (74-81% author recall at 1 year), but you miss most of their posts. The disparity means relay retention policies are the binding constraint, not relay selection.
 
@@ -864,7 +864,7 @@ Based on patterns observed across all implementations and benchmark results:
 
 8. **Support NIP-17 DM relays.** Only 4 of 10 mature implementations fully route DMs via kind 10050 relays. Kind 10050 is straightforward to implement and provides meaningful privacy benefits for direct messaging.
 
-9. **Aggregator results are surprisingly poor.** Primal reaches 28% recall at 7d and <1% at 3yr — worse than Popular+Random (damus + nos.lol + 2 random relays) at every window. This is unexpected: an aggregator that proxies tens if not hundreds of relays should in theory outperform 4 random connections. This may indicate a limitation in the benchmark methodology rather than a real-world indictment of aggregators.
+9. **Aggregator results are surprisingly poor.** Primal reaches 32% recall at 7d (6-profile mean) and <1% at 3yr — worse than Popular+Random (damus + nos.lol + 2 random relays) at every window. This is unexpected: an aggregator that proxies tens if not hundreds of relays should in theory outperform 4 random connections. This may indicate a limitation in the benchmark methodology rather than a real-world indictment of aggregators.
 
 ---
 
