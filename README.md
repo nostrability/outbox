@@ -30,7 +30,7 @@ If you're building on an existing library, here's where you stand and what to do
 | **NDK** | 1 (priority-based) | Add stochastic factor, then Thompson | [analysis/clients/ndk-applesauce-nostrudel.md](analysis/clients/ndk-applesauce-nostrudel.md) |
 | **Applesauce/noStrudel** | 1 (greedy set-cover) | Add stochastic factor, then Thompson | [analysis/clients/ndk-applesauce-nostrudel.md](analysis/clients/ndk-applesauce-nostrudel.md) |
 | **Gossip** | 1 (greedy set-cover) | Add stochastic factor or Thompson | [analysis/clients/gossip.md](analysis/clients/gossip.md) |
-| **rust-nostr** | 1 (filter decomp) | Already strong at 1yr (25%); add Thompson for further gains | [analysis/clients/rust-nostr-voyage-nosotros-wisp-shopstr.md](analysis/clients/rust-nostr-voyage-nosotros-wisp-shopstr.md) |
+| **rust-nostr** | 1 (filter decomp) | Add FD+Thompson — same per-author structure, learns from delivery | [analysis/clients/rust-nostr-voyage-nosotros-wisp-shopstr.md](analysis/clients/rust-nostr-voyage-nosotros-wisp-shopstr.md) |
 | **Amethyst** | 1 (direct mapping) | Add NIP-66 filtering — unlimited connections already give high recall | [analysis/clients/amethyst.md](analysis/clients/amethyst.md) |
 | **Nostur** | 1 (coverage sort) | Remove skipTopRelays, add stochastic factor | [analysis/clients/nostur-yakihonne-notedeck.md](analysis/clients/nostur-yakihonne-notedeck.md) |
 | **Nothing yet** | 0 | Start with big relays (damus + nos.lol), then add basic outbox | [IMPLEMENTATION-GUIDE.md](IMPLEMENTATION-GUIDE.md) |
@@ -43,7 +43,7 @@ Your relay picker optimizes for "who publishes where" on paper, but the relay th
 
 ## What we tested
 
-16 relay selection algorithms (8 extracted from real clients, 8 experimental), tested against 6 real Nostr profiles (194-2,784 follows), across 6 time windows (7 days to 3 years), with and without NIP-66 liveness filtering. Every algorithm connected to real relays and queried for real events.
+17 relay selection algorithms (8 extracted from real clients, 9 experimental), tested against 6 real Nostr profiles (194-2,784 follows), across 6 time windows (7 days to 3 years), with and without NIP-66 liveness filtering. Every algorithm connected to real relays and queried for real events.
 
 Full methodology: [OUTBOX-REPORT.md](OUTBOX-REPORT.md) | Reproduce results: [Benchmark-recreation.md](Benchmark-recreation.md) | Produced for [nostrability#69](https://github.com/niclas-pfeifer/nostrability/issues/69)
 
@@ -104,6 +104,7 @@ All deployed client algorithms plus key experimental ones:
 | Algorithm | Used by | 1yr recall | 7d recall | Verdict |
 |---|---|:---:|:---:|---|
 | **Welshman+Thompson** | *not yet deployed* | 81% | 92% | Upgrade path for Coracle — learns from delivery |
+| **FD+Thompson** | *not yet deployed* | — | 97% | Upgrade path for rust-nostr — learns without popularity bias |
 | **Filter Decomposition** | rust-nostr | 25% | 77% | Per-author top-N write relays; strong at long windows |
 | **Welshman Stochastic** | Coracle | 24% | 83% | Best stateless deployed algorithm for archival — 1.5× Greedy at 1yr |
 | **Greedy Set-Cover** | Gossip, Applesauce, Wisp | 16% | 84% | Best on-paper coverage; degrades sharply for history |
@@ -118,14 +119,14 @@ All deployed client algorithms plus key experimental ones:
 | Big Relays | 8% | 61% | Just damus+nos.lol — the "do nothing" baseline |
 | Primal Aggregator\*\*\* | 1% | 32% | Single caching relay — 100% assignment but low actual recall |
 
-*1yr and 7d recall: 6-profile means from cross-profile benchmarks (Section 8.2 of [OUTBOX-REPORT.md](OUTBOX-REPORT.md)). All testable-reliable authors, 20-connection cap except Direct Mapping. Thompson = 4-profile mean with NIP-66, 5 learning sessions. Stochastic algorithms have run-to-run variance of ±2–8pp depending on profile size (see [variance analysis](OUTBOX-REPORT.md#82-approximating-real-world-conditions-event-verification)).*
+*1yr and 7d recall: 6-profile means from cross-profile benchmarks (Section 8.2 of [OUTBOX-REPORT.md](OUTBOX-REPORT.md)). All testable-reliable authors, 20-connection cap except Direct Mapping. Thompson = 4-profile mean with NIP-66, 5 learning sessions. FD+Thompson 7d = 4-profile single-run mean. Stochastic algorithms have run-to-run variance of ±2–8pp depending on profile size (see [variance analysis](OUTBOX-REPORT.md#82-approximating-real-world-conditions-event-verification)).*
 
 *\*\*Direct Mapping uses unlimited connections (all declared write relays, typically 50-200+). Its high recall reflects connection count, not algorithmic superiority.*
 
 *\*\*\*Primal's low recall may reflect a benchmark methodology limitation (querying a caching aggregator as if it were a standard relay) rather than a definitive measure of aggregator quality. App devs using Primal should test against their own use cases.*
 
 <details>
-<summary>All 16 algorithms</summary>
+<summary>All 17 algorithms</summary>
 
 **Deployed in clients:**
 
@@ -145,6 +146,7 @@ All deployed client algorithms plus key experimental ones:
 | Algorithm | Strategy |
 |---|---|
 | Welshman+Thompson | Welshman scoring with `sampleBeta(α,β)` instead of `random()` — learns from delivery |
+| FD+Thompson | Filter Decomposition scoring with `sampleBeta(α,β)` — learns without popularity bias |
 | Greedy+ε-Explore | Greedy with 5% chance of picking a random relay instead of the best |
 
 **Academic** (benchmark ceilings only — not practical for real clients):
@@ -166,7 +168,7 @@ All deployed client algorithms plus key experimental ones:
 
 ### Thompson Sampling
 
-Replace `random()` in Welshman's scoring with `sampleBeta(successes, failures)` per relay. This keeps the beneficial randomness, adds learning, and is ~80 lines of code:
+Replace `random()` in Welshman's scoring with `sampleBeta(successes, failures)` per relay. This keeps the beneficial randomness, adds learning, and is ~80 lines of code. **If you use rust-nostr/Filter Decomposition**, use [FD+Thompson](#fdthompson-for-rust-nostr) instead — same idea but without the popularity weight, which fits Filter Decomposition's per-author structure better.
 
 ```typescript
 // Current Welshman (stateless):
@@ -226,6 +228,38 @@ function updateStats(selectedRelays: string[], eventsPerRelay: Map<string, numbe
   db.saveRelayStats(relayStats);  // persist for next session
 }
 ```
+
+### FD+Thompson (for rust-nostr)
+
+If you use Filter Decomposition (rust-nostr's `break_down_filter()`), FD+Thompson is a drop-in upgrade: score each author's write relays by `sampleBeta(α, β)` instead of lexicographic order. No popularity weight — the score is purely learned delivery performance:
+
+```typescript
+// Current Filter Decomposition (stateless):
+// Sort write relays lexicographically, take top N
+const selected = authorWriteRelays.sort().slice(0, writeLimit);
+
+// With FD+Thompson (learns from delivery):
+const scored = authorWriteRelays.map(relay => {
+  const stats = relayStats.get(relay) ?? { delivered: 0, expected: 0 };
+  const alpha = stats.delivered + 1;
+  const beta = stats.expected - stats.delivered + 1;
+  return { relay, score: sampleBeta(alpha, beta) };
+});
+const selected = scored.sort((a, b) => b.score - a.score)
+  .slice(0, writeLimit).map(r => r.relay);
+```
+
+Same `sampleBeta()`, same stats table, same update loop as [Thompson Sampling above](#thompson-sampling). The only difference: no `(1 + Math.log(weight))` multiplier. This avoids biasing toward popular relays that many authors declare but that prune aggressively — scoring purely from observed delivery.
+
+**1yr cross-profile results (cap@20, single run):**
+
+| Profile (follows) | FD+Thompson | Welshman+Thompson | Filter Decomp |
+|---|---|---|---|
+| fiatjaf (194) | **39.0%** | 37.0% | 25.5% |
+| ODELL (1,079) | 29.1% | **30.5%** | 21.6% |
+| Telluride (2,747) | **38.6%** | **38.6%** | 32.3% |
+
+*FD+Thompson and Welshman+Thompson are competitive — FD+Thompson wins on small graphs where popularity bias hurts; Welshman+Thompson wins on larger graphs where the popularity signal helps navigate retention. Both far exceed stateless Filter Decomposition.*
 
 ### NIP-66 pre-filter
 
@@ -295,7 +329,7 @@ IMPLEMENTATION-GUIDE.md       How to implement the recommendations above
 Benchmark-recreation.md       Step-by-step reproduction instructions
 bench/                        Benchmark tool (Deno/TypeScript)
   main.ts                     CLI entry point
-  src/algorithms/             16 algorithm implementations
+  src/algorithms/             17 algorithm implementations
   src/phase2/                 Event verification + baseline cache
   src/nip66/                  NIP-66 relay liveness filter
   src/relay-scores.ts         Thompson Sampling score persistence

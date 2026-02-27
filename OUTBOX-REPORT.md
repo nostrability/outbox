@@ -122,6 +122,7 @@ Clients with tightly-integrated outbox: **Gossip** (LMDB + Minion architecture),
 | Algorithm | Strategy | Benchmark impl |
 |-----------|----------|----------------|
 | **Welshman+Thompson** | Welshman scoring with `sampleBeta(α, β)` instead of `random()`. Learns from Phase 2 event delivery outcomes, persists Beta distribution priors across sessions. Cold start = baseline Welshman; converges in 2–3 sessions | [`welshman-thompson.ts`](bench/src/algorithms/welshman-thompson.ts) |
+| **FD+Thompson** | Filter Decomposition scoring with `sampleBeta(α, β)` instead of lexicographic order. Same per-author structure as rust-nostr but with learned delivery scores. No popularity weight — scores purely from delivery history | [`fd-thompson.ts`](bench/src/algorithms/fd-thompson.ts) |
 | **Greedy+ε-Explore** | Greedy set-cover with probability ε (5%) of picking a random relay instead of the max-coverage one. One `if` statement on top of standard greedy | [`greedy-epsilon.ts`](bench/src/algorithms/greedy-epsilon.ts) |
 
 **CS-inspired algorithms** (added for benchmark comparison — no client uses these yet):
@@ -842,6 +843,40 @@ A small fraction of prolific authors produce the majority of events. This power-
 *Academic context:*
 6. **The academic ceiling is ~92% at 7d** (Streaming Coverage, ILP, Spectral Clustering). The ~5-8pp gap vs the best practitioner algorithm (88%) is closable through learning (Thompson Sampling reaches 92-97% after 2-3 sessions) rather than through more complex static algorithms.
 
+### 8.4 FD+Thompson: Filter Decomposition with Thompson Sampling
+
+FD+Thompson applies Thompson Sampling to Filter Decomposition's per-author relay selection. Where Welshman+Thompson scores relays as `(1 + log(weight)) * sampleBeta(α, β)`, FD+Thompson scores purely by `sampleBeta(α, β)` — no popularity weight. This avoids biasing toward high-volume relays that many authors declare but that prune old events aggressively.
+
+The algorithm is a direct upgrade path for rust-nostr: same per-author structure (select top N write relays per followed author), but ranking by learned delivery scores instead of lexicographic order.
+
+**1yr cross-profile comparison (cap@20, single run, seed=0):**
+
+| Profile (follows) | FD+Thompson | Welshman+Thompson | Filter Decomp | Weighted Stochastic |
+|---|:---:|:---:|:---:|:---:|
+| fiatjaf (194) | **39.0%** evt / **80.4%** auth | 37.0% / 78.6% | 25.5% / 72.5% | 24.7% / 72.5% |
+| Gato (399) | 20.6% / **89.5%** | **22.5%** / 87.4% | 13.1% / 78.4% | 14.5% / 75.5% |
+| ODELL (1,079) | 29.1% / 79.7% | **30.5%** / **82.7%** | 21.6% / 72.7% | 18.2% / 74.1% |
+| Telluride (2,747) | **38.6%** / 81.4% | **38.6%** / **84.2%** | 32.3% / 75.5% | 30.3% / 74.7% |
+
+**Per-author median recall (1yr, cap@20):**
+
+| Profile (follows) | FD+Thompson | Welshman+Thompson | Filter Decomp | Weighted Stochastic |
+|---|:---:|:---:|:---:|:---:|
+| fiatjaf (194) | **39.4%** | 18.7% | 0.0% | 0.0% |
+| Gato (399) | 97.9% | **98.5%** | 87.5% | 83.3% |
+| ODELL (1,079) | 55.0% | **64.0%** | 35.0% | 17.0% |
+| Telluride (2,747) | 77.6% | **82.4%** | 60.6% | 52.0% |
+
+**Key findings:**
+
+1. **Both Thompson variants far exceed their stateless baselines.** FD+Thompson averages ~32% event recall vs Filter Decomposition's ~23% at 1yr. Welshman+Thompson averages ~32% vs Weighted Stochastic's ~22%. Learning from delivery adds +9-10pp on average even in a single session.
+
+2. **Welshman+Thompson wins at larger follow counts.** The `(1 + log(weight))` popularity factor helps at 1,000+ follows — the popularity signal correctly identifies relays where events are more likely to survive. FD+Thompson wins on fiatjaf's small graph where popularity bias over-concentrates on relays that prune old events.
+
+3. **Median recall tells a different story.** FD+Thompson's 39.4% median on fiatjaf (vs 18.7% for Welshman+Thompson) shows more equitable per-author coverage — fewer authors with zero recall. At larger scales, Welshman+Thompson's median advantage (64% vs 55% on ODELL) reflects better overall delivery.
+
+4. **Both hit the same ceiling.** The relay-discovery problem ([issue #21](https://github.com/nostrability/outbox/issues/21)) limits all algorithms equally — current NIP-65 lists don't reflect where authors wrote a year ago.
+
 ---
 
 ## 9. Observations
@@ -905,6 +940,7 @@ All algorithms are in [`bench/src/algorithms/`](bench/src/algorithms/).
 | Filter Decomposition | [`filter-decomposition.ts`](bench/src/algorithms/filter-decomposition.ts) | rust-nostr |
 | Direct Mapping | [`direct-mapping.ts`](bench/src/algorithms/direct-mapping.ts) | Amethyst (feeds) |
 | Welshman+Thompson | [`welshman-thompson.ts`](bench/src/algorithms/welshman-thompson.ts) | Welshman + Thompson Sampling |
+| FD+Thompson | [`fd-thompson.ts`](bench/src/algorithms/fd-thompson.ts) | Filter Decomposition + Thompson Sampling |
 | Greedy+ε-Explore | [`greedy-epsilon.ts`](bench/src/algorithms/greedy-epsilon.ts) | Greedy + ε-exploration |
 | Primal Aggregator | [`primal-baseline.ts`](bench/src/algorithms/primal-baseline.ts) | Baseline |
 | Popular+Random | [`popular-plus-random.ts`](bench/src/algorithms/popular-plus-random.ts) | Baseline |

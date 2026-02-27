@@ -23,6 +23,9 @@ rust-nostr stores bitflags per (pubkey, relay) pair: READ, WRITE, PRIVATE_MESSAG
 - Freshness checking via per-pubkey tokio semaphores, stress-tested to 10k concurrent requests.
 - SQLite backend persists the gossip graph across restarts (received_events count, last_received_event timestamp).
 
+### Upgrade Path: FD+Thompson
+rust-nostr's per-author Filter Decomposition can be upgraded to FD+Thompson by replacing lexicographic relay ordering with `sampleBeta(α, β)` scoring from delivery history. Same per-author structure, same write limits — just learned relay ranking instead of static. At 1yr (single session, cap@20): 29-39% event recall vs baseline Filter Decomposition's 14-33% across 4 profiles. See [README.md § FD+Thompson](../../README.md#fdthompson-for-rust-nostr) for implementation code.
+
 ---
 
 ## Voyage (Kotlin, Android)

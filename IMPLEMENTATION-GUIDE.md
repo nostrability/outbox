@@ -17,9 +17,11 @@ What's your starting point?
 │  └─ Simplicity over optimization? → Direct Mapping (30% 1yr, unlimited connections)
 │
 ├─ Historical event recall (archival, search)?
-│  ├─ Can persist state across sessions? → Welshman+Thompson Sampling (81% 1yr)
-│  └─ Stateless?                         → Filter Decomposition (25% 1yr) or
-│                                          Weighted Stochastic / Welshman (24% 1yr)
+│  ├─ Can persist state across sessions?
+│  │  ├─ Using Welshman/Coracle?  → Welshman+Thompson Sampling (81% 1yr)
+│  │  └─ Using rust-nostr?        → FD+Thompson (32% 1yr single-session)
+│  └─ Stateless?                  → Filter Decomposition (25% 1yr) or
+│                                   Weighted Stochastic / Welshman (24% 1yr)
 │
 └─ Anti-centralization (distribute relay load)?
    ├─ Via scoring?       → Weighted Stochastic (log dampening + random)
@@ -66,6 +68,13 @@ upgrade preserves randomness, adds memory, and is ~80 lines of code on top
 of what Coracle already ships.
 
 See [README.md § Thompson Sampling](README.md#thompson-sampling) for complete code including the full integration loop (startup → score → select → observe → persist).
+
+**For rust-nostr / Filter Decomposition users:** FD+Thompson is a variant that fits
+Filter Decomposition's per-author structure directly. It replaces lexicographic relay
+ordering with `sampleBeta(α, β)` scoring — no popularity weight. At 1yr (single session,
+cap@20), FD+Thompson achieves 29-39% event recall vs Filter Decomposition's 14-33%
+across 4 profiles. See [README.md § FD+Thompson](README.md#fdthompson-for-rust-nostr)
+for code.
 
 ### 2. Pre-filter relays with NIP-66
 
