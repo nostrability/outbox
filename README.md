@@ -104,7 +104,7 @@ All deployed client algorithms plus key experimental ones:
 | Algorithm | Used by | 1yr recall | 7d recall | Verdict |
 |---|---|:---:|:---:|---|
 | **Welshman+Thompson** | *not yet deployed* | 81% | 92% | Upgrade path for Coracle — learns from delivery |
-| **FD+Thompson** | *not yet deployed* | — | 97% | Upgrade path for rust-nostr — learns without popularity bias |
+| **FD+Thompson** | *not yet deployed* | 32% | 97% | Upgrade path for rust-nostr — +38% over baseline FD from learning |
 | **Filter Decomposition** | rust-nostr | 25% | 77% | Per-author top-N write relays; strong at long windows |
 | **Welshman Stochastic** | Coracle | 24% | 83% | Best stateless deployed algorithm for archival — 1.5× Greedy at 1yr |
 | **Greedy Set-Cover** | Gossip, Applesauce, Wisp | 16% | 84% | Best on-paper coverage; degrades sharply for history |
@@ -119,7 +119,7 @@ All deployed client algorithms plus key experimental ones:
 | Big Relays | 8% | 61% | Just damus+nos.lol — the "do nothing" baseline |
 | Primal Aggregator\*\*\* | 1% | 32% | Single caching relay — 100% assignment but low actual recall |
 
-*1yr and 7d recall: 6-profile means from cross-profile benchmarks (Section 8.2 of [OUTBOX-REPORT.md](OUTBOX-REPORT.md)). All testable-reliable authors, 20-connection cap except Direct Mapping. Thompson = 4-profile mean with NIP-66, 5 learning sessions. FD+Thompson 7d = 4-profile single-run mean. Stochastic algorithms have run-to-run variance of ±2–8pp depending on profile size (see [variance analysis](OUTBOX-REPORT.md#82-approximating-real-world-conditions-event-verification)).*
+*1yr and 7d recall: 6-profile means from cross-profile benchmarks (Section 8.2 of [OUTBOX-REPORT.md](OUTBOX-REPORT.md)). All testable-reliable authors, 20-connection cap except Direct Mapping. Thompson = 4-profile mean with NIP-66, 5 learning sessions. FD+Thompson = 4-profile single-run mean (32% 1yr vs baseline FD's 23% = +38% relative improvement from learning). Stochastic algorithms have run-to-run variance of ±2–8pp depending on profile size (see [variance analysis](OUTBOX-REPORT.md#82-approximating-real-world-conditions-event-verification)).*
 
 *\*\*Direct Mapping uses unlimited connections (all declared write relays, typically 50-200+). Its high recall reflects connection count, not algorithmic superiority.*
 
@@ -253,13 +253,15 @@ Same `sampleBeta()`, same stats table, same update loop as [Thompson Sampling ab
 
 **1yr cross-profile results (cap@20, single run):**
 
-| Profile (follows) | FD+Thompson | Welshman+Thompson | Filter Decomp |
-|---|---|---|---|
-| fiatjaf (194) | **39.0%** | 37.0% | 25.5% |
-| ODELL (1,079) | 29.1% | **30.5%** | 21.6% |
-| Telluride (2,747) | **38.6%** | **38.6%** | 32.3% |
+| Profile (follows) | FD+Thompson | Filter Decomp (baseline) | Gain |
+|---|:---:|:---:|:---:|
+| fiatjaf (194) | **39.0%** | 25.5% | +13.5pp (+53%) |
+| Gato (399) | **20.6%** | 13.1% | +7.5pp (+57%) |
+| ODELL (1,079) | **29.1%** | 21.6% | +7.5pp (+35%) |
+| Telluride (2,747) | **38.6%** | 32.3% | +6.3pp (+20%) |
+| **4-profile mean** | **31.8%** | **23.1%** | **+8.7pp (+38%)** |
 
-*FD+Thompson and Welshman+Thompson are competitive — FD+Thompson wins on small graphs where popularity bias hurts; Welshman+Thompson wins on larger graphs where the popularity signal helps navigate retention. Both far exceed stateless Filter Decomposition.*
+*FD+Thompson adds +8.7pp event recall on average from a single session of learning. The gain is largest on small graphs where lexicographic ordering wastes slots on pruning-heavy relays. Welshman+Thompson is competitive at larger follow counts where the popularity signal helps — see [Section 8.4](OUTBOX-REPORT.md#84-fdthompson-filter-decomposition-with-thompson-sampling) for the full comparison.*
 
 ### NIP-66 pre-filter
 
@@ -348,3 +350,5 @@ analysis/
 - [Benchmark Recreation](Benchmark-recreation.md) — Reproduce all results
 - [nostrability#69](https://github.com/niclas-pfeifer/nostrability/issues/69) — Parent issue
 - [NIP-65](https://github.com/nostr-protocol/nips/blob/master/65.md) — Relay List Metadata specification
+- [Building Nostr](https://building-nostr.coracle.social) — Protocol architecture guide (relay routing, content migration, bootstrapping)
+- [replicatr](https://github.com/coracle-social/replicatr) — Event replication daemon for relay list changes (negentropy sync)

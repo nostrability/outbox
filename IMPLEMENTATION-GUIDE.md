@@ -72,9 +72,10 @@ See [README.md § Thompson Sampling](README.md#thompson-sampling) for complete c
 **For rust-nostr / Filter Decomposition users:** FD+Thompson is a variant that fits
 Filter Decomposition's per-author structure directly. It replaces lexicographic relay
 ordering with `sampleBeta(α, β)` scoring — no popularity weight. At 1yr (single session,
-cap@20), FD+Thompson achieves 29-39% event recall vs Filter Decomposition's 14-33%
-across 4 profiles. See [README.md § FD+Thompson](README.md#fdthompson-for-rust-nostr)
-for code.
+cap@20), FD+Thompson averages 31.8% event recall vs baseline FD's 23.1% — a **+38%
+relative improvement** (+8.7pp absolute) from a single session of learning across 4
+profiles. The gain is largest on small graphs (+53% relative for fiatjaf/194 follows).
+See [README.md § FD+Thompson](README.md#fdthompson-for-rust-nostr) for code.
 
 ### 2. Pre-filter relays with NIP-66
 
@@ -119,6 +120,13 @@ systematic gaps: for each followed author, periodically query a second relay
 and compare against what your outbox relays returned. When gaps are detected,
 add a fallback relay automatically. This should be invisible to the user.
 
+[NIP-77](https://github.com/nostr-protocol/nips/blob/master/77.md) (negentropy
+syncing) makes this efficient: instead of downloading all events to compare,
+a client can run a set-reconciliation handshake to learn which events a relay
+has without transferring them. This is the same protocol
+[replicatr](https://github.com/coracle-social/replicatr) uses for relay
+migration — it works equally well for delivery verification.
+
 See [README.md § Delivery check](README.md#delivery-check-self-healing) for code.
 
 ### 4. Cap at 20 connections
@@ -147,6 +155,16 @@ gap among active users is ~3-5%. Options for handling missing relay lists
 - **Track which relays deliver events** per author (Gossip, rust-nostr,
   Voyage, Amethyst, Nosotros all do this as a secondary signal)
 
+A related problem: users who change write relays without migrating old events.
+Current NIP-65 lists reflect where users write *now*, not where they wrote
+historically. No analyzed client handles this. [Building Nostr](https://building-nostr.coracle.social)
+frames this as a synchronization problem: "it is the responsibility of anyone
+that changes the result of relay selection heuristics to synchronize events to
+the new relay." [replicatr](https://github.com/coracle-social/replicatr)
+automates this server-side via negentropy sync, but is a proof-of-concept (not
+production). Client-side detection of "relay listed but no data from this
+author" would catch both missing relay lists and stale migrations.
+
 ### 7. Diversify bootstrap relays
 
 8/13 analyzed clients hardcode relay.damus.io. 6/13 depend on purplepag.es
@@ -163,3 +181,5 @@ for indexing. Consider diversifying:
 - Per-client implementation details: [analysis/clients/](analysis/clients/)
 - Cross-client comparison: [analysis/cross-client-comparison.md](analysis/cross-client-comparison.md)
 - Reproduce results: [Benchmark-recreation.md](Benchmark-recreation.md)
+- Protocol architecture: [Building Nostr](https://building-nostr.coracle.social) — relay routing, content migration, bootstrapping
+- Relay sync tooling: [replicatr](https://github.com/coracle-social/replicatr) — negentropy-based event replication on relay list changes

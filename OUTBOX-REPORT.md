@@ -38,7 +38,7 @@ We analyzed outbox implementations in 15 codebases spanning 5 languages (Rust, T
 
 6. **No implementation cross-checks per-author delivery.** NIP-66 monitors check relay liveness, but no client verifies "did this relay return events for author X?" True completeness isn't measurable (no relay has everything), but cross-checking against a second source catches relays that consistently return nothing for a specific author.
 
-7. **Academic coverage ≠ real-world event recall.** Event verification against real relays shows that algorithms optimizing for assignment coverage don't necessarily win at actual event retrieval. At 1 year, MAB-UCB achieves 40.8% event recall vs. Greedy Set-Cover's 16.3%. The relay that *should* have the event often doesn't — due to retention policies, downtime, or access restrictions. Stochastic exploration discovers relays that retain historical events.
+7. **Academic coverage ≠ real-world event recall.** Event verification against real relays shows that algorithms optimizing for assignment coverage don't necessarily win at actual event retrieval. At 1 year, MAB-UCB achieves 40.8% event recall vs. Greedy Set-Cover's 16.3%. The relay that *should* have the event often doesn't — due to retention policies, downtime, or access restrictions. Stochastic exploration discovers relays that retain historical events. [Building Nostr](https://building-nostr.coracle.social) frames this as the routing problem: "the relay that 'should' have the event" is determined by the outbox heuristic, but "there are many notes that should not be posted to user outboxes" and "any event may be retrieved based on criteria other than event author." The outbox heuristic is only one of several routing heuristics needed — others include inbox (mentions), group, DM, and topic-based routing.
 
 8. **Welshman's `random()` is brilliant for archival.** The stochastic factor in ``quality * (1 + log(weight)) * random()`` spreads queries across relays over time, achieving 24% mean event recall at 1 year across 6 profiles — 1.5× better than Greedy's 16%. Filter Decomposition (rust-nostr) edges it out at 25% through per-author relay diversity.
 
@@ -867,15 +867,25 @@ The algorithm is a direct upgrade path for rust-nostr: same per-author structure
 | ODELL (1,079) | 55.0% | **64.0%** | 35.0% | 17.0% |
 | Telluride (2,747) | 77.6% | **82.4%** | 60.6% | 52.0% |
 
+**Per-profile improvement over baseline Filter Decomposition (1yr event recall):**
+
+| Profile (follows) | FD+Thompson | Baseline FD | Gain (absolute) | Gain (relative) |
+|---|:---:|:---:|:---:|:---:|
+| fiatjaf (194) | 39.0% | 25.5% | +13.5pp | +53% |
+| Gato (399) | 20.6% | 13.1% | +7.5pp | +57% |
+| ODELL (1,079) | 29.1% | 21.6% | +7.5pp | +35% |
+| Telluride (2,747) | 38.6% | 32.3% | +6.3pp | +20% |
+| **4-profile mean** | **31.8%** | **23.1%** | **+8.7pp** | **+38%** |
+
 **Key findings:**
 
-1. **Both Thompson variants far exceed their stateless baselines.** FD+Thompson averages ~32% event recall vs Filter Decomposition's ~23% at 1yr. Welshman+Thompson averages ~32% vs Weighted Stochastic's ~22%. Learning from delivery adds +9-10pp on average even in a single session.
+1. **Both Thompson variants far exceed their stateless baselines.** FD+Thompson averages 31.8% event recall vs Filter Decomposition's 23.1% at 1yr — a +38% relative improvement from a single session of learning. Welshman+Thompson averages ~32% vs Weighted Stochastic's ~22% (+45% relative). No multi-session convergence needed; the gain is immediate.
 
 2. **Welshman+Thompson wins at larger follow counts.** The `(1 + log(weight))` popularity factor helps at 1,000+ follows — the popularity signal correctly identifies relays where events are more likely to survive. FD+Thompson wins on fiatjaf's small graph where popularity bias over-concentrates on relays that prune old events.
 
 3. **Median recall tells a different story.** FD+Thompson's 39.4% median on fiatjaf (vs 18.7% for Welshman+Thompson) shows more equitable per-author coverage — fewer authors with zero recall. At larger scales, Welshman+Thompson's median advantage (64% vs 55% on ODELL) reflects better overall delivery.
 
-4. **Both hit the same ceiling.** The relay-discovery problem ([issue #21](https://github.com/nostrability/outbox/issues/21)) limits all algorithms equally — current NIP-65 lists don't reflect where authors wrote a year ago.
+4. **Both hit the same ceiling.** The relay-discovery problem ([issue #21](https://github.com/nostrability/outbox/issues/21)) limits all algorithms equally — current NIP-65 lists don't reflect where authors wrote a year ago. Staab's [Building Nostr](https://building-nostr.coracle.social) identifies this as the content migration problem: "the onus is on users (and by extension their clients) to choose good outbox relays and publish their events to them… it is the responsibility of anyone that changes the result of relay selection heuristics to synchronize events to the new relay." His [replicatr](https://github.com/coracle-social/replicatr) tool automates this via negentropy-based sync, but notes "synchronization is currently absent from most (or all) implementations."
 
 ---
 
@@ -962,3 +972,11 @@ Phase 2 verification: [`bench/src/phase2/`](bench/src/phase2/) (baseline constru
 NIP-66 relay filtering: [`bench/src/nip66/`](bench/src/nip66/) (monitor data fetching, relay classification).
 
 Relay score persistence: [`bench/src/relay-scores.ts`](bench/src/relay-scores.ts) (Thompson Sampling Beta distribution persistence).
+
+### Protocol Resources
+
+- [Building Nostr](https://building-nostr.coracle.social) — Staab's guide to Nostr protocol architecture. Defines relay selection as a family of heuristics (outbox, inbox, group, DM, topic, community) using a database-index analogy. Identifies content migration after relay changes as a critical unsolved problem. No algorithmic guidance for relay scoring — the benchmark fills that gap.
+- [replicatr](https://github.com/coracle-social/replicatr) — Proof-of-concept daemon that monitors kind 10002 changes and replicates events to new relays via negentropy sync. Addresses the relay migration problem but not relay retention (the dominant recall loss factor in our benchmarks).
+- [NIP-65](https://github.com/nostr-protocol/nips/blob/master/65.md) — Relay List Metadata specification
+- [NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md) — Relay Discovery and Liveness Monitoring
+- [NIP-77](https://github.com/nostr-protocol/nips/blob/master/77.md) — Negentropy Syncing (set reconciliation, used by replicatr and rust-nostr)
