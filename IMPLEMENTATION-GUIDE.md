@@ -11,11 +11,11 @@ What's your starting point?
 │  │
 │  ├─ Can you rewrite your relay routing layer?
 │  │  └─ Yes → Full outbox (Steps 1a → 4 in README)
-│  │           Best recall (84-89% 1yr [75–96]), biggest engineering investment
+│  │           Best recall (84-89% [75–96] 1yr), biggest engineering investment
 │  │
 │  └─ Need to preserve feed latency or can't change routing?
 │     └─ Hybrid outbox — add outbox queries to profile/event/thread hooks
-│        89% 1yr recall [86–93] (after learning), ~80 LOC, no routing layer changes
+│        89% [86–93] 1yr recall (after learning), ~80 LOC, no routing layer changes
 │        See README § Hybrid outbox for code
 │
 ├─ Basic outbox (real-time feeds)?
@@ -36,7 +36,7 @@ What's your starting point?
    └─ Via explicit skip? → Greedy Coverage Sort (skipTopRelays, but -20% recall)
 ```
 
-*All recall numbers are 1yr, 6-profile means. [min–max] ranges show the spread across tested profiles (194–1,779 follows) — your recall depends on your follow graph. At 7d most algorithms cluster at 83-84% — the differences only emerge at longer windows where relay retention becomes the binding constraint.*
+*Recall numbers are 1yr by default (6-profile means) unless a 7d value is explicitly shown. [min–max] ranges show the spread across tested profiles (194–1,779 follows) — your recall depends on your follow graph. At 7d most algorithms cluster at 83-84% — the differences only emerge at longer windows where relay retention becomes the binding constraint.*
 
 Key tradeoff: **coverage-optimal ≠ event-recall-optimal.** Greedy set-cover
 wins assignment coverage (23/26 profiles) but drops to 16% event recall at 1yr
