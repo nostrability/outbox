@@ -32,6 +32,8 @@ import { welshmanThompson } from "./welshman-thompson.ts";
 import { jumbleCoveragePruning } from "./jumble.ts";
 import { bigRelaysBaseline } from "./big-relays.ts";
 import { fdThompson } from "./fd-thompson.ts";
+import { dittoMew } from "./ditto-mew.ts";
+import { dittoOutbox } from "./ditto-outbox.ts";
 
 export interface AlgorithmEntry {
   id: string;
@@ -205,6 +207,22 @@ export const ALGORITHM_REGISTRY: AlgorithmEntry[] = [
     nativeCap: false,
     stochastic: false,
     defaults: {},
+  },
+  {
+    id: "ditto-mew",
+    name: "Ditto-Mew (4 app relays)",
+    fn: dittoMew,
+    nativeCap: true,  // fixed relay set, ignores maxConnections
+    stochastic: false,
+    defaults: {},
+  },
+  {
+    id: "ditto-outbox",
+    name: "Ditto+Outbox Thompson",
+    fn: dittoOutbox,
+    nativeCap: false,
+    stochastic: true,
+    defaults: { writeLimit: 3 },
   },
 ];
 
