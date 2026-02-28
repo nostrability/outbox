@@ -59,10 +59,10 @@ the scorer has learned which relays actually deliver and recall jumps dramatical
 
 | Profile (follows) | Session 1 (stateless) | Session 3+ (learned) | Improvement |
 |---|---|---|---|
-| Gato (399) | 24.5% | **95.5%** | +71pp |
-| ODELL (1,779) | 33.1% | **90.5%** | +57pp |
-| Telluride (2,784) | 20.4% | **89.5%** | +69pp |
-| 6-profile mean | 24% [12–38] | **89%** [82–96] | +65pp |
+| Gato (399) | 31.2% | **95.5%** | +64pp |
+| ODELL (1,779) | 29.1% | **90.5%** | +61pp |
+| Telluride (2,784) | 17.5% | **89.5%** | +72pp |
+| 4-profile mean | 23% [15–31] | **89%** [82–96] | +66pp |
 
 Thompson converges in 2-3 sessions. The gains are largest at long time windows
 and large follow counts, where the relay selection problem is hardest. Small
