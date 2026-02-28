@@ -15,6 +15,10 @@ export interface RelayOutcome {
   connectTimeMs: number;
   queryTimeMs: number;
   timedOut: boolean;
+  /** Time from query start to first EVENT received (ms). Undefined if no events. */
+  firstEventMs?: number;
+  /** Total events received across all batches for this relay. */
+  eventCount?: number;
   error?: string;
 }
 
@@ -138,6 +142,8 @@ export class RelayPool {
     const queryStartMs = performance.now();
     let reachedEose = false;
     let anyTimedOut = false;
+    let firstEventMs: number | undefined;
+    let totalEventCount = 0;
     // Collect full events per pubkey for proper capping
     const eventsPerPubkey = new Map<Pubkey, NostrEvent[]>();
     for (const pk of pubkeys) eventsPerPubkey.set(pk, []);
@@ -167,7 +173,13 @@ export class RelayPool {
         if (events.eose) reachedEose = true;
         if (!events.eose && !events.closed) anyTimedOut = true;
 
+        // Track first event time across all batches
+        if (events.firstEventAbsMs !== undefined && firstEventMs === undefined) {
+          firstEventMs = events.firstEventAbsMs - queryStartMs;
+        }
+
         for (const event of events.events) {
+          totalEventCount++;
           const pk = event.pubkey as Pubkey;
           const arr = eventsPerPubkey.get(pk);
           if (arr) arr.push(event);
@@ -191,6 +203,8 @@ export class RelayPool {
         connectTimeMs: pooled.connectTimeMs,
         queryTimeMs: performance.now() - queryStartMs,
         timedOut: anyTimedOut,
+        firstEventMs,
+        eventCount: totalEventCount,
       });
 
     } catch (err) {
@@ -327,7 +341,7 @@ export class RelayPool {
     pooled: PooledConnection,
     subId: string,
     filter: Record<string, unknown>,
-  ): Promise<{ events: NostrEvent[]; eose: boolean; closed?: string }> {
+  ): Promise<{ events: NostrEvent[]; eose: boolean; closed?: string; firstEventAbsMs?: number }> {
     return new Promise((resolve) => {
       if (pooled.ws.readyState !== WebSocket.OPEN) {
         resolve({ events: [], eose: false });
@@ -335,11 +349,12 @@ export class RelayPool {
       }
 
       const events: NostrEvent[] = [];
+      let firstEventAbsMs: number | undefined;
       const timeout = setTimeout(() => {
         pooled.ws.removeEventListener("message", handler);
         pooled.ws.send(JSON.stringify(["CLOSE", subId]));
         this._timeouts++;
-        resolve({ events, eose: false });
+        resolve({ events, eose: false, firstEventAbsMs });
       }, this.eoseTimeoutMs);
 
       const handler = (msg: MessageEvent) => {
@@ -347,19 +362,20 @@ export class RelayPool {
           const data = JSON.parse(msg.data);
           if (!Array.isArray(data)) return;
           if (data[0] === "EVENT" && data[1] === subId && data[2]) {
+            if (firstEventAbsMs === undefined) firstEventAbsMs = performance.now();
             events.push(data[2] as NostrEvent);
           } else if (data[0] === "EOSE" && data[1] === subId) {
             clearTimeout(timeout);
             pooled.ws.removeEventListener("message", handler);
             pooled.ws.send(JSON.stringify(["CLOSE", subId]));
-            resolve({ events, eose: true });
+            resolve({ events, eose: true, firstEventAbsMs });
           } else if (data[0] === "CLOSED" && data[1] === subId) {
             clearTimeout(timeout);
             pooled.ws.removeEventListener("message", handler);
             const reason = data[2] ?? "unknown";
             this._closedMessages.push({ relay: pooled.relay, reason: String(reason) });
             console.error(`[pool] CLOSED from ${pooled.relay}: ${reason}`);
-            resolve({ events, eose: false, closed: String(reason) });
+            resolve({ events, eose: false, closed: String(reason), firstEventAbsMs });
           } else if (data[0] === "NOTICE") {
             const notice = data[1] ?? "";
             if (/rate|limit|slow|too many|blocked/i.test(String(notice))) {

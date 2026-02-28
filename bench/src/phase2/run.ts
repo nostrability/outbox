@@ -4,7 +4,7 @@
 
 import { RelayPool, QueryCache, MAX_EVENTS_PER_PAIR } from "../relay-pool.ts";
 import { collectBaseline } from "./baseline.ts";
-import { verifyAlgorithm } from "./verify.ts";
+import { verifyAlgorithm, computeProfileViewLatency } from "./verify.ts";
 import { readPhase2Cache, writePhase2Cache } from "./cache.ts";
 import type {
   AlgorithmResult,
@@ -264,9 +264,13 @@ export async function runPhase2(
 
   const sortedEventCounts = toSortedNumericArray(testableEventCounts);
 
-  // 7. Verify each algorithm
+  // 7. Verify each algorithm (pass relay outcomes for latency simulation on fresh runs)
+  const outcomesForLatency = !cacheHit ? pool.getAllOutcomes() : undefined;
   const algorithms = algorithmResults.map((result) =>
-    verifyAlgorithm(result, baselines, cache, allBaselineRelays, declaredRelays)
+    verifyAlgorithm(
+      result, baselines, cache, allBaselineRelays, declaredRelays,
+      outcomesForLatency, options.eoseTimeoutMs, options.maxConcurrentConns,
+    )
   );
 
   // Invariant: testableReliable and totalBaselineEvents should be identical across algorithms
@@ -276,6 +280,12 @@ export async function runPhase2(
         `[phase2] WARNING: ${alg.algorithmName} testableReliableAuthors=${alg.testableReliableAuthors} != ${testableReliable}`,
       );
     }
+  }
+
+  // 8. Profile-view latency simulation (algorithm-independent, fresh runs only)
+  let profileViewLatency: Phase2Result["profileViewLatency"];
+  if (outcomesForLatency) {
+    profileViewLatency = computeProfileViewLatency(input, baselines, outcomesForLatency);
   }
 
   return {
@@ -296,6 +306,7 @@ export async function runPhase2(
       timingStats,
     },
     algorithms,
+    profileViewLatency,
     _baselines: baselines,
     _cache: cache,
   };
