@@ -21,14 +21,15 @@ const DECAY_FACTOR = 0.95; // exponential decay per session
 const MAX_SESSION_HISTORY = 10; // keep last N session rates for trend
 const TREND_MIN_SESSIONS = 3; // minimum sessions before computing trend
 
-function scorePath(pubkeyPrefix: string, window: number, filterMode?: string): string {
+function scorePath(pubkeyPrefix: string, window: number, filterMode?: string, algorithmId?: string): string {
   const suffix = filterMode ? `_${filterMode}` : "";
-  return `${CACHE_DIR}/relay_scores_${pubkeyPrefix}_${window}${suffix}.json`;
+  const algoSuffix = algorithmId ? `_${algorithmId}` : "";
+  return `${CACHE_DIR}/relay_scores_${pubkeyPrefix}_${window}${suffix}${algoSuffix}.json`;
 }
 
-export function loadRelayScores(pubkey: string, windowSeconds: number, filterMode?: string): RelayScoreDB {
+export function loadRelayScores(pubkey: string, windowSeconds: number, filterMode?: string, algorithmId?: string): RelayScoreDB {
   const prefix = pubkey.slice(0, 16);
-  const path = scorePath(prefix, windowSeconds, filterMode);
+  const path = scorePath(prefix, windowSeconds, filterMode, algorithmId);
 
   try {
     const raw = Deno.readTextFileSync(path);
@@ -148,10 +149,10 @@ export function updateRelayScores(
   return db;
 }
 
-export async function saveRelayScores(db: RelayScoreDB, filterMode?: string): Promise<void> {
+export async function saveRelayScores(db: RelayScoreDB, filterMode?: string, algorithmId?: string): Promise<void> {
   await Deno.mkdir(CACHE_DIR, { recursive: true });
   const prefix = db.pubkey.slice(0, 16);
-  const path = scorePath(prefix, db.windowSeconds, filterMode);
+  const path = scorePath(prefix, db.windowSeconds, filterMode, algorithmId);
   const tmp = await Deno.makeTempFile({ dir: CACHE_DIR });
   try {
     await Deno.writeTextFile(tmp, JSON.stringify(db, null, 2));

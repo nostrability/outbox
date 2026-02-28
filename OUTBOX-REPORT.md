@@ -38,9 +38,9 @@ We analyzed outbox implementations in 15 codebases spanning 5 languages (Rust, T
 
 6. **No implementation cross-checks per-author delivery.** NIP-66 monitors check relay liveness, but no client verifies "did this relay return events for author X?" True completeness isn't measurable (no relay has everything), but cross-checking against a second source catches relays that consistently return nothing for a specific author.
 
-7. **Academic coverage ≠ real-world event recall.** Event verification against real relays shows that algorithms optimizing for assignment coverage don't necessarily win at actual event retrieval. At 1 year, MAB-UCB achieves 40.8% event recall vs. Greedy Set-Cover's 16.3%. The relay that *should* have the event often doesn't — due to retention policies, downtime, or access restrictions. Stochastic exploration discovers relays that retain historical events.
+7. **Academic coverage ≠ real-world event recall.** Event verification against real relays shows that algorithms optimizing for assignment coverage don't necessarily win at actual event retrieval. At 1 year, MAB-UCB achieves 40.8% event recall vs. Greedy Set-Cover's 16.3%. The relay that *should* have the event often doesn't — due to retention policies, downtime, or access restrictions. Stochastic exploration discovers relays that retain historical events. [Building Nostr](https://building-nostr.coracle.social) frames this as the routing problem: "the relay that 'should' have the event" is determined by the outbox heuristic, but "there are many notes that should not be posted to user outboxes" and "any event may be retrieved based on criteria other than event author." The outbox heuristic is only one of several routing heuristics needed — others include inbox (mentions), group, DM, and topic-based routing.
 
-8. **Welshman's `random()` is brilliant for archival.** The stochastic factor in ``quality * (1 + log(weight)) * random()`` spreads queries across relays over time, achieving 24% mean event recall at 1 year across 6 profiles — 1.5× better than Greedy's 16%. Filter Decomposition (rust-nostr) edges it out at 25% through per-author relay diversity.
+8. **Per-author relay diversity beats popularity concentration.** Filter Decomposition (25% 1yr, deterministic) edges out Welshman Stochastic (24% 1yr) — both 1.5× better than Greedy's 16%. The winning factor isn't randomness vs determinism; it's whether the algorithm discovers niche relays that retain events. FD gives each author their own top-N write relays, so niche relays enter the query set. Welshman's ``(1 + log(weight))`` popularity factor concentrates on high-volume relays that prune aggressively. FD's per-author median recall (87.5% on ODELL) vs Welshman's (50.0%) shows the effect: FD provides equitable per-author coverage while popularity weighting leaves authors on niche relays with zero recall.
 
 ---
 
@@ -122,6 +122,7 @@ Clients with tightly-integrated outbox: **Gossip** (LMDB + Minion architecture),
 | Algorithm | Strategy | Benchmark impl |
 |-----------|----------|----------------|
 | **Welshman+Thompson** | Welshman scoring with `sampleBeta(α, β)` instead of `random()`. Learns from Phase 2 event delivery outcomes, persists Beta distribution priors across sessions. Cold start = baseline Welshman; converges in 2–3 sessions | [`welshman-thompson.ts`](bench/src/algorithms/welshman-thompson.ts) |
+| **FD+Thompson** | Filter Decomposition scoring with `sampleBeta(α, β)` instead of lexicographic order. Same per-author structure as rust-nostr but with learned delivery scores. No popularity weight — scores purely from delivery history | [`fd-thompson.ts`](bench/src/algorithms/fd-thompson.ts) |
 | **Greedy+ε-Explore** | Greedy set-cover with probability ε (5%) of picking a random relay instead of the max-coverage one. One `if` statement on top of standard greedy | [`greedy-epsilon.ts`](bench/src/algorithms/greedy-epsilon.ts) |
 
 **CS-inspired algorithms** (added for benchmark comparison — no client uses these yet):
@@ -334,6 +335,29 @@ Users often publish kind 10002 with problematic entries (localhost, paid filter 
 - **Welshman** -- Protocol-level filtering: exclude onion, local, insecure (ws://) by default
 
 The tradeoff: Nostur's "discard entire event" approach loses good relay data when users have just one bad entry. Others filter per-entry but may still connect to misconfigured relays.
+
+#### NIP-11 Relay Classification (February 2026 snapshot)
+
+To quantify the relay list pollution problem, we probed NIP-11 info documents for all candidate relays across 36 benchmark profiles (13,867 relay-user pairs, 2,359 unique relay URLs). Each relay was classified by its NIP-11 `limitation` fields:
+
+| Category | Relay-user pairs | % of probes | Unique relays | % of unique |
+|---|---:|---:|---:|---:|
+| content | 5,130 | 37.0% | 548 | 23.2% |
+| paid | 954 | 6.9% | 85 | 3.6% |
+| auth-gated | 73 | 0.5% | 6 | 0.3% |
+| restricted | 579 | 4.2% | 83 | 3.5% |
+| no-nip11 | 2,378 | 17.1% | 491 | 20.8% |
+| offline | 4,753 | 34.3% | 1,146 | 48.6% |
+
+**Only 37% of relay-user pairs point to normal content relays.** The remaining 63% are offline (34%), missing NIP-11 (17%), paid (7%), restricted writes (4%), or auth-gated (0.5%). Nearly half (48.6%) of all unique relay URLs encountered were offline at probe time.
+
+The most common offline relays appear in 32-34 of 36 profiles — widely listed but long dead: `relay.nostr.band`, `relay.nostr.bg`, `nostr.orangepill.dev`, `nostr.zbd.gg`, `relay.current.fyi`, `relayable.org`. These waste connection budget on every feed load.
+
+Paid relays like `nostr.wine`, `nostr.land`, `atlas.nostr.land` appear in 34/36 profiles. While some paid relays serve content to readers without payment, others require authentication or payment for any access. The `filter.nostr.wine/*` pattern alone accounts for 104 unique URLs (per-user broadcast proxies).
+
+Restricted-write relays like `pyramid.fiatjaf.com` (34/36 users), `nostr.einundzwanzig.space` (32/36), and `nostr.thank.eu` (28/36) are community or personal relays that won't serve general content queries.
+
+*Classification: `content` = no restriction flags; `paid` = `limitation.payment_required: true`; `auth-gated` = `limitation.auth_required: true`; `restricted` = `limitation.restricted_writes: true` without paid/auth; `no-nip11` = no NIP-11 response; `offline` = connection failed. Probed with 5s HTTP timeout, `Accept: application/nostr+json`. Data: [`bench/.cache/nip11_probe_*.json`](bench/.cache/).*
 
 ### 5.4 Centralization Pressure
 
@@ -842,6 +866,69 @@ A small fraction of prolific authors produce the majority of events. This power-
 *Academic context:*
 6. **The academic ceiling is ~92% at 7d** (Streaming Coverage, ILP, Spectral Clustering). The ~5-8pp gap vs the best practitioner algorithm (88%) is closable through learning (Thompson Sampling reaches 92-97% after 2-3 sessions) rather than through more complex static algorithms.
 
+### 8.4 FD+Thompson: Filter Decomposition with Thompson Sampling
+
+FD+Thompson applies Thompson Sampling to Filter Decomposition's per-author relay selection. Where Welshman+Thompson scores relays as `(1 + log(weight)) * sampleBeta(α, β)`, FD+Thompson scores purely by `sampleBeta(α, β)` — no popularity weight. This avoids biasing toward high-volume relays that many authors declare but that prune old events aggressively.
+
+The algorithm is a direct upgrade path for rust-nostr: same per-author structure (select top N write relays per followed author), but ranking by learned delivery scores instead of lexicographic order.
+
+**1yr cross-profile comparison (cap@20, single run, seed=0):**
+
+| Profile (follows) | FD+Thompson | Welshman+Thompson | Filter Decomp | Weighted Stochastic |
+|---|:---:|:---:|:---:|:---:|
+| fiatjaf (194) | **39.0%** evt / **80.4%** auth | 37.0% / 78.6% | 25.5% / 72.5% | 24.7% / 72.5% |
+| Gato (399) | 20.6% / **89.5%** | **22.5%** / 87.4% | 13.1% / 78.4% | 14.5% / 75.5% |
+| ODELL (1,779) | 29.1% / 79.7% | **30.5%** / **82.7%** | 21.6% / 72.7% | 18.2% / 74.1% |
+| Telluride (2,784) | **38.6%** / 81.4% | **38.6%** / **84.2%** | 32.3% / 75.5% | 30.3% / 74.7% |
+
+**Per-author median recall (1yr, cap@20):**
+
+| Profile (follows) | FD+Thompson | Welshman+Thompson | Filter Decomp | Weighted Stochastic |
+|---|:---:|:---:|:---:|:---:|
+| fiatjaf (194) | **39.4%** | 18.7% | 0.0% | 0.0% |
+| Gato (399) | 97.9% | **98.5%** | 87.5% | 83.3% |
+| ODELL (1,779) | 55.0% | **64.0%** | 35.0% | 17.0% |
+| Telluride (2,784) | 77.6% | **82.4%** | 60.6% | 52.0% |
+
+**Per-profile improvement over baseline Filter Decomposition (1yr event recall):**
+
+| Profile (follows) | FD+Thompson | Baseline FD | Gain (absolute) | Gain (relative) |
+|---|:---:|:---:|:---:|:---:|
+| fiatjaf (194) | 39.0% | 25.5% | +13.5pp | +53% |
+| Gato (399) | 20.6% | 13.1% | +7.5pp | +57% |
+| ODELL (1,779) | 29.1% | 21.6% | +7.5pp | +35% |
+| Telluride (2,784) | 38.6% | 32.3% | +6.3pp | +20% |
+| **4-profile mean** | **31.8%** | **23.1%** | **+8.7pp** | **+38%** |
+
+**5-session learning comparison (1yr event recall, cap@20, NIP-66 filtered, per-algorithm score DBs):**
+
+| Profile (follows) | FD+Thompson | Welshman+Thompson | Gap |
+|---|:---:|:---:|:---:|
+| fiatjaf (194) | 75.1% | 82.0% | -6.9pp |
+| Gato (399) | 91.9% | 95.5% | -3.6pp |
+| ODELL (1,779) | 85.3% | 90.5% | -5.2pp |
+| Telluride (2,784) | 83.4% | 89.5% | -6.1pp |
+| **4-profile mean** | **83.9%** | **89.4%** | **-5.5pp** |
+
+**FD+Thompson session progression (1yr event recall):**
+
+| Profile (follows) | S1 | S2 | S3 | S4 | S5 |
+|---|:---:|:---:|:---:|:---:|:---:|
+| fiatjaf (194) | 16.5% | 63.8% | 75.1% | 75.1% | 75.1% |
+| Gato (399) | 37.9% | 84.4% | 88.9% | 92.3% | 91.9% |
+| ODELL (1,779) | 17.5% | 59.1% | 77.5% | 80.3% | 85.3% |
+| Telluride (2,784) | 17.1% | 54.4% | 78.2% | 81.5% | 83.4% |
+
+**Key findings:**
+
+1. **Both Thompson variants far exceed their stateless baselines.** FD+Thompson averages 31.8% event recall from a single session vs Filter Decomposition's 23.1% at 1yr — a +38% relative improvement. After 5 learning sessions, FD+Thompson reaches 83.9% (a 2.6× improvement over session 1). Welshman+Thompson reaches 89.4%. Most gains arrive in sessions 2-3; sessions 4-5 provide diminishing returns.
+
+2. **Welshman+Thompson leads by 5-7pp at all profile sizes after convergence.** The `(1 + log(weight))` popularity factor provides a consistent advantage — the popularity signal helps identify relays that retain events across all follow-count scales, not just large graphs. The gap is narrowest on Gato (3.6pp) and widest on fiatjaf (6.9pp).
+
+3. **Median recall tells a different story.** FD+Thompson's 39.4% median on fiatjaf (vs 18.7% for Welshman+Thompson) shows more equitable per-author coverage — fewer authors with zero recall. At larger scales, Welshman+Thompson's median advantage (64% vs 55% on ODELL) reflects better overall delivery.
+
+4. **Both hit the same ceiling.** The relay-discovery problem ([issue #21](https://github.com/nostrability/outbox/issues/21)) limits all algorithms equally — current NIP-65 lists don't reflect where authors wrote a year ago. Staab's [Building Nostr](https://building-nostr.coracle.social) identifies this as the content migration problem: "the onus is on users (and by extension their clients) to choose good outbox relays and publish their events to them… it is the responsibility of anyone that changes the result of relay selection heuristics to synchronize events to the new relay." His [replicatr](https://github.com/coracle-social/replicatr) tool automates this via negentropy-based sync, but notes "synchronization is currently absent from most (or all) implementations."
+
 ---
 
 ## 9. Observations
@@ -856,7 +943,7 @@ Based on patterns observed across all implementations and benchmark results:
 
 4. **Configure multiple indexer relays.** Relying on a single indexer (e.g., only purplepag.es) is a single point of failure. Amethyst's 5-indexer approach is the most resilient.
 
-5. **Handle misconfigured kind 10002.** At minimum, filter out known-bad relay entries. Blocklists for aggregator relays (feeds.nostr.band, filter.nostr.wine) and special-purpose relays prevent wasted connections.
+5. **Handle misconfigured kind 10002.** NIP-65 relay list pollution is a widespread problem: users put purplepages, NWC relays, blastrs, proxies, and read-only feed relays into their outbox relay list because clients only expose a single relay configuration. As [vitorpamplona notes](https://github.com/nostr-protocol/nips/pull/2243#issuecomment-2695456282): "NIP-65 lists are for everybody else to find your content or to send content to you (tagging). They are not the place to put any other relay that you are using in any client." At minimum, filter out known-bad relay entries. Blocklists for aggregator relays (feeds.nostr.band, filter.nostr.wine), special-purpose relays (purplepag.es, NWC endpoints), and blast/proxy relays prevent wasted connections on relays that have no user content.
 
 6. **Make outbox debuggable — but go beyond assignment coverage.** noStrudel's coverage debugger is the only client that exposes outbox internals (coverage %, orphaned users, per-relay assignment, color-coded health). But it only shows the academic view — the on-paper relay mapping. NIP-66 monitors check relay liveness, but no client verifies per-author delivery — "did this relay return events for author X?" Our central finding is that these two views diverge sharply (85% assignment coverage can mean 16% event recall at 1yr). True completeness isn't measurable (no relay has everything — if indexers were complete, you'd skip outbox entirely), but cross-checking catches systematic gaps: a relay that's supposed to serve an author but consistently returns nothing. Opportunities for future work: per-author delivery cross-checks against independent relays, relay response/efficiency rates (events delivered per connection), orphan root-cause analysis (missing kind 10002 vs relays offline vs filtered out), and relay list staleness indicators.
 
@@ -905,6 +992,7 @@ All algorithms are in [`bench/src/algorithms/`](bench/src/algorithms/).
 | Filter Decomposition | [`filter-decomposition.ts`](bench/src/algorithms/filter-decomposition.ts) | rust-nostr |
 | Direct Mapping | [`direct-mapping.ts`](bench/src/algorithms/direct-mapping.ts) | Amethyst (feeds) |
 | Welshman+Thompson | [`welshman-thompson.ts`](bench/src/algorithms/welshman-thompson.ts) | Welshman + Thompson Sampling |
+| FD+Thompson | [`fd-thompson.ts`](bench/src/algorithms/fd-thompson.ts) | Filter Decomposition + Thompson Sampling |
 | Greedy+ε-Explore | [`greedy-epsilon.ts`](bench/src/algorithms/greedy-epsilon.ts) | Greedy + ε-exploration |
 | Primal Aggregator | [`primal-baseline.ts`](bench/src/algorithms/primal-baseline.ts) | Baseline |
 | Popular+Random | [`popular-plus-random.ts`](bench/src/algorithms/popular-plus-random.ts) | Baseline |
@@ -926,3 +1014,11 @@ Phase 2 verification: [`bench/src/phase2/`](bench/src/phase2/) (baseline constru
 NIP-66 relay filtering: [`bench/src/nip66/`](bench/src/nip66/) (monitor data fetching, relay classification).
 
 Relay score persistence: [`bench/src/relay-scores.ts`](bench/src/relay-scores.ts) (Thompson Sampling Beta distribution persistence).
+
+### Protocol Resources
+
+- [Building Nostr](https://building-nostr.coracle.social) — Staab's guide to Nostr protocol architecture. Defines relay selection as a family of heuristics (outbox, inbox, group, DM, topic, community) using a database-index analogy. Identifies content migration after relay changes as a critical unsolved problem. No algorithmic guidance for relay scoring — the benchmark fills that gap.
+- [replicatr](https://github.com/coracle-social/replicatr) — Proof-of-concept daemon that monitors kind 10002 changes and replicates events to new relays via negentropy sync. Addresses the relay migration problem but not relay retention (the dominant recall loss factor in our benchmarks).
+- [NIP-65](https://github.com/nostr-protocol/nips/blob/master/65.md) — Relay List Metadata specification
+- [NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md) — Relay Discovery and Liveness Monitoring
+- [NIP-77](https://github.com/nostr-protocol/nips/blob/master/77.md) — Negentropy Syncing (set reconciliation, used by replicatr and rust-nostr)

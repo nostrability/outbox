@@ -17,9 +17,11 @@ What's your starting point?
 │  └─ Simplicity over optimization? → Direct Mapping (30% 1yr, unlimited connections)
 │
 ├─ Historical event recall (archival, search)?
-│  ├─ Can persist state across sessions? → Welshman+Thompson Sampling (81% 1yr)
-│  └─ Stateless?                         → Filter Decomposition (25% 1yr) or
-│                                          Weighted Stochastic / Welshman (24% 1yr)
+│  ├─ Can persist state across sessions?
+│  │  ├─ Using Welshman/Coracle?  → Welshman+Thompson Sampling (89% 1yr)
+│  │  └─ Using rust-nostr?        → FD+Thompson (84% 1yr after 5 sessions)
+│  └─ Stateless?                  → Filter Decomposition (25% 1yr) or
+│                                   Weighted Stochastic / Welshman (24% 1yr)
 │
 └─ Anti-centralization (distribute relay load)?
    ├─ Via scoring?       → Weighted Stochastic (log dampening + random)
@@ -67,6 +69,15 @@ of what Coracle already ships.
 
 See [README.md § Thompson Sampling](README.md#thompson-sampling) for complete code including the full integration loop (startup → score → select → observe → persist).
 
+**For rust-nostr / Filter Decomposition users:** FD+Thompson is a variant that fits
+Filter Decomposition's per-author structure directly. It replaces lexicographic relay
+ordering with `sampleBeta(α, β)` scoring — no popularity weight. After 5 learning
+sessions (cap@20, NIP-66 filtered), FD+Thompson reaches **83.9% event recall** at 1yr
+vs baseline FD's 23.1% — converging within 2-3 sessions. Welshman+Thompson leads by
+~5pp (89.4%) due to the popularity weight, but FD+Thompson is a drop-in upgrade for
+existing rust-nostr code with no structural changes needed.
+See [README.md § FD+Thompson](README.md#fdthompson-for-rust-nostr) for code.
+
 ### 2. Pre-filter relays with NIP-66
 
 **Impact: 1.5-3× better relay success rates, 39% faster feed loads**
@@ -110,6 +121,13 @@ systematic gaps: for each followed author, periodically query a second relay
 and compare against what your outbox relays returned. When gaps are detected,
 add a fallback relay automatically. This should be invisible to the user.
 
+[NIP-77](https://github.com/nostr-protocol/nips/blob/master/77.md) (negentropy
+syncing) makes this efficient: instead of downloading all events to compare,
+a client can run a set-reconciliation handshake to learn which events a relay
+has without transferring them. This is the same protocol
+[replicatr](https://github.com/coracle-social/replicatr) uses for relay
+migration — it works equally well for delivery verification.
+
 See [README.md § Delivery check](README.md#delivery-check-self-healing) for code.
 
 ### 4. Cap at 20 connections
@@ -138,6 +156,16 @@ gap among active users is ~3-5%. Options for handling missing relay lists
 - **Track which relays deliver events** per author (Gossip, rust-nostr,
   Voyage, Amethyst, Nosotros all do this as a secondary signal)
 
+A related problem: users who change write relays without migrating old events.
+Current NIP-65 lists reflect where users write *now*, not where they wrote
+historically. No analyzed client handles this. [Building Nostr](https://building-nostr.coracle.social)
+frames this as a synchronization problem: "it is the responsibility of anyone
+that changes the result of relay selection heuristics to synchronize events to
+the new relay." [replicatr](https://github.com/coracle-social/replicatr)
+automates this server-side via negentropy sync, but is a proof-of-concept (not
+production). Client-side detection of "relay listed but no data from this
+author" would catch both missing relay lists and stale migrations.
+
 ### 7. Diversify bootstrap relays
 
 8/13 analyzed clients hardcode relay.damus.io. 6/13 depend on purplepag.es
@@ -154,3 +182,5 @@ for indexing. Consider diversifying:
 - Per-client implementation details: [analysis/clients/](analysis/clients/)
 - Cross-client comparison: [analysis/cross-client-comparison.md](analysis/cross-client-comparison.md)
 - Reproduce results: [Benchmark-recreation.md](Benchmark-recreation.md)
+- Protocol architecture: [Building Nostr](https://building-nostr.coracle.social) — relay routing, content migration, bootstrapping
+- Relay sync tooling: [replicatr](https://github.com/coracle-social/replicatr) — negentropy-based event replication on relay list changes

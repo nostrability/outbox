@@ -156,6 +156,7 @@ export interface CliOptions {
   nip66Filter: Nip66FilterMode;
   nip66TtlMs?: number;
   noPhase2Cache: boolean;
+  enrichHints: boolean;
 }
 
 export interface SerializedAlgorithmResult {
