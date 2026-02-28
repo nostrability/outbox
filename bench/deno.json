@@ -3,7 +3,8 @@
     "bench": "deno run --allow-net --allow-read --allow-write main.ts",
     "check": "deno check main.ts",
     "retention": "deno run --allow-read retention-profile.ts",
-    "probe-nip11": "deno run --allow-net --allow-read --allow-write probe-nip11.ts"
+    "probe-nip11": "deno run --allow-net --allow-read --allow-write probe-nip11.ts",
+    "probe-latency": "deno run --allow-net --allow-read --allow-write probe-relay-latency.ts"
   },
   "imports": {
     "@nostr/tools/": "jsr:@nostr/tools@^2.23/",

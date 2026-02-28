@@ -330,6 +330,68 @@ export interface PubkeyBaseline {
   classification: BaselineClassification;
 }
 
+/** Per-algorithm latency simulation stats.
+ *  Simulates querying only this algorithm's relay set in parallel.
+ *  Only available when Phase 2 runs fresh (not from cache). */
+export interface AlgorithmLatencyStats {
+  /** Estimated time-to-first-event: min(connectTimeMs + firstEventMs) across relays with events (ms). */
+  ttfeMs: number | null;
+  /** Estimated time-to-first-event using connect-only fallback when firstEventMs unavailable. */
+  ttfeConnectOnlyMs: number | null;
+  /** Median query time across connected relays (ms). */
+  queryP50Ms: number | null;
+  /** 80th percentile query time across connected relays (ms). */
+  queryP80Ms: number | null;
+  /** Max query time across all relays (ms), typically dominated by timeouts. */
+  queryMaxMs: number | null;
+  /** Number of relays in the algorithm's set that timed out. */
+  timeoutCount: number;
+  /** Number of relays in the algorithm's set with outcomes. */
+  relaysWithOutcomes: number;
+  /** Number of relays that connected successfully. */
+  relaysConnected: number;
+  /** Number of relays that delivered at least one event. */
+  relaysWithEvents: number;
+  /** Total events across all relays in the set. */
+  totalEvents: number;
+  /** Estimated timeout tax: how much dead relays slow down the query.
+   *  Computed as ceil(timeoutCount / concurrency) × eoseTimeoutMs.
+   *  Represents additional wall-clock delay from dead relay timeouts
+   *  blocking concurrency slots that could serve live relays. */
+  timeoutTaxMs: number;
+  /** Number of relays that connected but returned zero events. */
+  relaysConnectedNoEvents: number;
+  /** Progressive completeness: fraction of algorithm's eventual recall
+   *  achieved at each time window (seconds). Simulates parallel relay queries. */
+  progressiveCompleteness?: Record<number, number>;
+  /** EOSE-race simulation: fraction of algorithm's eventual recall achieved
+   *  at firstEoseMs + graceMs. Keys are grace periods in ms. */
+  eoseRace?: Record<number, { cutoffMs: number; completeness: number }>;
+}
+
+/** Profile-view latency simulation.
+ *  Simulates querying each followed author's write relays directly
+ *  (bypassing the algorithm's relay selection). This measures the
+ *  long-tail lookup path: tapping on a user's profile to see their notes. */
+export interface ProfileViewLatencyStats {
+  /** Number of authors simulated. */
+  authorCount: number;
+  /** Mean TTFE across profile views (ms). */
+  meanTtfeMs: number | null;
+  /** Median TTFE across profile views (ms). */
+  medianTtfeMs: number | null;
+  /** p95 TTFE across profile views (ms). */
+  p95TtfeMs: number | null;
+  /** Mean number of write relays queried per profile view. */
+  meanRelaysQueried: number;
+  /** Mean number of write relays that returned events. */
+  meanRelaysWithEvents: number;
+  /** Fraction of profile views where at least one relay returned events. */
+  hitRate: number;
+  /** Mean timeout count per profile view. */
+  meanTimeouts: number;
+}
+
 export interface AlgorithmVerification {
   algorithmName: string;
   eventRecallRate: number;
@@ -347,6 +409,8 @@ export interface AlgorithmVerification {
   outOfBaselineRelays: RelayUrl[];
   /** Per-author event recall rates (testable-reliable only), sorted ascending. */
   perAuthorRecallRates: number[];
+  /** Latency simulation stats. Only present for fresh (non-cached) Phase 2 runs. */
+  latency?: AlgorithmLatencyStats;
 }
 
 export interface Phase2Result {
@@ -373,6 +437,8 @@ export interface Phase2Result {
     };
   };
   algorithms: AlgorithmVerification[];
+  /** Profile-view latency simulation (algorithm-independent). Only for fresh runs. */
+  profileViewLatency?: ProfileViewLatencyStats;
   /** Baselines map, available for score persistence. Not serialized to JSON. */
   _baselines?: Map<Pubkey, PubkeyBaseline>;
   /** Query cache, available for score persistence. Not serialized to JSON. */
