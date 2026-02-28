@@ -75,7 +75,7 @@ The 3pp gap between hybrid (80%) and full outbox (83%) at 1yr comes from the ful
 
 **Decision tree:**
 
-```
+```text
 Do you have a routing layer that selects relays per-author?
 ├─ Yes → Add Thompson Sampling to it (Step 4)
 │        Welshman+Thompson: 89% 1yr | FD+Thompson: 84% 1yr

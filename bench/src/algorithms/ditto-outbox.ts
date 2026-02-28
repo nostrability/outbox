@@ -38,7 +38,7 @@ export function dittoOutbox(
   rng: () => number,
 ): AlgorithmResult {
   const start = performance.now();
-  const writeLimit = params.writeLimit ?? 3;
+  const writeLimit = Math.max(0, Math.floor(Number(params.writeLimit) || 3));
   const relayPriors = params.relayPriors;
 
   const relayAssignments = new Map<RelayUrl, Set<Pubkey>>();
