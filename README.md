@@ -14,12 +14,12 @@ Each technique adds incremental value. You don't need to implement everything at
 |:---:|---|:---:|:---:|---|
 | 0 | **Hardcode big relays** (damus + nos.lol) | 8% | 61% | Zero |
 | 1a | **Basic outbox** (greedy set-cover from NIP-65 data) | 16% | 84% | Medium — ~200 LOC, fetch relay lists + implement set-cover |
-| 1b | **Hybrid outbox** (keep app relays + add author write relays for profiles/threads) | 80% | 87% | Low — ~80 LOC, no routing layer changes ([details](#two-ways-to-add-outbox)) |
+| 1b | **Hybrid outbox** (keep app relays + add author write relays for profiles/threads) | 89% | 92% | Low — ~80 LOC, no routing layer changes ([details](#two-ways-to-add-outbox)) |
 | 2 | **Stochastic scoring** (Welshman's `random()` factor) | 24% | 83% | Low — ~50 LOC, replace greedy with weighted random |
 | 3 | **Filter dead relays** (NIP-66 liveness data) | neutral | +5pp efficiency | Low — ~30 LOC, fetch kind 30166, exclude dead relays |
-| 4 | **Learn from delivery** (Thompson Sampling) | 80-89% | 87-92% | Low — ~80 LOC + DB table, replace `random()` with `sampleBeta()` |
+| 4 | **Learn from delivery** (Thompson Sampling) | 84-89% | 87-97% | Low — ~80 LOC + DB table, replace `random()` with `sampleBeta()` |
 
-*Steps 1a and 1b are alternative entry points — 1a replaces your routing layer, 1b augments it. Step 1b already includes Thompson Sampling (it's the same ~80 LOC). Steps 2-4 are incremental enhancements that apply to the 1a path. Going from Step 0 to Step 4 takes your 1yr recall from 8% to 80-89% (and 7d from 61% to 87-92%). All values are 6-profile means except Thompson (4-profile mean with NIP-66, 5 learning sessions; FD+Thompson=84%, Welshman+Thompson=89%; Hybrid+Thompson=80%). 1yr recall is the more informative metric — 7d masks relay retention problems that dominate real-world performance.*
+*Steps 1a and 1b are alternative entry points — 1a replaces your routing layer, 1b augments it. Step 1b already includes Thompson Sampling (it's the same ~80 LOC). Steps 2-4 are incremental enhancements that apply to the 1a path. Going from Step 0 to Step 4 takes your 1yr recall from 8% to 84-89% (and 7d from 61% to 87-97%). All values are 6-profile means except Thompson variants (4-profile mean with NIP-66, 5 learning sessions; FD+Thompson=84%, Welshman+Thompson=89%, Hybrid+Thompson=89%). 1yr recall is the more informative metric — 7d masks relay retention problems that dominate real-world performance.*
 
 ## Already using a client library?
 
@@ -63,7 +63,7 @@ There are two architecturally distinct approaches to outbox routing. Both reach 
 
 | | Full outbox | Hybrid outbox |
 |---|---|---|
-| **1yr event recall** | 83-89% | 80% |
+| **1yr event recall** | 84-89% | 89% |
 | **Main feed latency** | Depends on per-author relay quality | Unchanged (app relays) |
 | **What changes** | Routing layer (NostrProvider / pool router) | Individual hooks (profile, event, thread) |
 | **Connection count** | 20+ (capped budget shared across all follows) | 4 app relays + 3 per viewed profile |
@@ -71,7 +71,7 @@ There are two architecturally distinct approaches to outbox routing. Both reach 
 | **Engineering effort** | Rewrite relay routing (~200-500 LOC) | Add outbox queries to 3-4 hooks (~80 LOC) |
 | **Best for** | Clients building relay routing from scratch, or with existing per-author routing | Clients with hardcoded app relays or fixed relay sets that can't change the feed path |
 
-The 3pp gap between hybrid (80%) and full outbox (83%) at 1yr comes from the full approach having more relay diversity in its 20-relay budget — every author's relays compete for the budget, surfacing niche relays that retain history. The hybrid approach queries fewer outbox relays per author (top 3) but compensates with the app relay safety net.
+The 4.5pp gap between hybrid (89%) and full outbox (94%) at 1yr comes from the full approach having more relay diversity in its 20-relay budget — every author's relays compete for the budget, surfacing niche relays that retain history. The hybrid approach queries fewer outbox relays per author (top 3) but compensates with the app relay safety net. Hybrid converges faster (session 2 vs session 3-4) because the app relay floor provides a strong initial signal.
 
 **Decision tree:**
 
@@ -88,7 +88,7 @@ Do you have a routing layer that selects relays per-author?
    │
    └─ No, or need to preserve feed latency guarantees?
       └─ Add hybrid outbox (Step 1b)
-         80% 1yr recall, ~80 LOC, no routing layer changes
+         89% 1yr recall, ~80 LOC, no routing layer changes
          Profile views: fetch author's kind 10002, query top 3 write relays in parallel
          Event lookups: rank relay hints by Thompson score, NIP-65 fallback
          Thread loading: propagate relay hints from e-tags
@@ -150,7 +150,7 @@ All deployed client algorithms plus key experimental ones:
 |---|---|:---:|:---:|---|
 | **Welshman+Thompson** | *not yet deployed* | 89% | 92% | Upgrade path for Coracle — learns from delivery |
 | **FD+Thompson** | *not yet deployed* | 84% | 97% | Upgrade path for rust-nostr — learns from delivery |
-| **Hybrid+Thompson** | *not yet deployed* | 80% | 87% | Upgrade path for app-relay clients — no routing changes |
+| **Hybrid+Thompson** | *not yet deployed* | 89% | 92% | Upgrade path for app-relay clients — no routing changes |
 | **Filter Decomposition** | rust-nostr | 25% | 77% | Per-author top-N write relays; strong at long windows |
 | **Welshman Stochastic** | Coracle | 24% | 83% | Best stateless deployed algorithm for archival — 1.5× Greedy at 1yr |
 | **Greedy Set-Cover** | Gossip, Applesauce, Wisp | 16% | 84% | Best on-paper coverage; degrades sharply for history |
@@ -162,11 +162,11 @@ All deployed client algorithms plus key experimental ones:
 | Baseline | 1yr recall | 7d recall | What it is |
 |---|:---:|:---:|---|
 | Direct Mapping\*\* | 30% | 88% | All declared write relays — unlimited connections |
-| Ditto-Mew (4 app relays) | 26% | 40% | 4 hardcoded app relays — broadcast, no per-author routing |
+| Ditto-Mew (4 app relays) | 6% | 62% | 4 hardcoded app relays — broadcast, no per-author routing |
 | Big Relays | 8% | 61% | Just damus+nos.lol — the "do nothing" baseline |
 | Primal Aggregator\*\*\* | 1% | 32% | Single caching relay — 100% assignment but low actual recall |
 
-*1yr and 7d recall: 6-profile means from cross-profile benchmarks (Section 8.2 of [OUTBOX-REPORT.md](OUTBOX-REPORT.md)). All testable-reliable authors, 20-connection cap except Direct Mapping. Thompson = 4-profile mean with NIP-66, 5 learning sessions (FD+Thompson=84%, Welshman+Thompson=89%). Hybrid+Thompson = fiatjaf profile (194 follows), 1yr window, with warm Thompson priors. Both Thompson variants converge within 2-3 sessions. Stochastic algorithms have run-to-run variance of ±2–8pp depending on profile size (see [variance analysis](OUTBOX-REPORT.md#82-approximating-real-world-conditions-event-verification)).*
+*1yr and 7d recall: 6-profile means from cross-profile benchmarks (Section 8.2 of [OUTBOX-REPORT.md](OUTBOX-REPORT.md)). All testable-reliable authors, 20-connection cap except Direct Mapping. Thompson = 4-profile mean with NIP-66, 5 learning sessions (FD+Thompson=84%, Welshman+Thompson=89%, Hybrid+Thompson=89%). All Thompson variants converge within 2-3 sessions. Hybrid converges by session 2. Stochastic algorithms have run-to-run variance of ±2–8pp depending on profile size (see [variance analysis](OUTBOX-REPORT.md#82-approximating-real-world-conditions-event-verification)). Ditto-Mew baseline = 4-profile mean with NIP-66.*
 
 *\*\*Direct Mapping uses unlimited connections (all declared write relays, typically 50-200+). Its high recall reflects connection count, not algorithmic superiority.*
 
@@ -378,15 +378,14 @@ const parentRef = getParentEventRef(event); // { id, relay?, author? }
 useEvent(parentRef.id, parentRef.relay ? [parentRef.relay] : undefined, parentRef.author);
 ```
 
-**1yr benchmark results (fiatjaf/194 follows):**
+**1yr benchmark results (4-profile mean, cap@20, NIP-66, 5 sessions):**
 
-| | Before | After | Delta |
+| | Ditto-Mew baseline | Hybrid+Thompson | Delta |
 |---|--:|--:|--:|
-| **Event recall** | 25.9% | 79.8% | **+53.9pp** |
-| **Author recall** | 57.6% | 82.8% | **+25.2pp** |
-| Authors at 0% recall | 42.4% | 17.2% | |
+| **Event recall** | 6.2% | 89.4% | **+83.2pp** |
+| **Author recall** | 62.2% | 84.1% | **+21.9pp** |
 
-*Hybrid+Thompson reaches within 3pp of Welshman+Thompson (82.9%) without any changes to the feed routing layer. The gap comes from full outbox having more relay diversity across the 20-relay budget. See [bench/src/algorithms/ditto-outbox.ts](bench/src/algorithms/ditto-outbox.ts) for the benchmark implementation.*
+*Hybrid+Thompson reaches within 4.5pp of Welshman+Thompson (93.9%) without any changes to the feed routing layer. Converges by session 2. See [OUTBOX-REPORT.md § 8.5](OUTBOX-REPORT.md#85-hybrid-outbox-app-relay-broadcast--per-author-thompson) for per-profile data and [bench/src/algorithms/ditto-outbox.ts](bench/src/algorithms/ditto-outbox.ts) for the benchmark implementation.*
 
 ### NIP-66 pre-filter
 

@@ -931,6 +931,58 @@ The algorithm is a direct upgrade path for rust-nostr: same per-author structure
 
 ---
 
+### 8.5 Hybrid Outbox: App Relay Broadcast + Per-Author Thompson
+
+Sections 8.3 and 8.4 benchmark full outbox routing — every filter is decomposed by author and routed to their write relays. This section benchmarks a **hybrid approach**: keep a fixed set of app relays for the main feed (broadcast, no per-author routing), and add per-author outbox queries only for long-tail paths (profile views, event lookups, thread traversal).
+
+The algorithm models [Ditto-Mew](https://gitlab.com/soapbox-pub/ditto-mew)'s architecture: 4 hardcoded app relays (relay.ditto.pub, relay.primal.net, relay.damus.io, nos.lol) broadcast all feed queries. For profile/event lookups, the viewed author's NIP-65 write relays are fetched, scored by Thompson Sampling, and the top 3 are queried in parallel with the app relays.
+
+**Why this matters:** Full outbox routing requires rewriting the relay routing layer — a significant engineering investment. Hybrid outbox is ~80 LOC of hook-level changes with no routing layer modifications. The question is how much recall this sacrifices.
+
+**1yr cross-profile comparison (cap@20, NIP-66 liveness filtered):**
+
+| Profile (follows) | Ditto-Mew baseline | Big Relays | Hybrid S1 | Hybrid S5 | Welshman+Thompson S5 |
+|---|:---:|:---:|:---:|:---:|:---:|
+| fiatjaf (194) | 5.3% | 4.1% | 40.8% | **91.9%** | 93.3% |
+| Gato (399) | 7.4% | 6.5% | 24.3% | **86.0%** | 95.6% |
+| ODELL (1,779) | 7.1% | 6.2% | 32.7% | **87.2%** | 89.2% |
+| Telluride (2,784) | 5.0% | 3.6% | 23.7% | **92.5%** | 97.7% |
+| **4-profile mean** | **6.2%** | **5.1%** | **30.4%** | **89.4%** | **93.9%** |
+
+**Hybrid outbox session progression (1yr event recall):**
+
+| Profile (follows) | S1 | S2 | S3 | S4 | S5 |
+|---|:---:|:---:|:---:|:---:|:---:|
+| fiatjaf (194) | 40.8% | 91.9% | 91.9% | 91.9% | 91.9% |
+| Gato (399) | 24.3% | 86.0% | 86.0% | 86.0% | 86.0% |
+| ODELL (1,779) | 32.7% | 87.2% | 87.2% | 87.2% | 87.2% |
+| Telluride (2,784) | 23.7% | 92.5% | 92.5% | 92.5% | 92.5% |
+
+**Welshman+Thompson session progression for comparison (1yr event recall):**
+
+| Profile (follows) | S1 | S2 | S3 | S4 | S5 |
+|---|:---:|:---:|:---:|:---:|:---:|
+| fiatjaf (194) | 14.9% | 86.3% | 89.7% | 91.9% | 93.3% |
+| Gato (399) | 31.2% | 93.7% | 95.7% | 95.6% | 95.6% |
+| ODELL (1,779) | 29.1% | 87.1% | 89.2% | 89.2% | 89.2% |
+| Telluride (2,784) | 17.5% | 97.5% | 97.7% | 97.7% | 97.7% |
+
+**Key findings:**
+
+1. **Hybrid outbox converges faster than full outbox.** Hybrid reaches its ceiling by session 2 on all profiles — the app relay floor provides a strong starting signal for Thompson to learn from. Welshman+Thompson takes 3-4 sessions to converge because it starts from a purely stochastic baseline.
+
+2. **The gap to full outbox is 4.5pp after convergence.** Hybrid mean is 89.4% vs Welshman+Thompson's 93.9% at 1yr (4-profile mean, session 5). The gap is smallest on ODELL (2.0pp) and largest on Gato (9.6pp). This 4.5pp gap represents the cost of not routing the main feed per-author — niche relays that only appear in full decomposition's 20-relay budget are missed.
+
+3. **Hybrid outbox beats Welshman+Thompson at session 1.** On cold start, hybrid (30.4% mean) outperforms Welshman+Thompson (23.2% mean) because the 4 app relays provide a guaranteed floor. This advantage inverts by session 2-3 as Welshman+Thompson's learned priors surpass the app relay floor.
+
+4. **The Ditto-Mew baseline (4 app relays, no outbox) averages 6.2% at 1yr.** This is comparable to Big Relays (5.1%) — 4 major relays capture roughly the same fraction of 1yr-old events as 2 major relays. The value of app relays is latency and reliability, not historical recall.
+
+5. **Hybrid outbox is a viable ship-first strategy.** For clients with hardcoded app relays, hybrid outbox + Thompson delivers 89% 1yr recall with ~80 LOC and no routing layer changes. Full outbox routing (#1305-style transport decomposition) can be added later for the remaining 4.5pp, or deferred entirely if the engineering cost doesn't justify the marginal gain.
+
+See [bench/src/algorithms/ditto-outbox.ts](bench/src/algorithms/ditto-outbox.ts) for the benchmark implementation and [bench/src/algorithms/ditto-mew.ts](bench/src/algorithms/ditto-mew.ts) for the baseline.
+
+---
+
 ## 9. Observations
 
 Based on patterns observed across all implementations and benchmark results:
@@ -997,6 +1049,8 @@ All algorithms are in [`bench/src/algorithms/`](bench/src/algorithms/).
 | Primal Aggregator | [`primal-baseline.ts`](bench/src/algorithms/primal-baseline.ts) | Baseline |
 | Popular+Random | [`popular-plus-random.ts`](bench/src/algorithms/popular-plus-random.ts) | Baseline |
 | Big Relays | [`big-relays.ts`](bench/src/algorithms/big-relays.ts) | Baseline (damus + nos.lol) |
+| Hybrid+Thompson | [`ditto-outbox.ts`](bench/src/algorithms/ditto-outbox.ts) | App relays + per-author outbox (Ditto-Mew) |
+| Ditto-Mew (4 app relays) | [`ditto-mew.ts`](bench/src/algorithms/ditto-mew.ts) | Baseline (4 hardcoded app relays) |
 
 **Academic algorithms** (benchmark ceilings only — not practical for real clients):
 

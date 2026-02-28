@@ -15,7 +15,7 @@ What's your starting point?
 │  │
 │  └─ Need to preserve feed latency or can't change routing?
 │     └─ Hybrid outbox — add outbox queries to profile/event/thread hooks
-│        80% 1yr recall, ~80 LOC, no routing layer changes
+│        89% 1yr recall (after learning), ~80 LOC, no routing layer changes
 │        See README § Hybrid outbox for code
 │
 ├─ Basic outbox (real-time feeds)?
@@ -27,7 +27,7 @@ What's your starting point?
 │  ├─ Can persist state across sessions?
 │  │  ├─ Using Welshman/Coracle?  → Welshman+Thompson Sampling (89% 1yr)
 │  │  ├─ Using rust-nostr?        → FD+Thompson (84% 1yr after 5 sessions)
-│  │  └─ Using app relays?        → Hybrid+Thompson (80% 1yr, no routing changes)
+│  │  └─ Using app relays?        → Hybrid+Thompson (89% 1yr, no routing changes)
 │  └─ Stateless?                  → Filter Decomposition (25% 1yr) or
 │                                   Weighted Stochastic / Welshman (24% 1yr)
 │
@@ -53,18 +53,19 @@ relays that retain history.
 Every analyzed client picks relays statelessly — recompute from NIP-65 data
 each time, with no memory of which relays actually delivered events.
 
-Welshman+Thompson Sampling adds learning to Welshman's existing stochastic
-scoring. After 2-3 sessions, it consistently outperforms Greedy and matches
-or exceeds baseline Welshman at long windows (120 benchmark runs across 4
-profiles, 3 time windows, 5 sessions):
+Thompson Sampling adds learning to any stochastic relay scoring. On session 1,
+`sampleBeta(1, 1)` = `rng()` — identical to stateless Welshman. By session 3,
+the scorer has learned which relays actually deliver and recall jumps dramatically
+(1yr event recall, cap@20, NIP-66 filtered):
 
-| Profile (follows) | Window | Greedy | Welshman | Thompson (learned) |
-|---|---|---|---|---|
-| Telluride (2,784) | 3yr | 56% | 60% | **63%** |
-| ValderDama (1,077) | 3yr | 71% | 77% | **75%** |
-| Gato (399) | 1yr | 79% | 83% | **83%** |
+| Profile (follows) | Session 1 (stateless) | Session 3+ (learned) | Improvement |
+|---|---|---|---|
+| Gato (399) | 24.5% | **95.5%** | +71pp |
+| ODELL (1,779) | 33.1% | **90.5%** | +57pp |
+| Telluride (2,784) | 20.4% | **89.5%** | +69pp |
+| 6-profile mean | 24% | **89%** | +65pp |
 
-Thompson converges in 2-3 sessions. The biggest gains appear at long windows
+Thompson converges in 2-3 sessions. The gains are largest at long time windows
 and large follow counts, where the relay selection problem is hardest. Small
 profiles (<200 follows) may see minimal gains — the 20-relay budget already
 covers most combinations.
@@ -85,6 +86,15 @@ vs baseline FD's 23.1% — converging within 2-3 sessions. Welshman+Thompson lea
 ~5pp (89.4%) due to the popularity weight, but FD+Thompson is a drop-in upgrade for
 existing rust-nostr code with no structural changes needed.
 See [README.md § FD+Thompson](README.md#fdthompson-for-rust-nostr) for code.
+
+**For app-relay clients (Ditto-Mew, or any client with hardcoded relay URLs):**
+Hybrid+Thompson keeps your app relays for the main feed and adds Thompson-scored
+outbox queries only for profile views, event lookups, and thread traversal. After
+2 sessions, hybrid reaches **89.4% event recall** at 1yr — within 4.5pp of full
+Welshman+Thompson (93.9%) — with ~80 LOC and no routing layer changes. Converges
+faster than full outbox because the app relay floor provides a strong initial signal.
+See [README.md § Hybrid outbox](README.md#hybrid-outbox-for-app-relay-clients) for code
+and [OUTBOX-REPORT.md § 8.5](OUTBOX-REPORT.md#85-hybrid-outbox-app-relay-broadcast--per-author-thompson) for full benchmark data.
 
 ### 2. Pre-filter relays with NIP-66
 
