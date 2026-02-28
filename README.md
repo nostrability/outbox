@@ -12,14 +12,14 @@ Each technique adds incremental value. You don't need to implement everything at
 
 | Step | What you do | 1yr recall | 7d recall | Effort |
 |:---:|---|:---:|:---:|---|
-| 0 | **Hardcode big relays** (damus + nos.lol) | 8% | 61% | Zero |
-| 1a | **Basic outbox** (greedy set-cover from NIP-65 data) | 16% | 84% | Medium — ~200 LOC, fetch relay lists + implement set-cover |
-| 1b | **Hybrid outbox** (keep app relays + add author write relays for profiles/threads) | 89% | 92% | Low — ~80 LOC, no routing layer changes ([details](#two-ways-to-add-outbox)) |
-| 2 | **Stochastic scoring** (Welshman's `random()` factor) | 24% | 83% | Low — ~50 LOC, replace greedy with weighted random |
+| 0 | **Hardcode big relays** (damus + nos.lol) | 8% [5–12] | 61% [45–70] | Zero |
+| 1a | **Basic outbox** (greedy set-cover from NIP-65 data) | 16% [12–20] | 84% [77–94] | Medium — ~200 LOC, fetch relay lists + implement set-cover |
+| 1b | **Hybrid outbox** (keep app relays + add author write relays for profiles/threads) | 89% [86–93] | 92% | Low — ~80 LOC, no routing layer changes ([details](#two-ways-to-add-outbox)) |
+| 2 | **Stochastic scoring** (Welshman's `random()` factor) | 24% [12–38] | 83% [75–93] | Low — ~50 LOC, replace greedy with weighted random |
 | 3 | **Filter dead relays** (NIP-66 liveness data) | neutral | +5pp efficiency | Low — ~30 LOC, fetch kind 30166, exclude dead relays |
-| 4 | **Learn from delivery** (Thompson Sampling) | 84-89% | 87-97% | Low — ~80 LOC + DB table, replace `random()` with `sampleBeta()` |
+| 4 | **Learn from delivery** (Thompson Sampling) | 84-89% [75–96] | 87-97% | Low — ~80 LOC + DB table, replace `random()` with `sampleBeta()` |
 
-*Steps 1a and 1b are alternative entry points — 1a replaces your routing layer, 1b augments it. Step 1b already includes Thompson Sampling (it's the same ~80 LOC). Steps 2-4 are incremental enhancements that apply to the 1a path. Going from Step 0 to Step 4 takes your 1yr recall from 8% to 84-89% (and 7d from 61% to 87-97%). All values are 6-profile means except Thompson variants (4-profile mean with NIP-66, 5 learning sessions; FD+Thompson=84%, Welshman+Thompson=89%, Hybrid+Thompson=89%). 1yr recall is the more informative metric — 7d masks relay retention problems that dominate real-world performance.*
+*Steps 1a and 1b are alternative entry points — 1a replaces your routing layer, 1b augments it. Step 1b already includes Thompson Sampling (it's the same ~80 LOC). Steps 2-4 are incremental enhancements that apply to the 1a path. Going from Step 0 to Step 4 takes your 1yr recall from 8% to 84-89% (and 7d from 61% to 87-97%). [min–max] ranges show the spread across tested profiles — your recall depends on your follow graph size and relay diversity. All values are 6-profile means except Thompson variants (4-profile mean with NIP-66, 5 learning sessions; FD+Thompson=84%, Welshman+Thompson=89%, Hybrid+Thompson=89%). 1yr recall is the more informative metric — 7d masks relay retention problems that dominate real-world performance.*
 
 ## Already using a client library?
 
@@ -148,25 +148,25 @@ All deployed client algorithms plus key experimental ones:
 
 | Algorithm | Used by | 1yr recall | 7d recall | Verdict |
 |---|---|:---:|:---:|---|
-| **Welshman+Thompson** | *not yet deployed* | 89% | 92% | Upgrade path for Coracle — learns from delivery |
-| **FD+Thompson** | *not yet deployed* | 84% | 97% | Upgrade path for rust-nostr — learns from delivery |
-| **Hybrid+Thompson** | *not yet deployed* | 89% | 92% | Upgrade path for app-relay clients — no routing changes |
-| **Filter Decomposition** | rust-nostr | 25% | 77% | Per-author top-N write relays; strong at long windows |
-| **Welshman Stochastic** | Coracle | 24% | 83% | Best stateless deployed algorithm for archival — 1.5× Greedy at 1yr |
-| **Greedy Set-Cover** | Gossip, Applesauce, Wisp | 16% | 84% | Best on-paper coverage; degrades sharply for history |
-| **NDK Priority** | NDK | 16% | 83% | Similar to Greedy; connected > selected > popular |
-| **Coverage Sort** | Nostur | 16% | 65% | Skip-top-relays heuristic costs 5-12% coverage |
+| **Welshman+Thompson** | *not yet deployed* | 89% [82–96] | 92% | Upgrade path for Coracle — learns from delivery |
+| **FD+Thompson** | *not yet deployed* | 84% [75–92] | 97% | Upgrade path for rust-nostr — learns from delivery |
+| **Hybrid+Thompson** | *not yet deployed* | 89% [86–93] | 92% | Upgrade path for app-relay clients — no routing changes |
+| **Filter Decomposition** | rust-nostr | 25% [19–32] | 77% [71–88] | Per-author top-N write relays; strong at long windows |
+| **Welshman Stochastic** | Coracle | 24% [12–38] | 83% [75–93] | Best stateless deployed algorithm for archival — 1.5× Greedy at 1yr |
+| **Greedy Set-Cover** | Gossip, Applesauce, Wisp | 16% [12–20] | 84% [77–94] | Best on-paper coverage; degrades sharply for history |
+| **NDK Priority** | NDK | 16% [12–19] | 83% [77–92] | Similar to Greedy; connected > selected > popular |
+| **Coverage Sort** | Nostur | 16% [9–22] | 65% [55–80] | Skip-top-relays heuristic costs 5-12% coverage |
 
 **Baselines** (for comparison, not recommendations):
 
 | Baseline | 1yr recall | 7d recall | What it is |
 |---|:---:|:---:|---|
-| Direct Mapping\*\* | 30% | 88% | All declared write relays — unlimited connections |
-| Ditto-Mew (4 app relays) | 6% | 62% | 4 hardcoded app relays — broadcast, no per-author routing |
-| Big Relays | 8% | 61% | Just damus+nos.lol — the "do nothing" baseline |
-| Primal Aggregator\*\*\* | 1% | 32% | Single caching relay — 100% assignment but low actual recall |
+| Direct Mapping\*\* | 30% [17–40] | 88% [86–91] | All declared write relays — unlimited connections |
+| Ditto-Mew (4 app relays) | 6% [5–7] | 62% | 4 hardcoded app relays — broadcast, no per-author routing |
+| Big Relays | 8% [5–12] | 61% [45–70] | Just damus+nos.lol — the "do nothing" baseline |
+| Primal Aggregator\*\*\* | 1% [0.2–1.6] | 32% [25–37] | Single caching relay — 100% assignment but low actual recall |
 
-*1yr and 7d recall: 6-profile means from cross-profile benchmarks (Section 8.2 of [OUTBOX-REPORT.md](OUTBOX-REPORT.md)). All testable-reliable authors, 20-connection cap except Direct Mapping. Thompson = 4-profile mean with NIP-66, 5 learning sessions (FD+Thompson=84%, Welshman+Thompson=89%, Hybrid+Thompson=89%). All Thompson variants converge within 2-3 sessions. Hybrid converges by session 2. Stochastic algorithms have run-to-run variance of ±2–8pp depending on profile size (see [variance analysis](OUTBOX-REPORT.md#82-approximating-real-world-conditions-event-verification)). Ditto-Mew baseline = 4-profile mean with NIP-66.*
+*1yr and 7d recall: 6-profile means from cross-profile benchmarks (Section 8.2 of [OUTBOX-REPORT.md](OUTBOX-REPORT.md)). [min–max] ranges show the spread across tested profiles (194–1,779 follows) — your recall will land somewhere in this range depending on your follow graph. All testable-reliable authors, 20-connection cap except Direct Mapping. Thompson = 4-profile mean with NIP-66, 5 learning sessions (FD+Thompson=84%, Welshman+Thompson=89%, Hybrid+Thompson=89%). All Thompson variants converge within 2-3 sessions. Hybrid converges by session 2. Stochastic algorithms have additional run-to-run variance on top of the cross-profile range (see [variance analysis](OUTBOX-REPORT.md#82-approximating-real-world-conditions-event-verification)). Ditto-Mew baseline = 4-profile mean with NIP-66.*
 
 *\*\*Direct Mapping uses unlimited connections (all declared write relays, typically 50-200+). Its high recall reflects connection count, not algorithmic superiority.*
 
@@ -307,7 +307,7 @@ Same `sampleBeta()`, same stats table, same update loop as [Thompson Sampling ab
 | Gato (399) | 91.9% | 95.5% | -3.6pp |
 | ODELL (1,779) | 85.3% | 90.5% | -5.2pp |
 | Telluride (2,784) | 83.4% | 89.5% | -6.1pp |
-| **4-profile mean** | **83.9%** | **89.4%** | **-5.5pp** |
+| **4-profile mean** | **83.9%** [75–92] | **89.4%** [82–96] | **-5.5pp** |
 
 *Both algorithms converge within 2-3 sessions (FD+Thompson session 1 = 22%, session 3 = 80%, session 5 = 84%). Welshman+Thompson leads by 5-7pp at all profile sizes after convergence — the popularity weight provides a consistent advantage. See [Section 8.4](OUTBOX-REPORT.md#84-fdthompson-filter-decomposition-with-thompson-sampling) for the full comparison including session progression.*
 
@@ -382,7 +382,7 @@ useEvent(parentRef.id, parentRef.relay ? [parentRef.relay] : undefined, parentRe
 
 | | Ditto-Mew baseline | Hybrid+Thompson | Delta |
 |---|--:|--:|--:|
-| **Event recall** | 6.2% | 89.4% | **+83.2pp** |
+| **Event recall** | 6.2% [5–7] | 89.4% [86–93] | **+83.2pp** |
 | **Author recall** | 62.2% | 84.1% | **+21.9pp** |
 
 *Hybrid+Thompson reaches within 4.5pp of Welshman+Thompson (93.9%) without any changes to the feed routing layer. Converges by session 2. See [OUTBOX-REPORT.md § 8.5](OUTBOX-REPORT.md#85-hybrid-outbox-app-relay-broadcast--per-author-thompson) for per-profile data and [bench/src/algorithms/ditto-outbox.ts](bench/src/algorithms/ditto-outbox.ts) for the benchmark implementation.*

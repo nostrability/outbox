@@ -11,33 +11,32 @@ What's your starting point?
 │  │
 │  ├─ Can you rewrite your relay routing layer?
 │  │  └─ Yes → Full outbox (Steps 1a → 4 in README)
-│  │           Best recall (84-89% 1yr), biggest engineering investment
+│  │           Best recall (84-89% 1yr [75–96]), biggest engineering investment
 │  │
 │  └─ Need to preserve feed latency or can't change routing?
 │     └─ Hybrid outbox — add outbox queries to profile/event/thread hooks
-│        89% 1yr recall (after learning), ~80 LOC, no routing layer changes
+│        89% 1yr recall [86–93] (after learning), ~80 LOC, no routing layer changes
 │        See README § Hybrid outbox for code
 │
 ├─ Basic outbox (real-time feeds)?
-│  ├─ Need connection minimization? → Greedy Set-Cover (16% 1yr, 84% 7d)
-│  ├─ Need zero-config library?     → Priority-Based / NDK (16% 1yr, 83% 7d)
-│  └─ Simplicity over optimization? → Direct Mapping (30% 1yr, unlimited connections)
+│  ├─ Need connection minimization? → Greedy Set-Cover (16% [12–20] 1yr, 84% [77–94] 7d)
+│  ├─ Need zero-config library?     → Priority-Based / NDK (16% [12–19] 1yr, 83% [77–92] 7d)
+│  └─ Simplicity over optimization? → Direct Mapping (30% [17–40] 1yr, unlimited connections)
 │
 ├─ Historical event recall (archival, search)?
 │  ├─ Can persist state across sessions?
-│  │  ├─ Using Welshman/Coracle?  → Welshman+Thompson Sampling (89% 1yr)
-│  │  ├─ Using rust-nostr?        → FD+Thompson (84% 1yr after 5 sessions)
-│  │  └─ Using app relays?        → Hybrid+Thompson (89% 1yr, no routing changes)
-│  └─ Stateless?                  → Filter Decomposition (25% 1yr) or
-│                                   Weighted Stochastic / Welshman (24% 1yr)
+│  │  ├─ Using Welshman/Coracle?  → Welshman+Thompson Sampling (89% [82–96] 1yr)
+│  │  ├─ Using rust-nostr?        → FD+Thompson (84% [75–92] 1yr after 5 sessions)
+│  │  └─ Using app relays?        → Hybrid+Thompson (89% [86–93] 1yr, no routing changes)
+│  └─ Stateless?                  → Filter Decomposition (25% [19–32] 1yr) or
+│                                   Weighted Stochastic / Welshman (24% [12–38] 1yr)
 │
 └─ Anti-centralization (distribute relay load)?
    ├─ Via scoring?       → Weighted Stochastic (log dampening + random)
    └─ Via explicit skip? → Greedy Coverage Sort (skipTopRelays, but -20% recall)
 ```
 
-*All recall numbers are 1yr, 6-profile means. At 7d most algorithms cluster at 83-84% —
-the differences only emerge at longer windows where relay retention becomes the binding constraint.*
+*All recall numbers are 1yr, 6-profile means. [min–max] ranges show the spread across tested profiles (194–1,779 follows) — your recall depends on your follow graph. At 7d most algorithms cluster at 83-84% — the differences only emerge at longer windows where relay retention becomes the binding constraint.*
 
 Key tradeoff: **coverage-optimal ≠ event-recall-optimal.** Greedy set-cover
 wins assignment coverage (23/26 profiles) but drops to 16% event recall at 1yr
@@ -63,7 +62,7 @@ the scorer has learned which relays actually deliver and recall jumps dramatical
 | Gato (399) | 24.5% | **95.5%** | +71pp |
 | ODELL (1,779) | 33.1% | **90.5%** | +57pp |
 | Telluride (2,784) | 20.4% | **89.5%** | +69pp |
-| 6-profile mean | 24% | **89%** | +65pp |
+| 6-profile mean | 24% [12–38] | **89%** [82–96] | +65pp |
 
 Thompson converges in 2-3 sessions. The gains are largest at long time windows
 and large follow counts, where the relay selection problem is hardest. Small
@@ -81,17 +80,17 @@ See [README.md § Thompson Sampling](README.md#thompson-sampling) for complete c
 **For rust-nostr / Filter Decomposition users:** FD+Thompson is a variant that fits
 Filter Decomposition's per-author structure directly. It replaces lexicographic relay
 ordering with `sampleBeta(α, β)` scoring — no popularity weight. After 5 learning
-sessions (cap@20, NIP-66 filtered), FD+Thompson reaches **83.9% event recall** at 1yr
+sessions (cap@20, NIP-66 filtered), FD+Thompson reaches **83.9% event recall** [75–92] at 1yr
 vs baseline FD's 23.1% — converging within 2-3 sessions. Welshman+Thompson leads by
-~5pp (89.4%) due to the popularity weight, but FD+Thompson is a drop-in upgrade for
+~5pp (89.4% [82–96]) due to the popularity weight, but FD+Thompson is a drop-in upgrade for
 existing rust-nostr code with no structural changes needed.
 See [README.md § FD+Thompson](README.md#fdthompson-for-rust-nostr) for code.
 
 **For app-relay clients (Ditto-Mew, or any client with hardcoded relay URLs):**
 Hybrid+Thompson keeps your app relays for the main feed and adds Thompson-scored
 outbox queries only for profile views, event lookups, and thread traversal. After
-2 sessions, hybrid reaches **89.4% event recall** at 1yr — within 4.5pp of full
-Welshman+Thompson (93.9%) — with ~80 LOC and no routing layer changes. Converges
+2 sessions, hybrid reaches **89.4% event recall** [86–93] at 1yr — within 4.5pp of full
+Welshman+Thompson (93.9% [89–98]) — with ~80 LOC and no routing layer changes. Converges
 faster than full outbox because the app relay floor provides a strong initial signal.
 See [README.md § Hybrid outbox](README.md#hybrid-outbox-for-app-relay-clients) for code
 and [OUTBOX-REPORT.md § 8.5](OUTBOX-REPORT.md#85-hybrid-outbox-app-relay-broadcast--per-author-thompson) for full benchmark data.

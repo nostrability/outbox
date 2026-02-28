@@ -643,17 +643,17 @@ To test whether patterns generalize beyond fiatjaf, event recall was measured ac
 
 **Practitioner algorithms** (deployed or deployable in real clients):
 
-| Algorithm | fiatjaf | hodlbod | Kieran | jb55 | ODELL | Derek Ross | Mean |
+| Algorithm | fiatjaf | hodlbod | Kieran | jb55 | ODELL | Derek Ross | Mean [range] |
 |-----------|:-------:|:-------:|:------:|:----:|:-----:|:----------:|:----:|
-| **Direct Mapping**† | 16.8% | 28.9% | 21.6% | 40.1% | 38.5% | 35.6% | **30.3%** |
-| **Filter Decomposition** | 19.0% | 20.2% | 21.0% | 31.9% | 28.4% | 28.5% | **24.8%** |
-| **Welshman Stochastic** | 37.8% | 24.3% | 11.8% | 27.0% | 21.0% | 20.8% | **23.8%** |
-| **Popular+Random**‡ | 11.8% | 29.5% | 14.2% | 22.1% | 20.2% | 19.6% | **19.6%** |
-| **Coverage Sort (Nostur)** | 13.3% | 22.0% | 8.9% | 16.7% | 17.8% | 19.8% | **16.4%** |
-| **Greedy Set-Cover** | 16.3% | 14.3% | 12.4% | 20.1% | 16.0% | 18.4% | **16.3%** |
-| **NDK Priority** | 18.7% | 12.6% | 12.3% | 19.0% | 16.3% | 18.7% | **16.3%** |
-| **Big Relays**§ | 4.9% | 7.3% | 5.8% | 12.3% | 10.2% | 10.0% | **8.4%** |
-| **Primal Aggregator** | 1.6% | 0.4% | 0.2% | 0.4% | 0.7% | 0.4% | **0.6%** |
+| **Direct Mapping**† | 16.8% | 28.9% | 21.6% | 40.1% | 38.5% | 35.6% | **30.3%** [17–40] |
+| **Filter Decomposition** | 19.0% | 20.2% | 21.0% | 31.9% | 28.4% | 28.5% | **24.8%** [19–32] |
+| **Welshman Stochastic** | 37.8% | 24.3% | 11.8% | 27.0% | 21.0% | 20.8% | **23.8%** [12–38] |
+| **Popular+Random**‡ | 11.8% | 29.5% | 14.2% | 22.1% | 20.2% | 19.6% | **19.6%** [12–30] |
+| **Coverage Sort (Nostur)** | 13.3% | 22.0% | 8.9% | 16.7% | 17.8% | 19.8% | **16.4%** [9–22] |
+| **Greedy Set-Cover** | 16.3% | 14.3% | 12.4% | 20.1% | 16.0% | 18.4% | **16.3%** [12–20] |
+| **NDK Priority** | 18.7% | 12.6% | 12.3% | 19.0% | 16.3% | 18.7% | **16.3%** [12–19] |
+| **Big Relays**§ | 4.9% | 7.3% | 5.8% | 12.3% | 10.2% | 10.0% | **8.4%** [5–12] |
+| **Primal Aggregator** | 1.6% | 0.4% | 0.2% | 0.4% | 0.7% | 0.4% | **0.6%** [0.2–1.6] |
 
 †Direct Mapping uses all declared write relays with no connection cap (typically 50-200+ connections). All other algorithms are capped at 20 connections.
 ‡Popular+Random = relay.damus.io + nos.lol + 2 random relays from the candidate set.
@@ -661,30 +661,30 @@ To test whether patterns generalize beyond fiatjaf, event recall was measured ac
 
 **Academic algorithms** (benchmark ceilings — not practical for real clients):
 
-| Algorithm | fiatjaf | hodlbod | Kieran | jb55 | ODELL | Derek Ross | Mean |
+| Algorithm | fiatjaf | hodlbod | Kieran | jb55 | ODELL | Derek Ross | Mean [range] |
 |-----------|:-------:|:-------:|:------:|:----:|:-----:|:----------:|:----:|
-| MAB-UCB | 40.8% | 41.5% | 21.4% | 39.3% | 24.7% | 32.3% | **33.3%** |
-| Streaming Coverage | 37.9% | 35.0% | 16.2% | 28.8% | 28.1% | 32.6% | **29.8%** |
-| Spectral Clustering | 37.9% | 34.0% | 15.2% | 28.6% | 21.2% | 40.5% | **29.6%** |
-| ILP Optimal | 38.1% | 31.8% | 15.1% | 23.1% | 21.2% | 29.6% | **26.5%** |
-| Bipartite Matching | 38.0% | 32.1% | 15.3% | 22.7% | 21.9% | 30.4% | **26.7%** |
-| Stochastic Greedy | 11.6% | 14.1% | 9.6% | 16.1% | 6.2% | 12.9% | **11.8%** |
+| MAB-UCB | 40.8% | 41.5% | 21.4% | 39.3% | 24.7% | 32.3% | **33.3%** [21–42] |
+| Streaming Coverage | 37.9% | 35.0% | 16.2% | 28.8% | 28.1% | 32.6% | **29.8%** [16–38] |
+| Spectral Clustering | 37.9% | 34.0% | 15.2% | 28.6% | 21.2% | 40.5% | **29.6%** [15–41] |
+| ILP Optimal | 38.1% | 31.8% | 15.1% | 23.1% | 21.2% | 29.6% | **26.5%** [15–38] |
+| Bipartite Matching | 38.0% | 32.1% | 15.3% | 22.7% | 21.9% | 30.4% | **26.7%** [15–38] |
+| Stochastic Greedy | 11.6% | 14.1% | 9.6% | 16.1% | 6.2% | 12.9% | **11.8%** [6–16] |
 
 **7d window:**
 
 **Practitioner algorithms** (deployed or deployable in real clients):
 
-| Algorithm | fiatjaf | hodlbod | Kieran | jb55 | ODELL | Derek Ross | Mean |
+| Algorithm | fiatjaf | hodlbod | Kieran | jb55 | ODELL | Derek Ross | Mean [range] |
 |-----------|:-------:|:-------:|:------:|:----:|:-----:|:----------:|:----:|
-| **Direct Mapping**† | 89.9% | 85.9% | 90.9% | 85.9% | 87.6% | 87.3% | **87.9%** |
-| **Greedy Set-Cover** | 93.5% | 87.6% | 84.8% | 81.0% | 77.2% | 82.5% | 84.4% |
-| **NDK Priority** | 92.3% | 82.1% | 85.2% | 81.1% | 77.2% | 82.0% | 83.3% |
-| **Welshman Stochastic** | 93.2% | 83.6% | 84.6% | 84.1% | 74.8% | 77.8% | 83.0% |
-| **Popular+Random**‡ | 83.4% | 86.8% | 84.1% | 87.0% | 76.9% | 79.7% | 83.0% |
-| **Filter Decomposition** | 88.1% | 74.7% | 81.7% | 74.0% | 71.4% | 72.1% | 77.0% |
-| **Greedy Coverage Sort** | 67.6% | 63.7% | 79.6% | 62.4% | 54.5% | 61.0% | 64.8% |
-| **Big Relays** | 56.5% | 64.4% | 69.9% | 67.4% | 45.0% | 62.3% | 60.9% |
-| **Primal Aggregator** | 28.3% | 37.3% | 34.8% | 25.2% | 33.6% | 30.2% | 31.6% |
+| **Direct Mapping**† | 89.9% | 85.9% | 90.9% | 85.9% | 87.6% | 87.3% | **87.9%** [86–91] |
+| **Greedy Set-Cover** | 93.5% | 87.6% | 84.8% | 81.0% | 77.2% | 82.5% | 84.4% [77–94] |
+| **NDK Priority** | 92.3% | 82.1% | 85.2% | 81.1% | 77.2% | 82.0% | 83.3% [77–92] |
+| **Welshman Stochastic** | 93.2% | 83.6% | 84.6% | 84.1% | 74.8% | 77.8% | 83.0% [75–93] |
+| **Popular+Random**‡ | 83.4% | 86.8% | 84.1% | 87.0% | 76.9% | 79.7% | 83.0% [77–87] |
+| **Filter Decomposition** | 88.1% | 74.7% | 81.7% | 74.0% | 71.4% | 72.1% | 77.0% [71–88] |
+| **Greedy Coverage Sort** | 67.6% | 63.7% | 79.6% | 62.4% | 54.5% | 61.0% | 64.8% [55–80] |
+| **Big Relays** | 56.5% | 64.4% | 69.9% | 67.4% | 45.0% | 62.3% | 60.9% [45–70] |
+| **Primal Aggregator** | 28.3% | 37.3% | 34.8% | 25.2% | 33.6% | 30.2% | 31.6% [25–37] |
 
 †Direct Mapping uses all declared write relays with no connection cap (typically 50-200+ connections). All other algorithms are capped at 20 connections. Its high recall reflects unlimited connections, not algorithmic superiority.
 
@@ -692,14 +692,16 @@ To test whether patterns generalize beyond fiatjaf, event recall was measured ac
 
 **Academic algorithms** (benchmark ceilings — not practical for real clients):
 
-| Algorithm | fiatjaf | hodlbod | Kieran | jb55 | ODELL | Derek Ross | Mean |
+| Algorithm | fiatjaf | hodlbod | Kieran | jb55 | ODELL | Derek Ross | Mean [range] |
 |-----------|:-------:|:-------:|:------:|:----:|:-----:|:----------:|:----:|
-| Streaming Coverage | 97.5% | 93.2% | 91.8% | 92.6% | 88.1% | 90.9% | 92.4% |
-| ILP Optimal | 98.0% | 96.8% | 90.5% | 91.6% | 87.2% | 89.8% | 92.3% |
-| Spectral Clustering | 97.5% | 94.8% | 89.7% | 93.3% | 87.0% | 89.8% | 92.0% |
-| Bipartite Matching | 98.0% | 93.1% | 90.1% | 93.1% | 86.3% | 90.1% | 91.8% |
-| MAB-UCB | 93.5% | 92.9% | 92.5% | 92.4% | 83.0% | 90.9% | 90.9% |
-| Stochastic Greedy | 67.1% | 73.0% | 76.8% | 64.7% | 46.3% | 72.5% | 66.7% |
+| Streaming Coverage | 97.5% | 93.2% | 91.8% | 92.6% | 88.1% | 90.9% | 92.4% [88–98] |
+| ILP Optimal | 98.0% | 96.8% | 90.5% | 91.6% | 87.2% | 89.8% | 92.3% [87–98] |
+| Spectral Clustering | 97.5% | 94.8% | 89.7% | 93.3% | 87.0% | 89.8% | 92.0% [87–98] |
+| Bipartite Matching | 98.0% | 93.1% | 90.1% | 93.1% | 86.3% | 90.1% | 91.8% [86–98] |
+| MAB-UCB | 93.5% | 92.9% | 92.5% | 92.4% | 83.0% | 90.9% | 90.9% [83–94] |
+| Stochastic Greedy | 67.1% | 73.0% | 76.8% | 64.7% | 46.3% | 72.5% | 66.7% [46–77] |
+
+*[range] = min–max across 6 profiles (194–1,779 follows). The spread reflects real cross-profile heterogeneity — profiles with different follow counts and relay diversity get different recall. For stochastic algorithms, single-seed results add run-to-run variance on top (see variance analysis below).*
 
 The ~8pp gap between the best academic algorithm (92.4%) and the best practitioner algorithm (87.9%) represents the theoretical ceiling that no simple, deployable algorithm has reached. However, Welshman+Thompson Sampling (Section 8.3) closes most of this gap through learning — achieving 92-97% after 2-3 sessions without the implementation complexity of the academic algorithms.
 
@@ -898,7 +900,7 @@ The algorithm is a direct upgrade path for rust-nostr: same per-author structure
 | Gato (399) | 20.6% | 13.1% | +7.5pp | +57% |
 | ODELL (1,779) | 29.1% | 21.6% | +7.5pp | +35% |
 | Telluride (2,784) | 38.6% | 32.3% | +6.3pp | +20% |
-| **4-profile mean** | **31.8%** | **23.1%** | **+8.7pp** | **+38%** |
+| **4-profile mean** | **31.8%** [21–39] | **23.1%** [13–32] | **+8.7pp** | **+38%** |
 
 **5-session learning comparison (1yr event recall, cap@20, NIP-66 filtered, per-algorithm score DBs):**
 
@@ -908,7 +910,7 @@ The algorithm is a direct upgrade path for rust-nostr: same per-author structure
 | Gato (399) | 91.9% | 95.5% | -3.6pp |
 | ODELL (1,779) | 85.3% | 90.5% | -5.2pp |
 | Telluride (2,784) | 83.4% | 89.5% | -6.1pp |
-| **4-profile mean** | **83.9%** | **89.4%** | **-5.5pp** |
+| **4-profile mean** | **83.9%** [75–92] | **89.4%** [82–96] | **-5.5pp** |
 
 **FD+Thompson session progression (1yr event recall):**
 
@@ -947,7 +949,7 @@ The algorithm models [Ditto-Mew](https://gitlab.com/soapbox-pub/ditto-mew)'s arc
 | Gato (399) | 7.4% | 6.5% | 24.3% | **86.0%** | 95.6% |
 | ODELL (1,779) | 7.1% | 6.2% | 32.7% | **87.2%** | 89.2% |
 | Telluride (2,784) | 5.0% | 3.6% | 23.7% | **92.5%** | 97.7% |
-| **4-profile mean** | **6.2%** | **5.1%** | **30.4%** | **89.4%** | **93.9%** |
+| **4-profile mean** | **6.2%** [5–7] | **5.1%** [4–7] | **30.4%** [24–41] | **89.4%** [86–93] | **93.9%** [89–98] |
 
 **Hybrid outbox session progression (1yr event recall):**
 
