@@ -15,7 +15,7 @@ What's your starting point?
 │  │
 │  └─ Need to preserve feed latency or can't change routing?
 │     └─ Hybrid outbox — add outbox queries to profile/event/thread hooks
-│        80% 1yr recall, ~80 LOC, no routing layer changes
+│        89% 1yr recall (after learning), ~80 LOC, no routing layer changes
 │        See README § Hybrid outbox for code
 │
 ├─ Basic outbox (real-time feeds)?
@@ -27,7 +27,7 @@ What's your starting point?
 │  ├─ Can persist state across sessions?
 │  │  ├─ Using Welshman/Coracle?  → Welshman+Thompson Sampling (89% 1yr)
 │  │  ├─ Using rust-nostr?        → FD+Thompson (84% 1yr after 5 sessions)
-│  │  └─ Using app relays?        → Hybrid+Thompson (80% 1yr, no routing changes)
+│  │  └─ Using app relays?        → Hybrid+Thompson (89% 1yr, no routing changes)
 │  └─ Stateless?                  → Filter Decomposition (25% 1yr) or
 │                                   Weighted Stochastic / Welshman (24% 1yr)
 │
@@ -86,6 +86,15 @@ vs baseline FD's 23.1% — converging within 2-3 sessions. Welshman+Thompson lea
 ~5pp (89.4%) due to the popularity weight, but FD+Thompson is a drop-in upgrade for
 existing rust-nostr code with no structural changes needed.
 See [README.md § FD+Thompson](README.md#fdthompson-for-rust-nostr) for code.
+
+**For app-relay clients (Ditto-Mew, or any client with hardcoded relay URLs):**
+Hybrid+Thompson keeps your app relays for the main feed and adds Thompson-scored
+outbox queries only for profile views, event lookups, and thread traversal. After
+2 sessions, hybrid reaches **89.4% event recall** at 1yr — within 4.5pp of full
+Welshman+Thompson (93.9%) — with ~80 LOC and no routing layer changes. Converges
+faster than full outbox because the app relay floor provides a strong initial signal.
+See [README.md § Hybrid outbox](README.md#hybrid-outbox-for-app-relay-clients) for code
+and [OUTBOX-REPORT.md § 8.5](OUTBOX-REPORT.md#85-hybrid-outbox-app-relay-broadcast--per-author-thompson) for full benchmark data.
 
 ### 2. Pre-filter relays with NIP-66
 
