@@ -53,18 +53,19 @@ relays that retain history.
 Every analyzed client picks relays statelessly — recompute from NIP-65 data
 each time, with no memory of which relays actually delivered events.
 
-Welshman+Thompson Sampling adds learning to Welshman's existing stochastic
-scoring. After 2-3 sessions, it consistently outperforms Greedy and matches
-or exceeds baseline Welshman at long windows (120 benchmark runs across 4
-profiles, 3 time windows, 5 sessions):
+Thompson Sampling adds learning to any stochastic relay scoring. On session 1,
+`sampleBeta(1, 1)` = `rng()` — identical to stateless Welshman. By session 3,
+the scorer has learned which relays actually deliver and recall jumps dramatically
+(1yr event recall, cap@20, NIP-66 filtered):
 
-| Profile (follows) | Window | Greedy | Welshman | Thompson (learned) |
-|---|---|---|---|---|
-| Telluride (2,784) | 3yr | 56% | 60% | **63%** |
-| ValderDama (1,077) | 3yr | 71% | 77% | **75%** |
-| Gato (399) | 1yr | 79% | 83% | **83%** |
+| Profile (follows) | Session 1 (stateless) | Session 3+ (learned) | Improvement |
+|---|---|---|---|
+| Gato (399) | 24.5% | **95.5%** | +71pp |
+| ODELL (1,779) | 33.1% | **90.5%** | +57pp |
+| Telluride (2,784) | 20.4% | **89.5%** | +69pp |
+| 6-profile mean | 24% | **89%** | +65pp |
 
-Thompson converges in 2-3 sessions. The biggest gains appear at long windows
+Thompson converges in 2-3 sessions. The gains are largest at long time windows
 and large follow counts, where the relay selection problem is hardest. Small
 profiles (<200 follows) may see minimal gains — the 20-relay budget already
 covers most combinations.
