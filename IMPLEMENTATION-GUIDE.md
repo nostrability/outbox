@@ -7,9 +7,16 @@ Detailed recommendations for adding or upgrading outbox relay selection in your 
 ```
 What's your starting point?
 │
-├─ No outbox yet?
-│  └─ Start here → hardcode relay.damus.io + nos.lol (8% 1yr recall)
-│     then upgrade to basic outbox when ready
+├─ No outbox yet (hardcoded app relays / broadcast)?
+│  │
+│  ├─ Can you rewrite your relay routing layer?
+│  │  └─ Yes → Full outbox (Steps 1a → 4 in README)
+│  │           Best recall (84-89% 1yr), biggest engineering investment
+│  │
+│  └─ Need to preserve feed latency or can't change routing?
+│     └─ Hybrid outbox — add outbox queries to profile/event/thread hooks
+│        80% 1yr recall, ~80 LOC, no routing layer changes
+│        See README § Hybrid outbox for code
 │
 ├─ Basic outbox (real-time feeds)?
 │  ├─ Need connection minimization? → Greedy Set-Cover (16% 1yr, 84% 7d)
@@ -19,7 +26,8 @@ What's your starting point?
 ├─ Historical event recall (archival, search)?
 │  ├─ Can persist state across sessions?
 │  │  ├─ Using Welshman/Coracle?  → Welshman+Thompson Sampling (89% 1yr)
-│  │  └─ Using rust-nostr?        → FD+Thompson (84% 1yr after 5 sessions)
+│  │  ├─ Using rust-nostr?        → FD+Thompson (84% 1yr after 5 sessions)
+│  │  └─ Using app relays?        → Hybrid+Thompson (80% 1yr, no routing changes)
 │  └─ Stateless?                  → Filter Decomposition (25% 1yr) or
 │                                   Weighted Stochastic / Welshman (24% 1yr)
 │
