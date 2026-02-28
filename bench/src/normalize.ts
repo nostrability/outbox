@@ -6,6 +6,7 @@ const KNOWN_BAD_RELAYS = new Set([
   "wss://nwc.primal.net",
   "wss://relay.getalby.com",
   "wss://nostr.mutinywallet.com",
+  "wss://purplepag.es",
 ]);
 
 const LOCALHOST_PATTERNS = ["localhost", "127.0.0.1", "::1"];

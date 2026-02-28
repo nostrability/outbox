@@ -40,7 +40,7 @@ We analyzed outbox implementations in 15 codebases spanning 5 languages (Rust, T
 
 7. **Academic coverage ≠ real-world event recall.** Event verification against real relays shows that algorithms optimizing for assignment coverage don't necessarily win at actual event retrieval. At 1 year, MAB-UCB achieves 40.8% event recall vs. Greedy Set-Cover's 16.3%. The relay that *should* have the event often doesn't — due to retention policies, downtime, or access restrictions. Stochastic exploration discovers relays that retain historical events. [Building Nostr](https://building-nostr.coracle.social) frames this as the routing problem: "the relay that 'should' have the event" is determined by the outbox heuristic, but "there are many notes that should not be posted to user outboxes" and "any event may be retrieved based on criteria other than event author." The outbox heuristic is only one of several routing heuristics needed — others include inbox (mentions), group, DM, and topic-based routing.
 
-8. **Welshman's `random()` is brilliant for archival.** The stochastic factor in ``quality * (1 + log(weight)) * random()`` spreads queries across relays over time, achieving 24% mean event recall at 1 year across 6 profiles — 1.5× better than Greedy's 16%. Filter Decomposition (rust-nostr) edges it out at 25% through per-author relay diversity.
+8. **Per-author relay diversity beats popularity concentration.** Filter Decomposition (25% 1yr, deterministic) edges out Welshman Stochastic (24% 1yr) — both 1.5× better than Greedy's 16%. The winning factor isn't randomness vs determinism; it's whether the algorithm discovers niche relays that retain events. FD gives each author their own top-N write relays, so niche relays enter the query set. Welshman's ``(1 + log(weight))`` popularity factor concentrates on high-volume relays that prune aggressively. FD's per-author median recall (87.5% on ODELL) vs Welshman's (50.0%) shows the effect: FD provides equitable per-author coverage while popularity weighting leaves authors on niche relays with zero recall.
 
 ---
 
@@ -335,6 +335,29 @@ Users often publish kind 10002 with problematic entries (localhost, paid filter 
 - **Welshman** -- Protocol-level filtering: exclude onion, local, insecure (ws://) by default
 
 The tradeoff: Nostur's "discard entire event" approach loses good relay data when users have just one bad entry. Others filter per-entry but may still connect to misconfigured relays.
+
+#### NIP-11 Relay Classification (February 2026 snapshot)
+
+To quantify the relay list pollution problem, we probed NIP-11 info documents for all candidate relays across 36 benchmark profiles (13,867 relay-user pairs, 2,359 unique relay URLs). Each relay was classified by its NIP-11 `limitation` fields:
+
+| Category | Relay-user pairs | % of probes | Unique relays | % of unique |
+|---|---:|---:|---:|---:|
+| content | 5,130 | 37.0% | 548 | 23.2% |
+| paid | 954 | 6.9% | 85 | 3.6% |
+| auth-gated | 73 | 0.5% | 6 | 0.3% |
+| restricted | 579 | 4.2% | 83 | 3.5% |
+| no-nip11 | 2,378 | 17.1% | 491 | 20.8% |
+| offline | 4,753 | 34.3% | 1,146 | 48.6% |
+
+**Only 37% of relay-user pairs point to normal content relays.** The remaining 63% are offline (34%), missing NIP-11 (17%), paid (7%), restricted writes (4%), or auth-gated (0.5%). Nearly half (48.6%) of all unique relay URLs encountered were offline at probe time.
+
+The most common offline relays appear in 32-34 of 36 profiles — widely listed but long dead: `relay.nostr.band`, `relay.nostr.bg`, `nostr.orangepill.dev`, `nostr.zbd.gg`, `relay.current.fyi`, `relayable.org`. These waste connection budget on every feed load.
+
+Paid relays like `nostr.wine`, `nostr.land`, `atlas.nostr.land` appear in 34/36 profiles. While some paid relays serve content to readers without payment, others require authentication or payment for any access. The `filter.nostr.wine/*` pattern alone accounts for 104 unique URLs (per-user broadcast proxies).
+
+Restricted-write relays like `pyramid.fiatjaf.com` (34/36 users), `nostr.einundzwanzig.space` (32/36), and `nostr.thank.eu` (28/36) are community or personal relays that won't serve general content queries.
+
+*Classification: `content` = no restriction flags; `paid` = `limitation.payment_required: true`; `auth-gated` = `limitation.auth_required: true`; `restricted` = `limitation.restricted_writes: true` without paid/auth; `no-nip11` = no NIP-11 response; `offline` = connection failed. Probed with 5s HTTP timeout, `Accept: application/nostr+json`. Data: [`bench/.cache/nip11_probe_*.json`](bench/.cache/).*
 
 ### 5.4 Centralization Pressure
 

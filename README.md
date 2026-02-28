@@ -2,7 +2,7 @@
 
 ## If you read nothing else
 
-1. **Filter dead relays first** ([NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md)) — 40-66% of declared relays are dead. Removing them stops you wasting connection budget on relays that will never respond (success rate goes from ~30% to ~75%). Zero algorithmic changes needed.
+1. **Filter dead relays first** ([NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md)) — only 37% of relay-user pairs in NIP-65 lists point to normal content relays ([NIP-11 survey](#relay-list-pollution-is-worse-than-expected)). The rest are offline, paid, restricted, or missing. Removing them stops you wasting connection budget on relays that will never respond (success rate goes from ~30% to ~75%). Zero algorithmic changes needed.
 2. **Add randomness to relay selection** — deterministic algorithms (greedy set-cover) pick the same popular relays every time. Those relays prune old events. Stochastic selection discovers relays that keep history. 1.5× better recall at 1 year across 6 profiles.
 3. **Learn from what relays actually return** — no client tracks "did this relay deliver events?" Track it, feed it back into selection, and your relay picks improve by 60-70pp after 2-3 sessions ([Thompson Sampling](#thompson-sampling)).
 
@@ -83,11 +83,13 @@ NIP-66 publishes relay liveness data. Filtering out dead relays before running a
 
 **Speed impact:** Across 10 profiles (4,587 relay queries), NIP-66 pre-filtering reduces feed load time by 39% (40s → 24s). Dead relays each burn a 15-second timeout that blocks a concurrency slot from querying live relays.
 
-### 3. Randomness > determinism for anything beyond real-time
+**Relay list pollution is worse than expected.** NIP-11 probing across 36 profiles (13,867 relay-user pairs) shows only 37% of relay-user pairs point to normal content relays. The rest are offline (34%), missing NIP-11 (17%), paid (7%), restricted (4%), or auth-gated (0.5%). Nearly half of all unique relay URLs in NIP-65 lists are offline. The most common dead relays (`relay.nostr.band`, `nostr.orangepill.dev`, `nostr.zbd.gg`) appear in 32-34 of 36 tested profiles. See [Section 5.3](OUTBOX-REPORT.md#53-misconfigured-relay-lists) for the full NIP-11 classification breakdown.
 
-At 1 year, greedy set-cover gets only 16% event recall. Welshman's stochastic scoring (`quality * (1 + log(weight)) * random()`) gets 24% — 1.5× better. Filter Decomposition (rust-nostr) does even better at 25% by preserving per-author relay diversity. (All 6-profile means.) Why? Relays prune old events to manage storage, and popular high-volume relays prune more aggressively. A few prolific authors produce most events (mean/median ratio: 7.6:1 at 3 years) — greedy concentrates on popular relays where many authors publish, but those relays can't retain the high-volume output. Stochastic selection discovers smaller relays that keep history longer. At 7 days all algorithms cluster at 83-84% — the differences only emerge at longer windows. Note: stochastic results have meaningful run-to-run variance (±2–8pp depending on profile size) — the advantage is real but noisy on any single run.
+### 3. Per-author relay diversity beats popularity-based selection
 
-**What to do:** If you use greedy set-cover, switch to stochastic scoring. If you already use Welshman, upgrade to Thompson Sampling for even better results. Don't optimize purely for "covers the most authors" — factor in whether the relay actually retains events long-term.
+At 1 year, greedy set-cover gets only 16% event recall. Welshman's stochastic scoring gets 24% — 1.5× better. Filter Decomposition (rust-nostr, deterministic) does even better at 25%. (All 6-profile means.) The winning factor isn't randomness vs determinism — it's **relay diversity**. Algorithms that give each author their own relay picks (FD's per-author top-N, Welshman's random perturbation) discover small/niche relays that retain events well. Algorithms that concentrate on popular relays (greedy, popularity-weighted) fill the 20-relay budget with the same high-volume relays that prune old events aggressively. FD's median per-author recall (87.5% on ODELL/1,779 follows) vs Welshman's (50.0%) shows the effect: FD gives equitable coverage across authors, while popularity weighting gets high recall for authors on popular relays but zero for authors on niche ones. At 7 days all algorithms cluster at 83-84% — the differences only emerge at longer windows where relay retention diverges. Note: stochastic results have meaningful run-to-run variance (±2–8pp depending on profile size).
+
+**What to do:** If you use greedy set-cover, switch to per-author relay selection (Filter Decomposition) or stochastic scoring (Welshman). Either way, upgrade to Thompson Sampling for the biggest gains — learning steers toward relays that actually deliver, regardless of popularity.
 
 ### 4. 20 relay connections is enough — relay history is the real ceiling
 
@@ -335,6 +337,7 @@ bench/                        Benchmark tool (Deno/TypeScript)
   src/phase2/                 Event verification + baseline cache
   src/nip66/                  NIP-66 relay liveness filter
   src/relay-scores.ts         Thompson Sampling score persistence
+  probe-nip11.ts              NIP-11 relay classification probe
   run-benchmark-batch.sh      Multi-session batch runner
   results/                    JSON benchmark outputs
 analysis/
