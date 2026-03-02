@@ -2,24 +2,25 @@
 
 ## If you read nothing else
 
-1. **Filter dead relays first** ([NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md)) — only 37% of relay-user pairs in NIP-65 lists point to normal content relays ([NIP-11 survey](#relay-list-pollution-is-worse-than-expected)). The rest are offline, paid, restricted, or missing. Removing them stops you wasting connection budget on relays that will never respond (success rate goes from ~30% to ~75%). Zero algorithmic changes needed.
+1. **Filter dead relays first** ([NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md)) — only 37% of relay-user pairs in NIP-65 lists point to normal content relays ([NIP-11 survey](#relay-list-pollution-is-worse-than-expected)). The rest are offline, paid, restricted, or missing. Removing them stops you wasting connection budget on relays that will never respond (success rate goes from ~30% to ~75%), and each dead relay wastes 15 seconds of timeout. Zero algorithmic changes needed.
 2. **Add randomness to relay selection** — deterministic algorithms (greedy set-cover) pick the same popular relays every time. Those relays prune old events. Stochastic selection discovers relays that keep history. 1.5× better recall at 1 year across 6 profiles.
 3. **Learn from what relays actually return** — no client tracks "did this relay deliver events?" Track it, feed it back into selection, and your relay picks improve by 60-70pp after 2-3 sessions ([Thompson Sampling](#thompson-sampling)).
+4. **Use EOSE-race for feeds** — query 20 relays in parallel, stop 2 seconds after the first one finishes. You'll have 86-99% of your events in under 3 seconds total. Show events as they stream in. ([Latency data](#4-latency-when-to-stop-waiting-for-relays))
 
 ## What each step buys you
 
 Each technique adds incremental value. You don't need to implement everything at once:
 
-| Step | What you do | 1yr recall | 7d recall | Effort |
+| Step | What you do | 1yr recall | Feed TTFE | Effort |
 |:---:|---|:---:|:---:|---|
-| 0 | **Hardcode big relays** (damus + nos.lol) | 8% [5–12] | 61% [45–70] | Zero |
-| 1a | **Basic outbox** (greedy set-cover from NIP-65 data) | 16% [12–20] | 84% [77–94] | Medium — ~200 LOC, fetch relay lists + implement set-cover |
-| 1b | **Hybrid outbox** (keep app relays + add author write relays for profiles/threads) | 89% [86–93] | — | Low — ~80 LOC, no routing layer changes ([details](#two-ways-to-add-outbox)) |
-| 2 | **Stochastic scoring** (Welshman's `random()` factor) | 24% [12–38] | 83% [75–93] | Low — ~50 LOC, replace greedy with weighted random |
-| 3 | **Filter dead relays** (NIP-66 liveness data) | neutral | +5pp efficiency | Low — ~30 LOC, fetch kind 30166, exclude dead relays |
-| 4 | **Learn from delivery** (Thompson Sampling) | 84-89% [75–96] | 92% | Low — ~80 LOC + DB table, replace `random()` with `sampleBeta()` |
+| 0 | **Hardcode big relays** (damus + nos.lol) | 8% [5–12] | 530-670ms, instant completeness | Zero |
+| 1a | **Basic outbox** (greedy set-cover from NIP-65 data) | 16% [12–20] | 530-670ms, 86-99% at +2s | Medium — ~200 LOC, fetch relay lists + implement set-cover |
+| 1b | **Hybrid outbox** (keep app relays + add author write relays for profiles/threads) | 89% [86–93] | 530-670ms, app events instant | Low — ~80 LOC, no routing layer changes ([details](#two-ways-to-add-outbox)) |
+| 2 | **Stochastic scoring** (Welshman's `random()` factor) | 24% [12–38] | same | Low — ~50 LOC, replace greedy with weighted random |
+| 3 | **Filter dead relays** (NIP-66 liveness data) | neutral | -39% wall-clock (removes 15s timeouts) | Low — ~30 LOC, fetch kind 30166, exclude dead relays |
+| 4 | **Learn from delivery** (Thompson Sampling) | 84-89% [75–96] | same | Low — ~80 LOC + DB table, replace `random()` with `sampleBeta()` |
 
-*Steps 1a and 1b are alternative entry points — 1a replaces your routing layer, 1b augments it. Step 1b already includes Thompson Sampling (it's the same ~80 LOC). Steps 2-4 are incremental enhancements that apply to the 1a path. Going from Step 0 to Step 4 takes your 1yr recall from 8% to 84-89% (and 7d from 61% to 92%). [min–max] ranges show the spread across tested profiles — your recall depends on your follow graph size and relay diversity. All values are 6-profile means except Thompson variants (4-profile mean with NIP-66, 5 learning sessions; FD+Thompson=84%, Welshman+Thompson=89%, Hybrid+Thompson=89%). Step 4's "84-89%" is the range across Thompson variants; [75–96] is the cross-profile spread. 1yr recall is the more informative metric — 7d masks relay retention problems that dominate real-world performance.*
+*Steps 1a and 1b are alternative entry points — 1a replaces your routing layer, 1b augments it. Step 1b already includes Thompson Sampling (it's the same ~80 LOC). Steps 2-4 are incremental enhancements that apply to the 1a path. Going from Step 0 to Step 4 takes your 1yr recall from 8% to 84-89%. [min–max] ranges show the spread across tested profiles — your recall depends on your follow graph size and relay diversity. All values are 6-profile means except Thompson variants (4-profile mean with NIP-66, 5 learning sessions; FD+Thompson=84%, Welshman+Thompson=89%, Hybrid+Thompson=89%). Feed TTFE = time to first event (all algorithms share the same fast relay). "+2s" = EOSE-race grace period; "instant completeness" = all events arrive with first EOSE (1-2 relay setups). 1yr recall is the more informative metric — 7d masks relay retention problems that dominate real-world performance. Latency data from 7 cross-profile benchmarks (194–2,784 follows).*
 
 ## Already using a client library?
 
@@ -45,7 +46,7 @@ Your relay picker optimizes for "who publishes where" on paper, but the relay th
 
 ## What we tested
 
-17 relay selection algorithms (8 extracted from real clients, 9 experimental), tested against 6 real Nostr profiles (194-2,784 follows), across 6 time windows (7 days to 3 years), with and without NIP-66 liveness filtering. Every algorithm connected to real relays and queried for real events.
+17 relay selection algorithms (8 extracted from real clients, 9 experimental), tested against 7 real Nostr profiles (194-2,784 follows), across 6 time windows (7 days to 3 years), with and without NIP-66 liveness filtering. Every algorithm connected to real relays and queried for real events. Latency benchmarks across all 7 profiles measure TTFE, EOSE-race convergence, and profile-view timing.
 
 Full methodology: [OUTBOX-REPORT.md](OUTBOX-REPORT.md) | Reproduce results: [Benchmark-recreation.md](Benchmark-recreation.md) | Produced for [nostrability#69](https://github.com/niclas-pfeifer/nostrability/issues/69)
 
@@ -134,11 +135,45 @@ At 1 year, greedy set-cover gets only 16% event recall. Welshman's stochastic sc
 
 **What to do:** If you use greedy set-cover, switch to per-author relay selection (Filter Decomposition) or stochastic scoring (Welshman). Either way, upgrade to Thompson Sampling for the biggest gains — learning steers toward relays that actually deliver, regardless of popularity.
 
-### 4. 20 relay connections is enough — relay history is the real ceiling
+### 4. Latency: when to stop waiting for relays
 
-All algorithms reach within 1-2% of their unlimited ceiling at 20 relays. NIP-65 adoption is not the bottleneck — only ~3-5% of active users lack relay lists ([dead account analysis](bench/NIP66-COMPARISON-REPORT.md#5-dead-account-analysis) shows the raw 20-44% "missing" rate is mostly accounts with no posts in 2+ years).
+Feed queries to 20 outbox relays produce the first event in **530-670ms** across all tested profiles (194–2,784 follows). The algorithm doesn't matter — TTFE depends on which relay responds fastest, and all algorithms include at least one fast relay. What matters is when to *stop* waiting for the rest.
 
-The real ceiling is **historical relay discovery**: relays retain 77% of events at 1 year, but algorithms only achieve 24% recall — because NIP-65 lists reflect where users write *now*, not where they wrote a year ago. See [issue #21](https://github.com/nostrability/outbox/issues/21) for the full analysis and proposed protocol-level fixes.
+**The EOSE-race tradeoff.** When your fastest relay finishes (sends EOSE), you have a fraction of your total recall. Each additional second of waiting adds more events from slower relays. Across 7 profiles:
+
+| Grace after first EOSE | Completeness (% of eventual recall) | What you lose |
+|:---:|:---:|---|
+| **+0ms** (stop immediately) | 0–62% | Most events. Only works for 1-2 relay setups. |
+| **+500ms** | 5–93% | Highly variable. Small profiles OK, large profiles still low. |
+| **+1s** | 5–93% | Better but still unreliable for large follow sets (jb55, Telluride at 5–42%). |
+| **+2s** | 86–99% | **Sweet spot.** Even the largest profile (2,784 follows) gets 86-87%. |
+| **+5s** | 89–100% | Nearly complete. Only Telluride (2,784 follows) below 100% due to timeouts. |
+
+**Coverage and latency are directly opposed.** More relays = more events found, but longer to collect them all. This is the fundamental tradeoff:
+
+| Relays queried | Recall ceiling | At first EOSE | At +2s | At +5s |
+|:---:|:---:|:---:|:---:|:---:|
+| 2 (Big Relays) | 50–77% | 100% | 100% | 100% |
+| 4 (Ditto-Mew) | 62–86% | 8–84% | 85–100% | 85–100% |
+| 20 (Outbox) | 81–98% | 0–62% | 86–99% | 89–100% |
+
+Two relays finish instantly but miss half the events. Twenty relays find nearly everything but take 2-5s to converge. **Hybrid outbox side-steps this**: show app relay events immediately (2-4 relay speed), stream in outbox events in the background (20-relay coverage). The user sees *something* in <600ms and *everything* within 2-5s.
+
+**Profile-view latency.** Querying an author's top 3 NIP-65 write relays for a profile view takes **750-920ms median** (96-100% hit rate). This is algorithm-independent — every profile view does the same outbox lookup.
+
+**Practical timeout settings:**
+- **EOSE-race grace period**: 2s for feeds (86-99% completeness), 5s for archival/search
+- **Individual relay timeout**: 15s (matches most relay EOSE timeouts)
+- **Profile-view timeout**: 3s (covers p95 of 1.7-2.5s)
+- **Dead relay cost**: Each dead relay burns a full 15s timeout. NIP-66 filtering removes 40-66% of dead relays — this is as much a latency optimization as a connection budget one.
+
+**Showing late-arriving events.** The EOSE-race means your feed renders in <1s but more events arrive over the next 2-5s. Use a "N new posts" banner (like Twitter) to buffer late events without reflowing the user's reading position. For profile views, use shimmer placeholders that resolve as relays respond. See [IMPLEMENTATION-GUIDE.md § Showing late-arriving events](IMPLEMENTATION-GUIDE.md#showing-late-arriving-events-in-the-ui) for visual examples and code.
+
+*Latency data from 7 cross-profile benchmarks (194–2,784 follows, 178–1,234 relays). See [OUTBOX-REPORT.md § 8.6](OUTBOX-REPORT.md#86-latency-simulation) for full data.*
+
+### 5. 20 relay connections is enough
+
+All algorithms reach within 1-2% of their unlimited ceiling at 20 relays.
 
 **What to do:** Cap at 20 connections. For the ~3-5% of active follows without relay lists, use fallback strategies (relay hints from tags, indexer queries, hardcoded popular relays).
 

@@ -147,18 +147,243 @@ migration — it works equally well for delivery verification.
 
 See [README.md § Delivery check](README.md#delivery-check-self-healing) for code.
 
-### 4. Cap at 20 connections
+### 4. Set timeouts by use case (latency-coverage tradeoff)
+
+**Impact: determines how fast your UI feels vs how much content users see**
+
+Every relay query faces a tradeoff: wait longer → more events, but slower UI. The right timeout depends on what you're loading. Benchmarked across 7 profiles (194–2,784 follows):
+
+```text
+What are you loading?
+│
+├─ Main feed (timeline)
+│  └─ EOSE-race: show events as they stream in,
+│     cut off at first EOSE + 2s grace
+│     → First event: 530-670ms
+│     → 86-99% completeness at cutoff
+│     → Done in 2-3s total wall-clock
+│
+├─ Profile view
+│  └─ Query author's top 3 write relays + app relays in parallel
+│     3s timeout
+│     → 750-920ms median TTFE, 96-100% hit rate
+│
+├─ Event lookup / reply context
+│  └─ Try relay hint from e-tag first (500ms timeout)
+│     Fall back to author's write relays (2s timeout)
+│
+├─ Search / archival
+│  └─ Query all selected relays, 15s timeout per relay
+│     → ~100% completeness, accept 5-15s latency
+│
+└─ Notification badge / unread count
+   └─ EOSE-race: first EOSE + 500ms grace
+      → 70-76% completeness, sub-second total
+```
+
+**EOSE-race implementation.** Query all relays in parallel. When the first relay sends EOSE, start a grace timer. Cut off when the timer fires:
+
+```typescript
+function eoseRace(pool, relays, filter, graceMs = 2000) {
+  const events = new Map();  // deduplicate by event ID
+  let firstEose = false;
+  let graceTimer;
+
+  return new Promise(resolve => {
+    const sub = pool.subscribe(relays, filter, {
+      onevent(event) {
+        if (!events.has(event.id)) {
+          events.set(event.id, event);
+          onNewEvent(event);  // render immediately
+        }
+      },
+      oneose() {
+        if (!firstEose) {
+          firstEose = true;
+          graceTimer = setTimeout(() => {
+            sub.close();
+            resolve([...events.values()]);
+          }, graceMs);
+        }
+      }
+    });
+
+    // Hard timeout: 15s regardless
+    setTimeout(() => { sub.close(); resolve([...events.values()]); }, 15000);
+  });
+}
+```
+
+**Coverage and latency are directly opposed.** More relays = more events, but longer to collect them:
+
+| Relays queried | Recall ceiling | At first EOSE | At +2s | At +5s |
+|:---:|:---:|:---:|:---:|:---:|
+| 2 (Big Relays) | 50–77% | 100% | 100% | 100% |
+| 4 (Ditto-Mew) | 62–86% | 8–84% | 85–100% | 85–100% |
+| 20 (Outbox) | 81–98% | 0–62% | 86–99% | 89–100% |
+
+Two relays finish instantly but miss half the events. Twenty relays find nearly everything but take 2-5s. Hybrid outbox side-steps this: show app relay events immediately, stream in outbox events in the background.
+
+**Grace period decision matrix** (from 7-profile benchmark, EOSE-race simulation):
+
+| Grace period | Completeness range | Best for |
+|:---:|:---:|---|
+| +0ms | 0–62% | Only 1-2 relay setups (Big Relays, Ditto-Mew) |
+| +500ms | 5–93% | Notification badges, unread counts |
+| +1s | 5–93% | Unreliable — too variable across profile sizes |
+| **+2s** | **86–99%** | **Main feeds — best balance of speed and coverage** |
+| +5s | 89–100% | Archival, search, completeness-critical paths |
+
+The 0–62% range at +0ms means: if your algorithm queries 20 relays, the first EOSE arrives from the fastest relay but 19 others haven't reported yet. Waiting 2s lets most of them finish. For the largest profiles (2,700+ follows), +2s gets 86-87% — consider +5s for completeness-critical use cases.
+
+*Data: 7 cross-profile benchmarks (194–2,784 follows). See [README.md § Latency](README.md#4-latency-when-to-stop-waiting-for-relays) for the summary and [OUTBOX-REPORT.md § 8.6](OUTBOX-REPORT.md#86-latency-simulation) for full data.*
+
+#### Showing late-arriving events in the UI
+
+The EOSE-race means your feed renders in <1s but more events trickle in over the next 2-5s. You need a UI pattern that shows the fast results immediately without reflowing content when stragglers arrive. This is a solved problem — Twitter, Mastodon, and federated search engines all handle it.
+
+**Pattern 1: "N new posts" banner (recommended for feeds)**
+
+The user sees the initial load. Late-arriving events accumulate in a buffer. A non-intrusive banner appears when the buffer has new content:
+
+```text
+┌─────────────────────────────────┐
+│  ↑ 3 more posts                 │  ← banner appears after grace period
+├─────────────────────────────────┤
+│  Alice: just mass-adopted nostr │  ← first-EOSE events (visible immediately)
+│  Bob: gm                        │
+│  Carol: building on nostr...    │
+│                                 │
+│  Dave: new relay just dropped   │
+│  Eve: outbox model is fire      │
+└─────────────────────────────────┘
+```
+
+Tapping the banner scrolls up and inserts the new events in chronological position. This avoids layout shift — the user's reading position never jumps.
+
+**Pattern 2: Shimmer placeholder rows (good for profile views)**
+
+When loading a profile via outbox (3 write relays, 3s timeout), show skeleton rows that resolve into real events:
+
+```text
+┌─────────────────────────────────┐
+│  @fiatjaf                       │
+│  194 follows · 3 write relays   │
+├─────────────────────────────────┤
+│  Real note from relay 1         │  ← arrived at 400ms
+│  Real note from relay 1         │
+│  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ │  ← shimmer placeholder
+│  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ │  ← shimmer placeholder
+└─────────────────────────────────┘
+
+          ↓ 800ms later ↓
+
+┌─────────────────────────────────┐
+│  @fiatjaf                       │
+│  194 follows · 3 write relays   │
+├─────────────────────────────────┤
+│  Real note from relay 1         │
+│  Real note from relay 1         │
+│  Real note from relay 2         │  ← resolved
+│  Real note from relay 3         │  ← resolved
+└─────────────────────────────────┘
+```
+
+Only show skeletons when you *expect* more content (you've queried relays that haven't responded yet). Remove them when the timeout fires, even if empty.
+
+**Pattern 3: Relay progress counter (power-user addition)**
+
+A subtle status line showing relay progress. Useful during longer queries (search, archival) or as a trust signal for users who want to see outbox routing working:
+
+```text
+┌─────────────────────────────────┐
+│  Timeline                       │
+│  ✓ 14 of 18 relays · 2 slow    │  ← progress counter
+├─────────────────────────────────┤
+│  [events...]                    │
+└─────────────────────────────────┘
+
+          ↓ grace period fires ↓
+
+┌─────────────────────────────────┐
+│  Timeline                       │
+│                                 │  ← counter disappears
+├─────────────────────────────────┤
+│  [events...]                    │
+└─────────────────────────────────┘
+```
+
+**Implementation with EOSE-race.** Extend the `eoseRace` function to support a UI callback:
+
+```typescript
+function eoseRaceFeed(pool, relays, filter, {
+  graceMs = 2000,
+  onEvent,          // (event) => void — render immediately
+  onLateEvents,     // (events[]) => void — show "N new posts" banner
+  onRelayProgress,  // (responded: number, total: number) => void
+} = {}) {
+  const earlyEvents = new Map();   // events before grace fires
+  const lateEvents = new Map();    // events after grace fires
+  let graceFired = false;
+  let responded = 0;
+  const total = relays.length;
+
+  const sub = pool.subscribe(relays, filter, {
+    onevent(event) {
+      if (earlyEvents.has(event.id) || lateEvents.has(event.id)) return;
+      if (!graceFired) {
+        earlyEvents.set(event.id, event);
+        onEvent?.(event);  // render in feed immediately
+      } else {
+        lateEvents.set(event.id, event);  // buffer for banner
+      }
+    },
+    oneose() {
+      responded++;
+      onRelayProgress?.(responded, total);
+      if (responded === 1) {
+        // First EOSE — start grace timer
+        setTimeout(() => {
+          graceFired = true;
+          // Any events already buffered? Show banner immediately.
+          // Future events go to lateEvents buffer.
+        }, graceMs);
+      }
+    }
+  });
+
+  // Hard timeout
+  setTimeout(() => {
+    sub.close();
+    if (lateEvents.size > 0) onLateEvents?.([...lateEvents.values()]);
+  }, 15000);
+}
+```
+
+**Which pattern to use where:**
+
+| Context | Pattern | Why |
+|---|---|---|
+| Main feed (timeline) | "N new posts" banner | Avoids layout shift while reading |
+| Profile view | Shimmer placeholders | User expects content to fill in; short wait (750-920ms) |
+| Thread / reply chain | Shimmer for missing parents | Conversations should look complete; fill gaps as relays respond |
+| Search / archival | Relay progress counter | Longer waits (5-15s); counter sets expectations |
+| Hybrid outbox feed | Banner for outbox layer | App relay events show instantly; banner for outbox additions |
+
+These patterns are proven at scale: Twitter uses the banner for timeline updates, Facebook and LinkedIn use shimmer for profile/card loading, and Slack/Confluence use progress counters for federated search. The nostr multi-relay model maps directly to the federated search model — you're querying N independent sources and progressively merging results.
+
+### 5. Cap at 20 connections
 
 All algorithms reach within 1-2% of their unlimited ceiling by 20
 connections. Greedy at 10 already achieves 93-97% of its unlimited coverage.
 
-### 5. Target 2-3 relays per author
+### 6. Target 2-3 relays per author
 
 1 relay = fragile (relay goes down or silently drops a write, you lose events).
 2 = redundancy. 3+ = diminishing returns. 7 of 9 implementations with
 per-pubkey limits default to 2 or 3.
 
-### 6. Handle missing relay lists gracefully
+### 7. Handle missing relay lists gracefully
 
 On paper, 20-44% of followed users lack kind 10002 — but [dead account
 analysis](bench/NIP66-COMPARISON-REPORT.md#5-dead-account-analysis) shows
@@ -183,7 +408,7 @@ automates this server-side via negentropy sync, but is a proof-of-concept (not
 production). Client-side detection of "relay listed but no data from this
 author" would catch both missing relay lists and stale migrations.
 
-### 7. Diversify bootstrap relays
+### 8. Diversify bootstrap relays
 
 8/13 analyzed clients hardcode relay.damus.io. 6/13 depend on purplepag.es
 for indexing. Consider diversifying:
