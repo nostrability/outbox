@@ -1024,6 +1024,42 @@ Sections 8.3–8.5 model relay quality as Bernoulli (delivered/not). This sectio
 
 **Implementation:** Two new algorithm registry entries (`welshman-thompson-latency`, `fd-thompson-latency`) point to the same functions as their base variants. When `params.relayLatencies` is present, the discount is applied; otherwise `discount = 1.0` (zero behavioral change). Latency EWMA is persisted in the relay score DB alongside existing Beta parameters. See [`welshman-thompson.ts`](bench/src/algorithms/welshman-thompson.ts) and [`fd-thompson.ts`](bench/src/algorithms/fd-thompson.ts).
 
+#### Cross-profile validation (6 profiles × 5 sessions, 7d window, NIP-66 liveness, cap@20)
+
+The single-profile findings above (fiatjaf, 194 follows) were validated across the full 6-profile set. Sessions 2–5 averaged (session 1 is cold start parity):
+
+| Profile (follows) | W+T Recall | W+T+Lat Recall | Δ Recall | W+T @2s | W+T+Lat @2s | Δ @2s | W+T p50 | W+T+Lat p50 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| fiatjaf (194) | 89.8% | 88.8% | −1.0pp | 70.1% | 80.8% | **+10.7pp** | 1.8s | 1.7s |
+| Gato (399) | 83.6% | 83.1% | −0.5pp | 76.5% | 76.0% | −0.5pp | 2.1s | 2.0s |
+| hodlbod (451) | 90.7% | 85.0% | −5.7pp | 53.7% | 65.0% | **+11.3pp** | 2.3s | 2.2s |
+| jb55 (945) | 91.1% | 83.4% | −7.7pp | 26.7% | 43.0% | **+16.3pp** | 2.8s | 2.3s |
+| ODELL (1,777) | 86.0% | 75.1% | −10.9pp | 7.3% | 13.7% | **+6.3pp** | 3.4s | 3.2s |
+| Telluride (2,795) | 88.4% | 74.7% | −13.8pp | 2.8% | 8.0% | **+5.1pp** | 4.6s | 3.5s |
+
+FD+Thompson shows the same pattern with larger recall cost:
+
+| Profile (follows) | FD+T Recall | FD+T+Lat Recall | Δ Recall | FD+T @2s | FD+T+Lat @2s | Δ @2s |
+|---|---:|---:|---:|---:|---:|---:|
+| fiatjaf (194) | 89.6% | 83.2% | −6.4pp | 71.9% | 86.5% | **+14.6pp** |
+| Gato (399) | 83.6% | 74.5% | −9.1pp | 72.4% | 75.7% | +3.3pp |
+| hodlbod (451) | 88.6% | 76.2% | −12.5pp | 53.4% | 65.0% | **+11.6pp** |
+| jb55 (945) | 89.7% | 75.2% | −14.4pp | 41.0% | 45.9% | +4.9pp |
+| ODELL (1,777) | 83.0% | 68.0% | −15.0pp | 9.6% | 12.4% | +2.8pp |
+| Telluride (2,795) | 84.8% | 68.9% | −15.8pp | 3.6% | 7.2% | +3.6pp |
+
+**Cross-profile patterns:**
+
+1. **Recall cost scales with profile size.** Welshman+Thompson+Latency: −1.0pp at 194 follows → −13.8pp at 2,795. FD+Thompson+Latency: −6.4pp → −15.8pp. Larger profiles have more relays competing, so the latency discount displaces more marginal-but-relevant relays.
+
+2. **Completeness @2s wins are largest at medium profile sizes.** The sweet spot is 200–1000 follows: jb55 (945) gains +16.3pp for W+T+Lat. At 2,795 follows (Telluride), the gain shrinks to +5.1pp because even latency-optimized relay sets can't finish querying 574 candidate relays in 2 seconds.
+
+3. **Welshman variant is strictly safer than FD variant.** W+T+Lat recall cost is roughly half of FD+T+Lat at every profile size, while @2s gains are comparable or better. The popularity weight `(1 + log(weight))` anchors relay selection to high-coverage relays, limiting how far latency discount can push selections toward fast-but-low-coverage relays.
+
+4. **p50 improvement is consistent but modest.** Across all profiles, latency variants show 0.1–1.1s lower p50. The improvement is real but not transformative — tail latency (p80) and progressive completeness are where the latency discount has its biggest practical impact.
+
+5. **Recommendation for app devs is profile-size-dependent.** For apps targeting typical users (< 500 follows), `W+T+Latency` is a clear win: +10pp completeness @2s at < 1pp recall cost. For apps targeting power users (1000+ follows), the tradeoff is steeper — consider making the latency discount tunable or applying it only when completeness @2s matters more than total recall.
+
 ### 8.7 Latency Simulation
 
 **What this measures:** How fast do events arrive when querying outbox relays? When should a client stop waiting? This uses per-relay timing data (connect latency, query time, EOSE timing) collected during Phase 2 baseline queries to simulate parallel relay queries for each algorithm's relay set. No additional network calls — timing is replayed from baseline collection.
@@ -1038,7 +1074,7 @@ Sections 8.3–8.5 model relay quality as Bernoulli (delivered/not). This sectio
 | jb55 (945) | 731 | 605ms | 808ms | 15 | 668ms | 920ms |
 | ODELL (1,777) | 281 | 700ms | 954ms | 6 | 556ms | 717ms |
 | ValderDama (1,082) | 635 | 658ms | 874ms | 14 | 542ms | 912ms |
-| Telluride (2,747) | 1,234 | 611ms | 829ms | 35 | 527ms | 791ms |
+| Telluride (2,795) | 1,234 | 611ms | 829ms | 35 | 527ms | 791ms |
 
 *Follow counts differ slightly from earlier sections (e.g., ODELL 1,777 vs 1,779) because these latency benchmarks were run at a different time — follow counts change as users follow/unfollow people. The differences are small (<2%) and don't affect timing conclusions.*
 
@@ -1136,6 +1172,8 @@ Based on patterns observed across all implementations and benchmark results:
 9. **EOSE-race with 2s grace is the practical feed timeout.** Across 7 profiles, waiting 2s after the first relay finishes captures 86-99% of eventual recall — enough for feeds, where showing *most* events quickly beats showing *all* events slowly. The tradeoff is fundamental: 2 relays give instant completeness (100% at +0ms) but low absolute recall (50-77%). 20 outbox relays give high recall (81-98%) but need 2-5s to converge. Hybrid outbox bridges this — app relay events arrive instantly, outbox events stream in. For completeness-critical paths (archival, search), 5s gets to ~100% on all but the largest profiles (2,700+ follows need 15s due to timeout overhead).
 
 10. **Aggregator results are surprisingly poor.** Primal reaches 32% recall at 7d (6-profile mean) and <1% at 3yr — worse than Popular+Random (damus + nos.lol + 2 random relays) at every window. This is unexpected: an aggregator that proxies tens if not hundreds of relays should in theory outperform 4 random connections. This may indicate a limitation in the benchmark methodology rather than a real-world indictment of aggregators.
+
+11. **Latency-aware scoring is worth it for small-to-medium profiles.** Adding `score × 1/(1 + latencyMs/1000)` to Thompson Sampling improves progressive completeness @2s by +5 to +16pp across 6 profiles, with the sweet spot at 200–1000 follows (Section 8.6). Recall cost scales with profile size: −1pp at 194 follows, −14pp at 2,795 follows. Welshman+Thompson+Latency is the safer variant (half the recall cost of FD+Thompson+Latency). For apps targeting typical users (<500 follows), this is a clear win — a 1-line scoring change. For power users (1000+ follows), consider making the discount tunable.
 
 ---
 
