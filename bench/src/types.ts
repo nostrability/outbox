@@ -74,6 +74,8 @@ export interface AlgorithmParams {
   epsilon?: number;
   /** Max fraction of covered pubkeys any single relay may serve (0-1). */
   maxSharePerRelay?: number;
+  /** Per-relay EWMA latencies for latency-aware Thompson Sampling. */
+  relayLatencies?: Map<RelayUrl, number>;
 }
 
 export interface Distribution {
@@ -520,6 +522,10 @@ export interface RelayScoreEntry {
   sessionRates?: number[];
   /** Trend direction: "improving", "declining", or "stable". */
   trend?: "improving" | "declining" | "stable";
+  /** EWMA of connect+query latency (ms). */
+  latencyMs?: number;
+  /** Number of latency observations. */
+  latencyObservations?: number;
 }
 
 export interface RelayScoreDB {

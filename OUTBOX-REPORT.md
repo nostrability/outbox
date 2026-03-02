@@ -983,7 +983,48 @@ The algorithm models [Ditto-Mew](https://gitlab.com/soapbox-pub/ditto-mew)'s arc
 
 See [bench/src/algorithms/ditto-outbox.ts](bench/src/algorithms/ditto-outbox.ts) for the benchmark implementation and [bench/src/algorithms/ditto-mew.ts](bench/src/algorithms/ditto-mew.ts) for the baseline.
 
-### 8.6 Latency Simulation
+### 8.6 Latency-Aware Thompson Sampling
+
+Sections 8.3–8.5 model relay quality as Bernoulli (delivered/not). This section tests whether adding a latency discount to the scoring function improves feed responsiveness — specifically, whether TTFE (time-to-first-event) becomes algorithm-dependent when latency is in the scoring function.
+
+**Approach:** Multiply each relay's Thompson score by a hyperbolic latency discount: `score × 1/(1 + latencyMs/1000)`. Latency is an EWMA (α=0.7) of connect+query time, learned from Phase 2 relay outcomes and persisted across sessions. Cold start (no latency data) = discount of 1.0 → identical behavior to the base variant.
+
+| Latency | Discount | Interpretation |
+|---------|----------|----------------|
+| 200ms | 0.83 | Fast relay, minimal penalty |
+| 500ms | 0.67 | Slight preference against |
+| 1000ms | 0.50 | Reference point |
+| 2000ms | 0.33 | Significant penalty |
+| 5000ms | 0.17 | Near-excluded |
+
+**Why hyperbolic, not exponential:** Slow-but-reliable relays still compete. A relay at 2s with high delivery gets `0.33 × sampleBeta(high_α, low_β)` — often still above a fast relay with poor delivery.
+
+**7 sessions on fiatjaf (194 follows), 7d window, NIP-66 liveness filtered, cap@20:**
+
+| Metric | Welshman+Thompson | W+T+Latency | FD+Thompson | FD+T+Latency |
+|--------|:-----------------:|:-----------:|:-----------:|:------------:|
+| TTFE | 587–722ms | 587–722ms | 587–722ms | 587–779ms |
+| p50 query | 1.8–2.0s | 1.5–2.0s | 1.6–1.9s | **1.4–1.5s** |
+| p80 query | 2.2–2.3s | 2.0–2.3s | 2.2–2.3s | **2.0–2.1s** |
+| Event recall | 88–90% | 83–90% | 88–93% | 79–86% |
+| Completeness @2s | 55–84% | 67–88% | 57–80% | **81–90%** |
+| EOSE-race +500ms | 23–57% | 33–69% | 41–63% | **49–72%** |
+
+**Key findings:**
+
+1. **TTFE remains algorithm-independent.** All four variants consistently hit the same TTFE (587–722ms per session). The fastest relay in the follow graph is always selected regardless of latency discount. This confirms the Section 8.6.1 finding: TTFE is determined by the single fastest relay, which every algorithm includes.
+
+2. **Tail latency improves significantly.** FD+Thompson+Latency achieves p50 of 1.4–1.5s (vs 1.6–1.9s base) and p80 of 2.0–2.1s (vs 2.2–2.3s base) by sessions 4–7. The discount steers relay selection away from slow relays that drag down the median and upper percentiles.
+
+3. **Progressive completeness is the clearest win.** FD+Thompson+Latency reaches 81–90% of its eventual recall within 2 seconds, vs 57–80% for the base variant. At EOSE-race +500ms, the latency variant captures 49–72% (vs 41–63% base). Events that matter arrive faster.
+
+4. **The cost is 5–10% event recall for FD, 1–3% for Welshman.** FD+Thompson+Latency trades event recall (79–86% vs 88–93% base) for speed. Welshman+Thompson+Latency has a gentler tradeoff (83–90% vs 88–90% base) because the popularity weight `(1 + log(weight))` anchors selections toward high-coverage relays that also tend to be fast.
+
+5. **For app devs: add `* 1/(1 + latencyMs/1000)` to Thompson scoring.** It's a 1-line change. If you care about how fast the full feed populates (not just first event), it's a clear UX win at modest recall cost. The Welshman variant is the safer bet (minimal recall loss). If recall is paramount, skip latency discount — the base Thompson variants already converge to 88–93%.
+
+**Implementation:** Two new algorithm registry entries (`welshman-thompson-latency`, `fd-thompson-latency`) point to the same functions as their base variants. When `params.relayLatencies` is present, the discount is applied; otherwise `discount = 1.0` (zero behavioral change). Latency EWMA is persisted in the relay score DB alongside existing Beta parameters. See [`welshman-thompson.ts`](bench/src/algorithms/welshman-thompson.ts) and [`fd-thompson.ts`](bench/src/algorithms/fd-thompson.ts).
+
+### 8.7 Latency Simulation
 
 **What this measures:** How fast do events arrive when querying outbox relays? When should a client stop waiting? This uses per-relay timing data (connect latency, query time, EOSE timing) collected during Phase 2 baseline queries to simulate parallel relay queries for each algorithm's relay set. No additional network calls — timing is replayed from baseline collection.
 
@@ -1040,7 +1081,7 @@ Big Relays reaches full completeness at +0ms on most profiles (only 1-2 relays w
 
 1. **+2s grace captures 86-99% of recall for most profiles.** This is the recommended default for feeds. Only Telluride (2,784 follows, 1,234 relays) and ValderDama (1,082 follows) stay below 90% at +2s. For these large profiles, +5s gets to 89-100%.
 
-2. **TTFE is algorithm-independent and profile-size-independent.** 527-668ms across all 7 profiles and all algorithms. The fastest relay in any 20-relay set responds in under 700ms.
+2. **TTFE is algorithm-independent and profile-size-independent — even with latency-aware scoring.** 527-668ms across all 7 profiles and all algorithms. The fastest relay in any 20-relay set responds in under 700ms. Latency-aware Thompson Sampling (Section 8.6) confirms this: adding a latency discount to relay scoring does not change TTFE, but does improve tail latency (p50, p80) and progressive completeness (@2s recall fraction) by steering selections away from slow relays.
 
 3. **Coverage and latency are directly opposed.** This is the fundamental tradeoff — more relays = more events found, but longer to collect them:
 
@@ -1136,6 +1177,8 @@ All algorithms are in [`bench/src/algorithms/`](bench/src/algorithms/).
 | Direct Mapping | [`direct-mapping.ts`](bench/src/algorithms/direct-mapping.ts) | Amethyst (feeds) |
 | Welshman+Thompson | [`welshman-thompson.ts`](bench/src/algorithms/welshman-thompson.ts) | Welshman + Thompson Sampling |
 | FD+Thompson | [`fd-thompson.ts`](bench/src/algorithms/fd-thompson.ts) | Filter Decomposition + Thompson Sampling |
+| Welshman+Thompson+Latency | [`welshman-thompson.ts`](bench/src/algorithms/welshman-thompson.ts) | Welshman+Thompson + latency discount |
+| FD+Thompson+Latency | [`fd-thompson.ts`](bench/src/algorithms/fd-thompson.ts) | FD+Thompson + latency discount |
 | Greedy+ε-Explore | [`greedy-epsilon.ts`](bench/src/algorithms/greedy-epsilon.ts) | Greedy + ε-exploration |
 | Primal Aggregator | [`primal-baseline.ts`](bench/src/algorithms/primal-baseline.ts) | Baseline |
 | Popular+Random | [`popular-plus-random.ts`](bench/src/algorithms/popular-plus-random.ts) | Baseline |

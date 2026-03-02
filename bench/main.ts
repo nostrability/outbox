@@ -26,6 +26,7 @@ import {
   updateRelayScores,
   saveRelayScores,
   getRelayPriors,
+  getRelayLatencies,
 } from "./src/relay-scores.ts";
 import { QueryCache } from "./src/relay-pool.ts";
 import { enrichWithRelayHints } from "./src/hint-enrichment.ts";
@@ -310,10 +311,11 @@ async function runDefault(
   const maxConnections = opts.maxConnections ?? 20;
 
   // Load per-algorithm Thompson Sampling priors (if available from previous sessions)
-  const THOMPSON_IDS = new Set(["welshman-thompson", "fd-thompson"]);
+  const THOMPSON_IDS = new Set(["welshman-thompson", "fd-thompson", "welshman-thompson-latency", "fd-thompson-latency"]);
   const hasThompson = algorithms.some((a) => THOMPSON_IDS.has(a.id));
   const thompsonDBs = new Map<string, ReturnType<typeof loadRelayScores>>();
   const thompsonPriors = new Map<string, Map<string, { alpha: number; beta: number }>>();
+  const thompsonLatencies = new Map<string, Map<string, number>>();
 
   if (hasThompson && opts.verify) {
     for (const entry of algorithms) {
@@ -324,6 +326,14 @@ async function runDefault(
       if (priors.size > 0) {
         thompsonPriors.set(entry.id, priors);
         console.log(`\nThompson Sampling [${entry.id}]: loaded ${priors.size} relay priors (session ${db.sessionCount})`);
+      }
+      // Load latencies for latency-aware variants
+      if (entry.id.endsWith("-latency")) {
+        const latencies = getRelayLatencies(db);
+        if (latencies.size > 0) {
+          thompsonLatencies.set(entry.id, latencies);
+          console.log(`  Latency data: ${latencies.size} relays with EWMA latencies`);
+        }
       }
     }
   }
@@ -347,6 +357,10 @@ async function runDefault(
     // Inject per-algorithm Thompson Sampling priors
     if (THOMPSON_IDS.has(entry.id) && thompsonPriors.has(entry.id)) {
       params.relayPriors = thompsonPriors.get(entry.id);
+    }
+    // Inject latency data for latency-aware variants
+    if (thompsonLatencies.has(entry.id)) {
+      params.relayLatencies = thompsonLatencies.get(entry.id);
     }
 
     if (entry.stochastic) {
@@ -424,6 +438,10 @@ async function runDefault(
         if (THOMPSON_IDS.has(entry.id) && thompsonPriors.has(entry.id)) {
           params.relayPriors = thompsonPriors.get(entry.id);
         }
+        // Inject latency data for latency-aware variants
+        if (thompsonLatencies.has(entry.id)) {
+          params.relayLatencies = thompsonLatencies.get(entry.id);
+        }
         const rng = mulberry32(0);
         const singleResult = runAlgorithm(entry, input, params, rng);
         return {
@@ -475,6 +493,7 @@ async function runDefault(
           thompsonResult.pubkeyAssignments,
           phase2Result._baselines,
           phase2Result._cache as QueryCache,
+          phase2Result._relayOutcomes,
         );
         thompsonDBs.set(entry.id, db);
         await saveRelayScores(db, opts.nip66Filter || undefined, entry.id);

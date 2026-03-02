@@ -13,7 +13,7 @@ import type {
   RelayScoreDB,
   RelayScoreEntry,
 } from "./types.ts";
-import type { QueryCache } from "./relay-pool.ts";
+import type { QueryCache, RelayOutcome } from "./relay-pool.ts";
 
 const CACHE_DIR = ".cache";
 const SCHEMA_VERSION = 1;
@@ -73,6 +73,7 @@ export function updateRelayScores(
   _pubkeyAssignments: Map<Pubkey, Set<RelayUrl>>,
   baselines: Map<Pubkey, PubkeyBaseline>,
   cache: QueryCache,
+  relayOutcomes?: ReadonlyMap<RelayUrl, RelayOutcome>,
 ): RelayScoreDB {
   // Apply decay to existing scores
   for (const entry of Object.values(db.relays)) {
@@ -127,6 +128,17 @@ export function updateRelayScores(
     entry.trend = computeTrend(history);
     if (entry.trend === "declining" && history.length >= TREND_MIN_SESSIONS) {
       degrading.push(relay);
+    }
+
+    // EWMA latency update from relay outcomes
+    if (relayOutcomes) {
+      const outcome = relayOutcomes.get(relay);
+      if (outcome?.connected) {
+        const measured = outcome.connectTimeMs + outcome.queryTimeMs;
+        const prev = entry.latencyObservations ?? 0;
+        entry.latencyMs = prev === 0 ? measured : (entry.latencyMs! * 0.7 + measured * 0.3);
+        entry.latencyObservations = prev + 1;
+      }
     }
 
     db.relays[relay] = entry;
@@ -198,4 +210,20 @@ export function getRelayPriors(
     priors.set(relay, { alpha: entry.alpha, beta: entry.beta });
   }
   return priors;
+}
+
+/**
+ * Build per-relay latency map from the score DB.
+ * Only includes relays with at least one latency observation.
+ */
+export function getRelayLatencies(
+  db: RelayScoreDB,
+): Map<RelayUrl, number> {
+  const latencies = new Map<RelayUrl, number>();
+  for (const [relay, entry] of Object.entries(db.relays)) {
+    if (entry.latencyMs !== undefined && (entry.latencyObservations ?? 0) > 0) {
+      latencies.set(relay, entry.latencyMs);
+    }
+  }
+  return latencies;
 }
