@@ -124,7 +124,7 @@ Persist the EWMA in your relay stats table (one extra column). See [README.md §
 
 ### 2. Pre-filter relays with NIP-66
 
-**Impact: 1.5-3× better relay success rates, 39% faster feed loads**
+**Impact: 1.5-3× better relay success rates, 45% faster feed loads**
 
 [NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md) (kind
 30166) and [nostr.watch](https://github.com/sandwichfarm/nostr-watch) publish
@@ -263,7 +263,7 @@ Two relays finish instantly but miss half the events. Twenty relays find nearly 
 
 The 0–62% range at +0ms means: if your algorithm queries 20 relays, the first EOSE arrives from the fastest relay but 19 others haven't reported yet. Waiting 2s lets most of them finish. For the largest profiles (2,700+ follows), +2s gets 86-87% — consider +5s for completeness-critical use cases.
 
-*Data: 7 cross-profile benchmarks (194–2,784 follows). See [README.md § Latency](README.md#4-latency-when-to-stop-waiting-for-relays) for the summary and [OUTBOX-REPORT.md § 8.6](OUTBOX-REPORT.md#86-latency-simulation) for full data.*
+*Data: 7 cross-profile benchmarks (194–2,784 follows). See [README.md § Latency](README.md#4-latency-when-to-stop-waiting-for-relays) for the summary and [OUTBOX-REPORT.md § 8.7](OUTBOX-REPORT.md#87-latency-simulation) for full data.*
 
 #### Showing late-arriving events in the UI
 
