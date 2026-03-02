@@ -482,6 +482,34 @@ bash run-benchmark-batch.sh
 
 Run `deno task bench --help` for all options. See [Benchmark-recreation.md](Benchmark-recreation.md) for full reproduction instructions.
 
+## Help wanted: benchmark from your location
+
+All data in this report was collected from a single observer. Relay latency,
+success rates, and timeout behavior are location-dependent — someone in Brazil,
+Southeast Asia, or on a VPN will see different numbers. We need benchmark runs
+from different locations to validate whether findings generalize.
+
+**What to run** (takes ~30 min, needs Deno v2+ and internet):
+
+```bash
+cd bench
+deno task bench 3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d \
+  --verify --verify-window 604800 \
+  --nip66-filter liveness --no-phase2-cache \
+  --output both
+```
+
+**What to share:** Open an issue with your JSON file from `bench/results/`,
+your approximate location (country/region), and connection type (home, VPN,
+cloud, mobile).
+
+**What should vary by location:** TTFE, relay success rates, timeout counts,
+NIP-66 RTT correlation strength (NIP-66 monitors are in specific locations —
+correlation from your vantage point may be stronger or weaker).
+
+**What should be stable:** Relative algorithm rankings, relay retention
+patterns, which algorithms benefit from NIP-66 filtering.
+
 ## Repo structure
 
 ```text
