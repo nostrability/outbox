@@ -17,7 +17,8 @@ import {
   writeJsonOutput,
 } from "./src/report.ts";
 import { runPhase2 } from "./src/phase2/run.ts";
-import { printPhase2Table } from "./src/phase2/report.ts";
+import { printPhase2Table, printNip66Correlation } from "./src/phase2/report.ts";
+import { computeNip66Correlation } from "./src/phase2/nip66-correlation.ts";
 import { fetchNip66MonitorData } from "./src/nip66/fetch.ts";
 import { parseNip66FilterArg, classifyCandidates } from "./src/nip66/filter.ts";
 import {
@@ -25,6 +26,7 @@ import {
   updateRelayScores,
   saveRelayScores,
   getRelayPriors,
+  getRelayLatencies,
 } from "./src/relay-scores.ts";
 import { QueryCache } from "./src/relay-pool.ts";
 import { enrichWithRelayHints } from "./src/hint-enrichment.ts";
@@ -37,6 +39,7 @@ import type {
   BenchmarkInput,
   CliOptions,
   FilterProfile,
+  Nip66RelayData,
   Phase2Result,
   SweepRow,
 } from "./src/types.ts";
@@ -224,8 +227,9 @@ async function main(): Promise<void> {
   }
 
   // NIP-66 liveness filter: remove dead relays before algorithm runs
+  let nip66Data: Map<string, Nip66RelayData> | undefined;
   if (opts.nip66Filter) {
-    const nip66Data = await fetchNip66MonitorData(opts.nip66TtlMs);
+    nip66Data = await fetchNip66MonitorData(opts.nip66TtlMs);
 
     if (nip66Data.size > 0) {
       const { knownAlive, unknown, onionPreserved, parseFailedPreserved } =
@@ -287,9 +291,9 @@ async function main(): Promise<void> {
     if (opts.maxConnections !== undefined) {
       console.log("Warning: --sweep overrides --max-connections");
     }
-    await runSweep(input, algorithms, opts, seed, runs, showTable, showJson, hintMap);
+    await runSweep(input, algorithms, opts, seed, runs, showTable, showJson, hintMap, nip66Data);
   } else {
-    await runDefault(input, algorithms, opts, seed, runs, showTable, showJson, hintMap);
+    await runDefault(input, algorithms, opts, seed, runs, showTable, showJson, hintMap, nip66Data);
   }
 }
 
@@ -302,14 +306,16 @@ async function runDefault(
   showTable: boolean,
   showJson: boolean,
   hintMap?: HintMap,
+  nip66Data?: ReadonlyMap<string, Nip66RelayData>,
 ): Promise<void> {
   const maxConnections = opts.maxConnections ?? 20;
 
   // Load per-algorithm Thompson Sampling priors (if available from previous sessions)
-  const THOMPSON_IDS = new Set(["welshman-thompson", "fd-thompson"]);
+  const THOMPSON_IDS = new Set(["welshman-thompson", "fd-thompson", "welshman-thompson-latency", "fd-thompson-latency"]);
   const hasThompson = algorithms.some((a) => THOMPSON_IDS.has(a.id));
   const thompsonDBs = new Map<string, ReturnType<typeof loadRelayScores>>();
   const thompsonPriors = new Map<string, Map<string, { alpha: number; beta: number }>>();
+  const thompsonLatencies = new Map<string, Map<string, number>>();
 
   if (hasThompson && opts.verify) {
     for (const entry of algorithms) {
@@ -320,6 +326,14 @@ async function runDefault(
       if (priors.size > 0) {
         thompsonPriors.set(entry.id, priors);
         console.log(`\nThompson Sampling [${entry.id}]: loaded ${priors.size} relay priors (session ${db.sessionCount})`);
+      }
+      // Load latencies for latency-aware variants
+      if (entry.id.endsWith("-latency")) {
+        const latencies = getRelayLatencies(db);
+        if (latencies.size > 0) {
+          thompsonLatencies.set(entry.id, latencies);
+          console.log(`  Latency data: ${latencies.size} relays with EWMA latencies`);
+        }
       }
     }
   }
@@ -343,6 +357,10 @@ async function runDefault(
     // Inject per-algorithm Thompson Sampling priors
     if (THOMPSON_IDS.has(entry.id) && thompsonPriors.has(entry.id)) {
       params.relayPriors = thompsonPriors.get(entry.id);
+    }
+    // Inject latency data for latency-aware variants
+    if (thompsonLatencies.has(entry.id)) {
+      params.relayLatencies = thompsonLatencies.get(entry.id);
     }
 
     if (entry.stochastic) {
@@ -420,6 +438,10 @@ async function runDefault(
         if (THOMPSON_IDS.has(entry.id) && thompsonPriors.has(entry.id)) {
           params.relayPriors = thompsonPriors.get(entry.id);
         }
+        // Inject latency data for latency-aware variants
+        if (thompsonLatencies.has(entry.id)) {
+          params.relayLatencies = thompsonLatencies.get(entry.id);
+        }
         const rng = mulberry32(0);
         const singleResult = runAlgorithm(entry, input, params, rng);
         return {
@@ -444,6 +466,16 @@ async function runDefault(
       printPhase2Table(phase2Result);
     }
 
+    // NIP-66 RTT vs measured latency correlation
+    if (nip66Data && phase2Result._relayOutcomes) {
+      phase2Result.nip66Correlation = computeNip66Correlation(
+        nip66Data, phase2Result._relayOutcomes,
+      );
+      if (showTable && phase2Result.nip66Correlation.n > 0) {
+        printNip66Correlation(phase2Result.nip66Correlation);
+      }
+    }
+
     // Thompson Sampling learning: update relay scores from Phase 2 results (per-algorithm)
     if (hasThompson && phase2Result._baselines && phase2Result._cache) {
       for (let i = 0; i < algorithms.length; i++) {
@@ -461,6 +493,7 @@ async function runDefault(
           thompsonResult.pubkeyAssignments,
           phase2Result._baselines,
           phase2Result._cache as QueryCache,
+          phase2Result._relayOutcomes,
         );
         thompsonDBs.set(entry.id, db);
         await saveRelayScores(db, opts.nip66Filter || undefined, entry.id);
@@ -510,7 +543,7 @@ async function runDefault(
     );
     // Include Phase 2 results if available (strip internal fields)
     if (phase2Result) {
-      const { _baselines: _, _cache: __, ...serializablePhase2 } = phase2Result;
+      const { _baselines: _, _cache: __, _relayOutcomes: ___, ...serializablePhase2 } = phase2Result;
       // deno-lint-ignore no-explicit-any
       (output as any).phase2 = serializablePhase2;
     }
@@ -528,6 +561,7 @@ async function runSweep(
   showTable: boolean,
   showJson: boolean,
   hintMap?: HintMap,
+  nip66Data?: ReadonlyMap<string, Nip66RelayData>,
 ): Promise<void> {
   const budgets = opts.fast ? SWEEP_BUDGETS_FAST : SWEEP_BUDGETS_FULL;
   const sweepRows: SweepRow[] = [];
@@ -577,7 +611,7 @@ async function runSweep(
 
   // Also run default regime for full metrics at default cap
   console.log("");
-  await runDefault(input, algorithms, opts, seed, runs, showTable, showJson, hintMap);
+  await runDefault(input, algorithms, opts, seed, runs, showTable, showJson, hintMap, nip66Data);
 }
 
 main().then(() => {

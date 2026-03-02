@@ -37,7 +37,9 @@ export function welshmanThompson(
   }
 
   let priorsUsed = 0;
+  let latencyUsed = 0;
   const priorsTotal = relayPriors ? relayPriors.size : 0;
+  const relayLatencies = params.relayLatencies;
 
   for (const pubkey of input.follows) {
     const authorRelays = input.writerToRelays.get(pubkey);
@@ -57,7 +59,11 @@ export function welshmanThompson(
 
       if (prior) priorsUsed++;
 
-      const score = (1 + Math.log(weight)) * sample;
+      const latMs = relayLatencies?.get(relay);
+      const discount = latMs !== undefined ? 1 / (1 + latMs / 1000) : 1.0;
+      if (latMs !== undefined) latencyUsed++;
+
+      const score = (1 + Math.log(weight)) * sample * discount;
       scored.push({ relay, score });
     }
 
@@ -89,9 +95,12 @@ export function welshmanThompson(
   } else {
     notes.push("Thompson Sampling: cold start (uniform priors)");
   }
+  if (relayLatencies != null) {
+    notes.push(`Latency discount: ${relayLatencies.size} relays with latency data, ${latencyUsed} lookups applied`);
+  }
 
   return {
-    name: "Welshman+Thompson",
+    name: relayLatencies != null ? "Welshman+Thompson+Latency" : "Welshman+Thompson",
     relayAssignments,
     pubkeyAssignments,
     orphanedPubkeys,

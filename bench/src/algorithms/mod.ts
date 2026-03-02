@@ -201,6 +201,22 @@ export const ALGORITHM_REGISTRY: AlgorithmEntry[] = [
     defaults: { writeLimit: 3 },
   },
   {
+    id: "welshman-thompson-latency",
+    name: "Welshman+Thompson+Latency",
+    fn: welshmanThompson,
+    nativeCap: false,
+    stochastic: true,
+    defaults: { relayLimit: 3 },
+  },
+  {
+    id: "fd-thompson-latency",
+    name: "FD+Thompson+Latency",
+    fn: fdThompson,
+    nativeCap: false,
+    stochastic: true,
+    defaults: { writeLimit: 3 },
+  },
+  {
     id: "big-relays",
     name: "Big Relays (damus+nos.lol)",
     fn: bigRelaysBaseline,

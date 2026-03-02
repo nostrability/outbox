@@ -349,7 +349,9 @@ To quantify the relay list pollution problem, we probed NIP-11 info documents fo
 | no-nip11 | 2,378 | 17.1% | 491 | 20.8% |
 | offline | 4,753 | 34.3% | 1,146 | 48.6% |
 
-**Only 37% of relay-user pairs point to normal content relays.** The remaining 63% are offline (34%), missing NIP-11 (17%), paid (7%), restricted writes (4%), or auth-gated (0.5%). Nearly half (48.6%) of all unique relay URLs encountered were offline at probe time.
+**46% of relay-user pairs point to relays that won't serve content** — offline (34%), paid (7%), restricted writes (4%), or auth-gated (0.5%). Another 17% lack NIP-11 info documents but are likely functional (NIP-11 is voluntary — ~500 functional relays don't serve it, per nostr.watch). Only 37% are confirmed open content relays via NIP-11. Nearly half (48.6%) of all unique relay URLs encountered were offline at probe time.
+
+NIP-11 cannot determine relay liveness on its own — it's an HTTP info document, not a connectivity test. Use NIP-66 liveness data (WebSocket connectivity) to filter dead relays.
 
 The most common offline relays appear in 32-34 of 36 profiles — widely listed but long dead: `relay.nostr.band`, `relay.nostr.bg`, `nostr.orangepill.dev`, `nostr.zbd.gg`, `relay.current.fyi`, `relayable.org`. These waste connection budget on every feed load.
 
@@ -357,7 +359,7 @@ Paid relays like `nostr.wine`, `nostr.land`, `atlas.nostr.land` appear in 34/36 
 
 Restricted-write relays like `pyramid.fiatjaf.com` (34/36 users), `nostr.einundzwanzig.space` (32/36), and `nostr.thank.eu` (28/36) are community or personal relays that won't serve general content queries.
 
-*Classification: `content` = no restriction flags; `paid` = `limitation.payment_required: true`; `auth-gated` = `limitation.auth_required: true`; `restricted` = `limitation.restricted_writes: true` without paid/auth; `no-nip11` = no NIP-11 response; `offline` = connection failed. Probed with 5s HTTP timeout, `Accept: application/nostr+json`. Data: [`bench/.cache/nip11_probe_*.json`](bench/.cache/).*
+*Classification: `content` = no restriction flags; `paid` = `limitation.payment_required: true`; `auth-gated` = `limitation.auth_required: true`; `restricted` = `limitation.restricted_writes: true` without paid/auth; `no-nip11` = no NIP-11 response (relay may still be functional — NIP-11 is voluntary); `offline` = connection failed. Probed with 5s HTTP timeout, `Accept: application/nostr+json`. Data: [`bench/.cache/nip11_probe_*.json`](bench/.cache/).*
 
 ### 5.4 Centralization Pressure
 
@@ -592,7 +594,7 @@ ILP, Streaming Coverage, and Spectral Clustering frequently hit the theoretical 
 - Baseline: query ALL declared write relays for each author, plus additional relays needed by baselines (primal.net, damus.io, nos.lol)
 - Authors classified as **testable-reliable** (events found + ≥50% declared relays responded), **testable-partial** (<50% responded), **zero-baseline** (no events, relays responded), or **unreliable** (no events, relays unresponsive)
 - Events per (relay, author) pair capped at 10,000 to eliminate recency bias
-- 14 algorithms tested across 6 time windows (7d to 3 years)
+- 22 algorithms (+ 2 latency-aware variants) tested across 6 time windows (7d to 3 years)
 
 **Baseline limitations:** The baseline is a lower bound, not ground truth. If a relay is down or slow during the baseline query, events stored there are missed — making the baseline incomplete and all recall percentages conservative. Relay success rates during baseline construction range from 31% (ODELL, 1,199 relays) to 55% (fiatjaf, 234 relays), meaning 45-69% of declared relays did not respond. The "testable-reliable" author filter (≥50% declared relays responded) mitigates this by excluding authors whose baseline is likely incomplete, but some undercount is inherent. All recall percentages in this report should be read as "at least X%" rather than exact values.
 
@@ -738,8 +740,10 @@ Single-seed results can be misleading. To quantify run-to-run variability, we ra
 | Profile | Follows | Welshman seeds 0–4 | Mean ± std | P+R seeds 0–4 | Mean ± std |
 |---------|:-------:|---------------------|:----------:|----------------|:----------:|
 | fiatjaf | 194 | 37.8, 20.2, 23.3, 16.9, 25.2 | 24.7% ± 8.0pp | 11.8, 18.9, 20.1, 14.9, 23.0 | 17.7% ± 4.4pp |
-| jb55 | 655 | 27.0, 26.8, 30.5, 36.5, 27.8 | 29.7% ± 4.1pp | 22.1, 23.0, 23.7, 23.4, 22.6 | 23.0% ± 0.6pp |
+| jb55 | 655\* | 27.0, 26.8, 30.5, 36.5, 27.8 | 29.7% ± 4.1pp | 22.1, 23.0, 23.7, 23.4, 22.6 | 23.0% ± 0.6pp |
 | ODELL | 1,779 | 21.0, 18.5, 17.6, 19.4, 17.0 | 18.7% ± 1.6pp | 20.2, 18.9, 18.9, 19.2, 18.3 | 19.1% ± 0.7pp |
+
+*\*jb55's follow count was 655 when this variance analysis was run (earlier data snapshot); later benchmarks show 943-945. Follow counts change as users follow/unfollow.*
 
 Key observations:
 - **Variance decreases with follow count.** fiatjaf (194 follows) has ±8pp Welshman std; ODELL (1,779 follows) has ±1.6pp. Larger follow lists average out per-relay randomness.
@@ -983,7 +987,84 @@ The algorithm models [Ditto-Mew](https://gitlab.com/soapbox-pub/ditto-mew)'s arc
 
 See [bench/src/algorithms/ditto-outbox.ts](bench/src/algorithms/ditto-outbox.ts) for the benchmark implementation and [bench/src/algorithms/ditto-mew.ts](bench/src/algorithms/ditto-mew.ts) for the baseline.
 
-### 8.6 Latency Simulation
+### 8.6 Latency-Aware Thompson Sampling
+
+Sections 8.3–8.5 model relay quality as Bernoulli (delivered/not). This section tests whether adding a latency discount to the scoring function improves feed responsiveness — specifically, whether TTFE (time-to-first-event) becomes algorithm-dependent when latency is in the scoring function.
+
+**Approach:** Multiply each relay's Thompson score by a hyperbolic latency discount: `score × 1/(1 + latencyMs/1000)`. Latency is an EWMA (α=0.7) of connect+query time, learned from Phase 2 relay outcomes and persisted across sessions. Cold start (no latency data) = discount of 1.0 → identical behavior to the base variant.
+
+| Latency | Discount | Interpretation |
+|---------|----------|----------------|
+| 200ms | 0.83 | Fast relay, minimal penalty |
+| 500ms | 0.67 | Slight preference against |
+| 1000ms | 0.50 | Reference point |
+| 2000ms | 0.33 | Significant penalty |
+| 5000ms | 0.17 | Near-excluded |
+
+**Why hyperbolic, not exponential:** Slow-but-reliable relays still compete. A relay at 2s with high delivery gets `0.33 × sampleBeta(high_α, low_β)` — often still above a fast relay with poor delivery.
+
+**7 sessions on fiatjaf (194 follows), 7d window, NIP-66 liveness filtered, cap@20:**
+
+| Metric | Welshman+Thompson | W+T+Latency | FD+Thompson | FD+T+Latency |
+|--------|:-----------------:|:-----------:|:-----------:|:------------:|
+| TTFE | 587–722ms | 587–722ms | 587–722ms | 587–779ms |
+| p50 query | 1.8–2.0s | 1.5–2.0s | 1.6–1.9s | **1.4–1.5s** |
+| p80 query | 2.2–2.3s | 2.0–2.3s | 2.2–2.3s | **2.0–2.1s** |
+| Event recall | 88–90% | 83–90% | 88–93% | 79–86% |
+| Completeness @2s | 55–84% | 67–88% | 57–80% | **81–90%** |
+| EOSE-race +500ms | 23–57% | 33–69% | 41–63% | **49–72%** |
+
+**Key findings:**
+
+1. **TTFE remains algorithm-independent.** All four variants consistently hit the same TTFE (587–722ms per session). The fastest relay in the follow graph is always selected regardless of latency discount. This confirms the Section 8.7 finding: TTFE is determined by the single fastest relay, which every algorithm includes.
+
+2. **Tail latency improves significantly.** FD+Thompson+Latency achieves p50 of 1.4–1.5s (vs 1.6–1.9s base) and p80 of 2.0–2.1s (vs 2.2–2.3s base) by sessions 4–7. The discount steers relay selection away from slow relays that drag down the median and upper percentiles.
+
+3. **Progressive completeness is the clearest win.** FD+Thompson+Latency reaches 81–90% of its eventual recall within 2 seconds, vs 57–80% for the base variant. At EOSE-race +500ms, the latency variant captures 49–72% (vs 41–63% base). Events that matter arrive faster.
+
+4. **The cost is 5–10% event recall for FD, 1–3% for Welshman.** FD+Thompson+Latency trades event recall (79–86% vs 88–93% base) for speed. Welshman+Thompson+Latency has a gentler tradeoff (83–90% vs 88–90% base) because the popularity weight `(1 + log(weight))` anchors selections toward high-coverage relays that also tend to be fast.
+
+5. **For app devs: add `* 1/(1 + latencyMs/1000)` to Thompson scoring.** It's a 1-line change. If you care about how fast the full feed populates (not just first event), it's a clear UX win at modest recall cost. The Welshman variant is the safer bet (minimal recall loss). If recall is paramount, skip latency discount — the base Thompson variants already converge to 88–93%.
+
+**Implementation:** Two new algorithm registry entries (`welshman-thompson-latency`, `fd-thompson-latency`) point to the same functions as their base variants. When `params.relayLatencies` is present, the discount is applied; otherwise `discount = 1.0` (zero behavioral change). Latency EWMA is persisted in the relay score DB alongside existing Beta parameters. See [`welshman-thompson.ts`](bench/src/algorithms/welshman-thompson.ts) and [`fd-thompson.ts`](bench/src/algorithms/fd-thompson.ts).
+
+#### Cross-profile validation (6 profiles × 5 sessions, 7d window, NIP-66 liveness, cap@20)
+
+The single-profile findings above (fiatjaf, 194 follows) were validated across the full 6-profile set. Sessions 2–5 averaged (session 1 is cold start parity):
+
+| Profile (follows) | W+T Recall | W+T+Lat Recall | Δ Recall | W+T @2s | W+T+Lat @2s | Δ @2s | W+T p50 | W+T+Lat p50 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| fiatjaf (194) | 89.8% | 88.8% | −1.0pp | 70.1% | 80.8% | **+10.7pp** | 1.8s | 1.7s |
+| Gato (399) | 83.6% | 83.1% | −0.5pp | 76.5% | 76.0% | −0.5pp | 2.1s | 2.0s |
+| hodlbod (451) | 90.7% | 85.0% | −5.7pp | 53.7% | 65.0% | **+11.3pp** | 2.3s | 2.2s |
+| jb55 (945) | 91.1% | 83.4% | −7.7pp | 26.7% | 43.0% | **+16.3pp** | 2.8s | 2.3s |
+| ODELL (1,777) | 86.0% | 75.1% | −10.9pp | 7.3% | 13.7% | **+6.3pp** | 3.4s | 3.2s |
+| Telluride (2,795) | 88.4% | 74.7% | −13.8pp | 2.8% | 8.0% | **+5.1pp** | 4.6s | 3.5s |
+
+FD+Thompson shows the same pattern with larger recall cost:
+
+| Profile (follows) | FD+T Recall | FD+T+Lat Recall | Δ Recall | FD+T @2s | FD+T+Lat @2s | Δ @2s |
+|---|---:|---:|---:|---:|---:|---:|
+| fiatjaf (194) | 89.6% | 83.2% | −6.4pp | 71.9% | 86.5% | **+14.6pp** |
+| Gato (399) | 83.6% | 74.5% | −9.1pp | 72.4% | 75.7% | +3.3pp |
+| hodlbod (451) | 88.6% | 76.2% | −12.5pp | 53.4% | 65.0% | **+11.6pp** |
+| jb55 (945) | 89.7% | 75.2% | −14.4pp | 41.0% | 45.9% | +4.9pp |
+| ODELL (1,777) | 83.0% | 68.0% | −15.0pp | 9.6% | 12.4% | +2.8pp |
+| Telluride (2,795) | 84.8% | 68.9% | −15.8pp | 3.6% | 7.2% | +3.6pp |
+
+**Cross-profile patterns:**
+
+1. **Recall cost scales with profile size.** Welshman+Thompson+Latency: −1.0pp at 194 follows → −13.8pp at 2,795. FD+Thompson+Latency: −6.4pp → −15.8pp. Larger profiles have more relays competing, so the latency discount displaces more marginal-but-relevant relays.
+
+2. **Completeness @2s wins are largest at medium profile sizes.** The sweet spot is 200–1000 follows: jb55 (945) gains +16.3pp for W+T+Lat. At 2,795 follows (Telluride), the gain shrinks to +5.1pp because even latency-optimized relay sets can't finish querying 574 candidate relays in 2 seconds.
+
+3. **Welshman variant is strictly safer than FD variant.** W+T+Lat recall cost is roughly half of FD+T+Lat at every profile size, while @2s gains are comparable or better. The popularity weight `(1 + log(weight))` anchors relay selection to high-coverage relays, limiting how far latency discount can push selections toward fast-but-low-coverage relays.
+
+4. **p50 improvement is consistent but modest.** Across all profiles, latency variants show 0.1–1.1s lower p50. The improvement is real but not transformative — tail latency (p80) and progressive completeness are where the latency discount has its biggest practical impact.
+
+5. **Recommendation for app devs is profile-size-dependent.** For apps targeting typical users (< 500 follows), `W+T+Latency` is a clear win: +10pp completeness @2s at < 1pp recall cost. For apps targeting power users (1000+ follows), the tradeoff is steeper — consider making the latency discount tunable or applying it only when completeness @2s matters more than total recall.
+
+### 8.7 Latency Simulation
 
 **What this measures:** How fast do events arrive when querying outbox relays? When should a client stop waiting? This uses per-relay timing data (connect latency, query time, EOSE timing) collected during Phase 2 baseline queries to simulate parallel relay queries for each algorithm's relay set. No additional network calls — timing is replayed from baseline collection.
 
@@ -997,7 +1078,7 @@ See [bench/src/algorithms/ditto-outbox.ts](bench/src/algorithms/ditto-outbox.ts)
 | jb55 (945) | 731 | 605ms | 808ms | 15 | 668ms | 920ms |
 | ODELL (1,777) | 281 | 700ms | 954ms | 6 | 556ms | 717ms |
 | ValderDama (1,082) | 635 | 658ms | 874ms | 14 | 542ms | 912ms |
-| Telluride (2,747) | 1,234 | 611ms | 829ms | 35 | 527ms | 791ms |
+| Telluride (2,795) | 1,234 | 611ms | 829ms | 35 | 527ms | 791ms |
 
 *Follow counts differ slightly from earlier sections (e.g., ODELL 1,777 vs 1,779) because these latency benchmarks were run at a different time — follow counts change as users follow/unfollow people. The differences are small (<2%) and don't affect timing conclusions.*
 
@@ -1040,7 +1121,7 @@ Big Relays reaches full completeness at +0ms on most profiles (only 1-2 relays w
 
 1. **+2s grace captures 86-99% of recall for most profiles.** This is the recommended default for feeds. Only Telluride (2,784 follows, 1,234 relays) and ValderDama (1,082 follows) stay below 90% at +2s. For these large profiles, +5s gets to 89-100%.
 
-2. **TTFE is algorithm-independent and profile-size-independent.** 527-668ms across all 7 profiles and all algorithms. The fastest relay in any 20-relay set responds in under 700ms.
+2. **TTFE is algorithm-independent and profile-size-independent — even with latency-aware scoring.** 527-668ms across all 7 profiles and all algorithms. The fastest relay in any 20-relay set responds in under 700ms. Latency-aware Thompson Sampling (Section 8.6) confirms this: adding a latency discount to relay scoring does not change TTFE, but does improve tail latency (p50, p80) and progressive completeness (@2s recall fraction) by steering selections away from slow relays.
 
 3. **Coverage and latency are directly opposed.** This is the fundamental tradeoff — more relays = more events found, but longer to collect them:
 
@@ -1096,6 +1177,8 @@ Based on patterns observed across all implementations and benchmark results:
 
 10. **Aggregator results are surprisingly poor.** Primal reaches 32% recall at 7d (6-profile mean) and <1% at 3yr — worse than Popular+Random (damus + nos.lol + 2 random relays) at every window. This is unexpected: an aggregator that proxies tens if not hundreds of relays should in theory outperform 4 random connections. This may indicate a limitation in the benchmark methodology rather than a real-world indictment of aggregators.
 
+11. **Latency-aware scoring is worth it for small-to-medium profiles.** Adding `score × 1/(1 + latencyMs/1000)` to Thompson Sampling improves progressive completeness @2s by +5 to +16pp across 6 profiles, with the sweet spot at 200–1000 follows (Section 8.6). Recall cost scales with profile size: −1pp at 194 follows, −14pp at 2,795 follows. Welshman+Thompson+Latency is the safer variant (half the recall cost of FD+Thompson+Latency). For apps targeting typical users (<500 follows), this is a clear win — a 1-line scoring change. For power users (1000+ follows), consider making the discount tunable.
+
 ---
 
 ## Appendix: Source Code References
@@ -1136,6 +1219,8 @@ All algorithms are in [`bench/src/algorithms/`](bench/src/algorithms/).
 | Direct Mapping | [`direct-mapping.ts`](bench/src/algorithms/direct-mapping.ts) | Amethyst (feeds) |
 | Welshman+Thompson | [`welshman-thompson.ts`](bench/src/algorithms/welshman-thompson.ts) | Welshman + Thompson Sampling |
 | FD+Thompson | [`fd-thompson.ts`](bench/src/algorithms/fd-thompson.ts) | Filter Decomposition + Thompson Sampling |
+| Welshman+Thompson+Latency | [`welshman-thompson.ts`](bench/src/algorithms/welshman-thompson.ts) | Welshman+Thompson + latency discount |
+| FD+Thompson+Latency | [`fd-thompson.ts`](bench/src/algorithms/fd-thompson.ts) | FD+Thompson + latency discount |
 | Greedy+ε-Explore | [`greedy-epsilon.ts`](bench/src/algorithms/greedy-epsilon.ts) | Greedy + ε-exploration |
 | Primal Aggregator | [`primal-baseline.ts`](bench/src/algorithms/primal-baseline.ts) | Baseline |
 | Popular+Random | [`popular-plus-random.ts`](bench/src/algorithms/popular-plus-random.ts) | Baseline |

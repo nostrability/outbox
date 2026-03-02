@@ -17,8 +17,9 @@ Each technique adds incremental value. You don't need to implement everything at
 | 1a | **Basic outbox** (greedy set-cover from NIP-65 data) | 16% [12–20] | 530-670ms, 86-99% at +2s | Medium — ~200 LOC, fetch relay lists + implement set-cover |
 | 1b | **Hybrid outbox** (keep app relays + add author write relays for profiles/threads) | 89% [86–93] | 530-670ms, app events instant | Low — ~80 LOC, no routing layer changes ([details](#two-ways-to-add-outbox)) |
 | 2 | **Stochastic scoring** (Welshman's `random()` factor) | 24% [12–38] | same | Low — ~50 LOC, replace greedy with weighted random |
-| 3 | **Filter dead relays** (NIP-66 liveness data) | neutral | -39% wall-clock (removes 15s timeouts) | Low — ~30 LOC, fetch kind 30166, exclude dead relays |
+| 3 | **Filter dead relays** (NIP-66 liveness data) | neutral | -45% wall-clock (removes 15s timeouts) | Low — ~30 LOC, fetch kind 30166, exclude dead relays |
 | 4 | **Learn from delivery** (Thompson Sampling) | 84-89% [75–96] | same | Low — ~80 LOC + DB table, replace `random()` with `sampleBeta()` |
+| 4+ | **Learn relay speed** (latency discount) | same | +10-16pp completeness @2s | 1 line — `score *= 1/(1 + latencyMs/1000)` on top of Step 4 |
 
 *Steps 1a and 1b are alternative entry points — 1a replaces your routing layer, 1b augments it. Step 1b already includes Thompson Sampling (it's the same ~80 LOC). Steps 2-4 are incremental enhancements that apply to the 1a path. Going from Step 0 to Step 4 takes your 1yr recall from 8% to 84-89%. [min–max] ranges show the spread across tested profiles — your recall depends on your follow graph size and relay diversity. All values are 6-profile means except Thompson variants (4-profile mean with NIP-66, 5 learning sessions; FD+Thompson=84%, Welshman+Thompson=89%, Hybrid+Thompson=89%). Feed TTFE = time to first event (all algorithms share the same fast relay). "+2s" = EOSE-race grace period; "instant completeness" = all events arrive with first EOSE (1-2 relay setups). 1yr recall is the more informative metric — 7d masks relay retention problems that dominate real-world performance. Latency data from 7 cross-profile benchmarks (194–2,784 follows).*
 
@@ -46,7 +47,7 @@ Your relay picker optimizes for "who publishes where" on paper, but the relay th
 
 ## What we tested
 
-17 relay selection algorithms (8 extracted from real clients, 9 experimental), tested against 7 real Nostr profiles (194-2,784 follows), across 6 time windows (7 days to 3 years), with and without NIP-66 liveness filtering. Every algorithm connected to real relays and queried for real events. Latency benchmarks across all 7 profiles measure TTFE, EOSE-race convergence, and profile-view timing.
+22 relay selection algorithms (9 from real clients, 4 experimental-actionable, 7 academic, 2 baselines — plus 2 latency-aware variants), tested against 7 real Nostr profiles (194-2,784 follows), across 6 time windows (7 days to 3 years), with and without NIP-66 liveness filtering. Every algorithm connected to real relays and queried for real events. Latency benchmarks across all 7 profiles measure TTFE, EOSE-race convergence, and profile-view timing.
 
 Full methodology: [OUTBOX-REPORT.md](OUTBOX-REPORT.md) | Reproduce results: [Benchmark-recreation.md](Benchmark-recreation.md) | Produced for [nostrability#69](https://github.com/nostrability/nostrability/issues/69)
 
@@ -125,9 +126,9 @@ NIP-66 publishes relay liveness data. Filtering out dead relays before running a
 
 *Relay success rate = % of selected relays that actually respond to queries. This is an efficiency improvement (fewer wasted connections), not necessarily more events retrieved.*
 
-**Speed impact:** Across 10 profiles (4,587 relay queries), NIP-66 pre-filtering reduces feed load time by 39% (40s → 24s). Dead relays each burn a 15-second timeout that blocks a concurrency slot from querying live relays.
+**Speed impact:** Across 10 profiles (4,587 relay queries), NIP-66 pre-filtering reduces feed load time by 45% (40s → 22s). Dead relays each burn a 15-second timeout that blocks a concurrency slot from querying live relays.
 
-**Relay list pollution is worse than expected.** NIP-11 probing across 36 profiles (13,867 relay-user pairs) shows only 37% of relay-user pairs point to normal content relays. The rest are offline (34%), missing NIP-11 (17%), paid (7%), restricted (4%), or auth-gated (0.5%). Nearly half of all unique relay URLs in NIP-65 lists are offline. The most common dead relays (`relay.nostr.band`, `nostr.orangepill.dev`, `nostr.zbd.gg`) appear in 32-34 of 36 tested profiles. See [Section 5.3](OUTBOX-REPORT.md#53-misconfigured-relay-lists) for the full NIP-11 classification breakdown.
+**Relay list pollution is worse than expected.** NIP-11 probing across 36 profiles (13,867 relay-user pairs) shows 46% of relay-user pairs point to relays that won't serve content — offline (34%), paid (7%), restricted (4%), or auth-gated (0.5%). Another 17% lack NIP-11 but are likely functional (NIP-11 is voluntary — ~500 relays don't serve it, per nostr.watch). Nearly half of all unique relay URLs in NIP-65 lists are offline. The most common dead relays (`relay.nostr.band`, `nostr.orangepill.dev`, `nostr.zbd.gg`) appear in 32-34 of 36 tested profiles. Use NIP-66 liveness (WebSocket connectivity) rather than NIP-11 to filter dead relays. See [Section 5.3](OUTBOX-REPORT.md#53-misconfigured-relay-lists) for the full breakdown.
 
 ### 3. Per-author relay diversity beats popularity-based selection
 
@@ -169,9 +170,38 @@ Two relays finish instantly but miss half the events. Twenty relays find nearly 
 
 **Showing late-arriving events.** The EOSE-race means your feed renders in <1s but more events arrive over the next 2-5s. Use a "N new posts" banner (like Twitter) to buffer late events without reflowing the user's reading position. For profile views, use shimmer placeholders that resolve as relays respond. See [IMPLEMENTATION-GUIDE.md § Showing late-arriving events](IMPLEMENTATION-GUIDE.md#showing-late-arriving-events-in-the-ui) for visual examples and code.
 
-*Latency data from 7 cross-profile benchmarks (194–2,784 follows, 178–1,234 relays). See [OUTBOX-REPORT.md § 8.6](OUTBOX-REPORT.md#86-latency-simulation) for full data.*
+*Latency data from 7 cross-profile benchmarks (194–2,784 follows, 178–1,234 relays). See [OUTBOX-REPORT.md § 8.7](OUTBOX-REPORT.md#87-latency-simulation) for full data.*
 
-### 5. 20 relay connections is enough
+### 5. Make your feed fill in faster by learning relay speed
+
+TTFE (first event) is fast and algorithm-independent — 530-670ms regardless of algorithm. But *how fast the full feed populates* is improvable. Adding a latency discount to Thompson scoring steers selection toward fast relays, so more events arrive within the first 2 seconds.
+
+**The change:** Multiply each relay's Thompson score by `1 / (1 + latencyMs / 1000)`. Learn `latencyMs` from your own connect+query measurements using an exponential moving average (EWMA, α=0.3). Cold start = no latency data = discount of 1.0 (identical to base Thompson).
+
+```typescript
+// After Thompson scoring, add one line:
+const latencyMs = relayStats.get(relay)?.latencyMs;  // EWMA from past queries
+const discount = latencyMs !== undefined ? 1 / (1 + latencyMs / 1000) : 1.0;
+const score = quality * (1 + Math.log(weight)) * sampleBeta(alpha, beta) * discount;
+```
+
+The discount is hyperbolic, not exponential — a slow-but-reliable relay at 2s still competes (discount 0.33) if it has strong delivery. A fast relay at 200ms gets 0.83. A 5s relay is near-excluded at 0.17.
+
+**Cross-profile results (6 profiles × 5 sessions, 7d window, Welshman+Thompson+Latency):**
+
+| Profile size | Completeness @2s gain | Recall cost | Verdict |
+|:---:|:---:|:---:|---|
+| < 500 follows | **+10-11pp** | −0.5 to −1pp | Clear win — near-free improvement |
+| 500–1000 follows | **+16pp** | −8pp | Best sweet spot — biggest @2s gain |
+| 1000+ follows | +5-6pp | −11 to −14pp | Steep tradeoff — tune or skip |
+
+**What to do:** For apps targeting typical users (< 500 follows), add the latency discount unconditionally — it's a 1-line change with near-zero recall cost. For apps targeting power users (1000+ follows), either make the discount strength tunable or skip it if total recall matters more than feed population speed.
+
+**Why learn latency yourself:** Your measured connect+query times reflect your users' actual experience. Each relay's performance varies by client location, time of day, and load. The EWMA adapts to this naturally — a relay that gets slow gets deprioritized, one that speeds up gets promoted. Persist the EWMA alongside your Thompson Sampling stats (same DB table, one extra column).
+
+*Data: 6 profiles (194–2,795 follows), 5 learning sessions each, 7d window, NIP-66 liveness filtered, cap@20. FD+Thompson+Latency shows the same pattern with ~2× the recall cost — Welshman variant is strictly safer. See [OUTBOX-REPORT.md § 8.6](OUTBOX-REPORT.md#86-latency-aware-thompson-sampling) for per-profile tables and session progression.*
+
+### 6. 20 relay connections is enough
 
 All algorithms reach within 1-2% of their unlimited ceiling at 20 relays.
 
@@ -199,7 +229,7 @@ All deployed client algorithms plus key experimental ones:
 | Direct Mapping\*\* | 30% [17–40] | 88% [86–91] | All declared write relays — unlimited connections |
 | Ditto-Mew (4 app relays) | 6% [5–7] | 62% | 4 hardcoded app relays — broadcast, no per-author routing |
 | Big Relays | 8% [5–12] | 61% [45–70] | Just damus+nos.lol — the "do nothing" baseline |
-| Primal Aggregator\*\*\* | 1% [0.2–1.6] | 32% [25–37] | Single caching relay — 100% assignment but low actual recall |
+| Primal Aggregator\*\*\* | <1% [0.2–1.6] | 32% [25–37] | Single caching relay — 100% assignment but low actual recall |
 
 *1yr and 7d recall: 6-profile means from cross-profile benchmarks (Section 8.2 of [OUTBOX-REPORT.md](OUTBOX-REPORT.md)). [min–max] ranges show the spread across tested profiles (194–1,779 follows for the 6-profile set; Thompson variants use a 4-profile set up to 2,784 follows) — your recall will land somewhere in this range depending on your follow graph. All testable-reliable authors, 20-connection cap except Direct Mapping. Thompson = 4-profile mean with NIP-66, 5 learning sessions (FD+Thompson=84%, Welshman+Thompson=89%, Hybrid+Thompson=89%). Welshman+Thompson 7d = 92% (4-profile mean, Section 8.3); FD+Thompson and Hybrid+Thompson were not benchmarked at 7d (—). All Thompson variants converge within 2-3 sessions. Hybrid converges by session 2. Stochastic algorithms have additional run-to-run variance on top of the cross-profile range (see [variance analysis](OUTBOX-REPORT.md#82-approximating-real-world-conditions-event-verification)). Ditto-Mew baseline = 4-profile mean with NIP-66.*
 
@@ -208,7 +238,7 @@ All deployed client algorithms plus key experimental ones:
 *\*\*\*Primal's low recall may reflect a benchmark methodology limitation (querying a caching aggregator as if it were a standard relay) rather than a definitive measure of aggregator quality. App devs using Primal should test against their own use cases.*
 
 <details>
-<summary>All 17 algorithms</summary>
+<summary>All 22 algorithms</summary>
 
 **Deployed in clients:**
 
@@ -221,7 +251,15 @@ All deployed client algorithms plus key experimental ones:
 | Filter Decomposition | rust-nostr | Per-author top-N write relays |
 | Direct Mapping | Amethyst (feeds) | All declared write relays |
 | Primal Aggregator | Primal | Single aggregator relay |
-| Popular+Random | — | Top popular + random fill |
+| Jumble Coverage Pruning | Jumble | Coverage-weighted pruning |
+| Ditto-Mew (4 app relays) | Ditto (broadcast) | 4 hardcoded app relays, no per-author routing |
+
+**Baselines:**
+
+| Algorithm | Strategy |
+|---|---|
+| Popular+Random | Top popular + random fill |
+| Big Relays | Just damus+nos.lol — the "do nothing" baseline |
 
 **Experimental — actionable** (not yet in any client, but deployable):
 
@@ -229,7 +267,7 @@ All deployed client algorithms plus key experimental ones:
 |---|---|
 | Welshman+Thompson | Welshman scoring with `sampleBeta(α,β)` instead of `random()` — learns from delivery |
 | FD+Thompson | Filter Decomposition scoring with `sampleBeta(α,β)` — learns without popularity bias |
-| Hybrid+Thompson | App relays + per-author outbox (top 3 write relays by Thompson) — no routing layer changes |
+| Ditto+Outbox Thompson | App relays + per-author outbox (top 3 write relays by Thompson) — no routing layer changes |
 | Greedy+ε-Explore | Greedy with 5% chance of picking a random relay instead of the best |
 
 **Academic** (benchmark ceilings only — not practical for real clients):
@@ -242,6 +280,7 @@ All deployed client algorithms plus key experimental ones:
 | Spectral Clustering | Eigendecomposition of relay-author matrix | Requires linear algebra library |
 | Streaming Coverage | Single-pass submodular maximization | Marginal gains over simpler greedy |
 | Stochastic Greedy | Random subset sampling per step | Worse than standard greedy at this scale |
+| Hybrid Greedy+Explore | Greedy base + stochastic exploration slots | Complex, marginal gains over greedy+ε |
 
 **Full benchmark data:** [OUTBOX-REPORT.md Section 8](OUTBOX-REPORT.md#8-benchmark-results)
 
@@ -275,7 +314,8 @@ CREATE TABLE relay_stats (
   times_selected INTEGER DEFAULT 0,
   events_delivered INTEGER DEFAULT 0,
   events_expected INTEGER DEFAULT 0,
-  last_selected_at INTEGER
+  last_selected_at INTEGER,
+  latency_ms REAL           -- optional: EWMA of connect+query time (§5)
 );
 ```
 
@@ -482,6 +522,34 @@ bash run-benchmark-batch.sh
 
 Run `deno task bench --help` for all options. See [Benchmark-recreation.md](Benchmark-recreation.md) for full reproduction instructions.
 
+## Help wanted: benchmark from your location
+
+All data in this report was collected from a single observer. Relay latency,
+success rates, and timeout behavior are location-dependent — someone in Brazil,
+Southeast Asia, or on a VPN will see different numbers. We need benchmark runs
+from different locations to validate whether findings generalize.
+
+**What to run** (takes ~30 min, needs Deno v2+ and internet):
+
+```bash
+cd bench
+deno task bench 3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d \
+  --verify --verify-window 604800 \
+  --nip66-filter liveness --no-phase2-cache \
+  --output both
+```
+
+**What to share:** Open an issue with your JSON file from `bench/results/`,
+your approximate location (country/region), and connection type (home, VPN,
+cloud, mobile).
+
+**What should vary by location:** TTFE, relay success rates, timeout counts,
+NIP-66 RTT correlation strength (NIP-66 monitors are in specific locations —
+correlation from your vantage point may be stronger or weaker).
+
+**What should be stable:** Relative algorithm rankings, relay retention
+patterns, which algorithms benefit from NIP-66 filtering.
+
 ## Repo structure
 
 ```text
@@ -490,7 +558,7 @@ IMPLEMENTATION-GUIDE.md       How to implement the recommendations above
 Benchmark-recreation.md       Step-by-step reproduction instructions
 bench/                        Benchmark tool (Deno/TypeScript)
   main.ts                     CLI entry point
-  src/algorithms/             17 algorithm implementations
+  src/algorithms/             22 algorithm implementations
   src/phase2/                 Event verification + baseline cache
   src/nip66/                  NIP-66 relay liveness filter
   src/relay-scores.ts         Thompson Sampling score persistence

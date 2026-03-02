@@ -33,7 +33,7 @@ cd bench
 
 ## On-Paper Relay Mapping
 
-Computes relay-to-pubkey assignments from NIP-65 data. Runs all 14 algorithms against the same input. No relay connections beyond the initial data fetch.
+Computes relay-to-pubkey assignments from NIP-65 data. Runs all 24 registered algorithm variants against the same input. No relay connections beyond the initial data fetch.
 
 ### Single profile
 
@@ -126,9 +126,10 @@ deno task bench 76c71aae3a491f1d9eec47cba17e229cda4113a0bbb6e6ae1776d7643e29cafa
 ### Specific algorithms
 
 ```bash
-deno task bench <hex> --algorithms greedy,ndk,welshman,nostur,rust-nostr,direct
-deno task bench <hex> --algorithms ilp,matching,spectral,mab,streaming,stochastic-greedy
-deno task bench <hex> --algorithms primal,popular-random
+deno task bench <hex> --algorithms greedy,ndk,welshman,nostur,rust-nostr,direct,jumble,ditto-mew
+deno task bench <hex> --algorithms ilp,matching,spectral,mab,streaming,stochastic-greedy,hybrid
+deno task bench <hex> --algorithms primal,popular-random,big-relays
+deno task bench <hex> --algorithms welshman-thompson,fd-thompson,ditto-outbox,greedy-epsilon
 ```
 
 ### Connection budget sweep
@@ -243,5 +244,13 @@ On-paper mapping results should be nearly identical within a few days. Event ret
 | `streaming` | Streaming Coverage |
 | `matching` | Bipartite Matching |
 | `spectral` | Spectral Clustering |
-| `welshman-thompson` | Welshman+Thompson Sampling |
+| `hybrid` | Hybrid Greedy+Explore |
 | `greedy-epsilon` | Greedy+ε-Explore |
+| `welshman-thompson` | Welshman+Thompson Sampling |
+| `fd-thompson` | FD+Thompson Sampling |
+| `welshman-thompson-latency` | Welshman+Thompson+Latency |
+| `fd-thompson-latency` | FD+Thompson+Latency |
+| `jumble` | Jumble Coverage Pruning |
+| `big-relays` | Big Relays (damus+nos.lol) |
+| `ditto-mew` | Ditto-Mew (4 app relays) |
+| `ditto-outbox` | Ditto+Outbox Thompson |

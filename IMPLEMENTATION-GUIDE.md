@@ -95,9 +95,36 @@ faster than full outbox because the app relay floor provides a strong initial si
 See [README.md § Hybrid outbox](README.md#hybrid-outbox-for-app-relay-clients) for code
 and [OUTBOX-REPORT.md § 8.5](OUTBOX-REPORT.md#85-hybrid-outbox-app-relay-broadcast--per-author-thompson) for full benchmark data.
 
+#### Optional: Latency-aware scoring (faster feed population)
+
+Once you have Thompson Sampling running, you can optionally add a latency discount that makes the feed fill in faster. This doesn't change TTFE (first event) — that's already fast. It improves *progressive completeness*: how much of the feed is visible within 2 seconds.
+
+Add one line to your Thompson scoring:
+
+```typescript
+// Track latency alongside delivery stats:
+// After each relay query, update EWMA:
+const measured = connectTimeMs + queryTimeMs;
+stats.latencyMs = stats.latencyMs === undefined
+  ? measured
+  : stats.latencyMs * 0.7 + measured * 0.3;
+
+// In relay scoring, multiply by latency discount:
+const discount = stats.latencyMs !== undefined
+  ? 1 / (1 + stats.latencyMs / 1000)
+  : 1.0;  // cold start = no penalty
+const score = quality * (1 + Math.log(weight)) * sampleBeta(alpha, beta) * discount;
+```
+
+The discount shape is hyperbolic: 200ms → 0.83, 500ms → 0.67, 1s → 0.50, 2s → 0.33, 5s → 0.17. Slow-but-reliable relays still compete. Cold start (no data yet) = 1.0 = identical to base Thompson.
+
+**When to use it:** For apps targeting typical users (< 500 follows), add it unconditionally — +10-11pp completeness @2s at < 1pp recall cost. For power users (1000+ follows), the recall cost is steeper (−11 to −14pp) — consider making the discount tunable or skipping it. The Welshman variant (with popularity weight) has roughly half the recall cost of FD+Thompson at every profile size.
+
+Persist the EWMA in your relay stats table (one extra column). See [README.md § 5](README.md#5-make-your-feed-fill-in-faster-by-learning-relay-speed) for the cross-profile data and [OUTBOX-REPORT.md § 8.6](OUTBOX-REPORT.md#86-latency-aware-thompson-sampling) for the full benchmark results.
+
 ### 2. Pre-filter relays with NIP-66
 
-**Impact: 1.5-3× better relay success rates, 39% faster feed loads**
+**Impact: 1.5-3× better relay success rates, 45% faster feed loads**
 
 [NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md) (kind
 30166) and [nostr.watch](https://github.com/sandwichfarm/nostr-watch) publish
@@ -236,7 +263,7 @@ Two relays finish instantly but miss half the events. Twenty relays find nearly 
 
 The 0–62% range at +0ms means: if your algorithm queries 20 relays, the first EOSE arrives from the fastest relay but 19 others haven't reported yet. Waiting 2s lets most of them finish. For the largest profiles (2,700+ follows), +2s gets 86-87% — consider +5s for completeness-critical use cases.
 
-*Data: 7 cross-profile benchmarks (194–2,784 follows). See [README.md § Latency](README.md#4-latency-when-to-stop-waiting-for-relays) for the summary and [OUTBOX-REPORT.md § 8.6](OUTBOX-REPORT.md#86-latency-simulation) for full data.*
+*Data: 7 cross-profile benchmarks (194–2,784 follows). See [README.md § Latency](README.md#4-latency-when-to-stop-waiting-for-relays) for the summary and [OUTBOX-REPORT.md § 8.7](OUTBOX-REPORT.md#87-latency-simulation) for full data.*
 
 #### Showing late-arriving events in the UI
 

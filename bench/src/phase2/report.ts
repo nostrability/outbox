@@ -2,7 +2,7 @@
  * Phase 2 table and JSON output formatting.
  */
 
-import type { Phase2Result } from "../types.ts";
+import type { Nip66CorrelationResult, Phase2Result } from "../types.ts";
 import { median as computeMedian } from "../types.ts";
 
 function pad(s: string, width: number, align: "left" | "right" = "right"): string {
@@ -296,4 +296,46 @@ function formatWindow(seconds: number): string {
   if (seconds >= 86400) return `${seconds / 86400}d`;
   if (seconds >= 3600) return `${seconds / 3600}h`;
   return `${seconds}s`;
+}
+
+export function printNip66Correlation(corr: Nip66CorrelationResult): void {
+  const ageStr = corr.medianDataAgeMinutes != null
+    ? `${corr.medianDataAgeMinutes.toFixed(0)}min`
+    : "N/A";
+  console.log(`\n=== NIP-66 RTT vs Measured Latency (${corr.n} relays, data age: ${ageStr}) ===`);
+
+  const headers = ["", "N", "Spearman r", "MAE", "Bias", "Top5", "Top10", "Top20"];
+  const widths = [24, 4, 11, 7, 6, 6, 6, 6];
+
+  const headerRow = headers.map((h, i) => pad(h, widths[i], i === 0 ? "left" : "right")).join("  ");
+  const separator = widths.map((w) => "-".repeat(w)).join("  ");
+
+  console.log(headerRow);
+  console.log(separator);
+
+  function formatRow(label: string, stats: typeof corr.openVsConnect): string {
+    const r = stats.spearmanR != null ? stats.spearmanR.toFixed(2) : "N/A";
+    const mae = stats.n > 0 ? fmtMs(stats.maeMs) : "N/A";
+    const bias = stats.medianRatio != null ? `${stats.medianRatio.toFixed(1)}x` : "N/A";
+    const cols = [
+      pad(label, widths[0], "left"),
+      pad(String(stats.n), widths[1]),
+      pad(r, widths[2]),
+      pad(mae, widths[3]),
+      pad(bias, widths[4]),
+      pad(stats.n > 0 && stats.topKOverlap[5] != null ? pct(stats.topKOverlap[5]) : "N/A", widths[5]),
+      pad(stats.n > 0 && stats.topKOverlap[10] != null ? pct(stats.topKOverlap[10]) : "N/A", widths[6]),
+      pad(stats.n > 0 && stats.topKOverlap[20] != null ? pct(stats.topKOverlap[20]) : "N/A", widths[7]),
+    ];
+    return cols.join("  ");
+  }
+
+  console.log(formatRow("rttOpen vs connect", corr.openVsConnect));
+  console.log(formatRow("rttRead vs query", corr.readVsQuery));
+  console.log(`(Bias = measured/nip66, >1 = NIP-66 underestimates. TopK = overlap of K fastest relays.)`);
+
+  if (corr.monitorPubkeys.length > 0) {
+    const short = corr.monitorPubkeys.map((pk) => pk.slice(0, 12) + "...").join(", ");
+    console.log(`Monitor: ${short}`);
+  }
 }

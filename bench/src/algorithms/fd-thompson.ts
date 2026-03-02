@@ -36,7 +36,9 @@ export function fdThompson(
   const orphanedPubkeys = new Set<Pubkey>();
 
   let priorsUsed = 0;
+  let latencyUsed = 0;
   const priorsTotal = relayPriors ? relayPriors.size : 0;
+  const relayLatencies = params.relayLatencies;
 
   for (const pubkey of input.follows) {
     const authorRelays = input.writerToRelays.get(pubkey);
@@ -54,7 +56,13 @@ export function fdThompson(
         : sampleBeta(1, 1, rng); // uniform = rng()
 
       if (prior) priorsUsed++;
-      scored.push({ relay, score: sample });
+
+      const latMs = relayLatencies?.get(relay);
+      const discount = latMs !== undefined ? 1 / (1 + latMs / 1000) : 1.0;
+      if (latMs !== undefined) latencyUsed++;
+
+      const score = sample * discount;
+      scored.push({ relay, score });
     }
 
     // Sort by score descending, tie-break by URL ascending (deterministic)
@@ -85,9 +93,12 @@ export function fdThompson(
   } else {
     notes.push("FD+Thompson: cold start (uniform priors)");
   }
+  if (relayLatencies != null) {
+    notes.push(`Latency discount: ${relayLatencies.size} relays with latency data, ${latencyUsed} lookups applied`);
+  }
 
   return {
-    name: "FD+Thompson",
+    name: relayLatencies != null ? "FD+Thompson+Latency" : "FD+Thompson",
     relayAssignments,
     pubkeyAssignments,
     orphanedPubkeys,
