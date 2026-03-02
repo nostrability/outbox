@@ -19,6 +19,7 @@ Each technique adds incremental value. You don't need to implement everything at
 | 2 | **Stochastic scoring** (Welshman's `random()` factor) | 24% [12–38] | same | Low — ~50 LOC, replace greedy with weighted random |
 | 3 | **Filter dead relays** (NIP-66 liveness data) | neutral | -39% wall-clock (removes 15s timeouts) | Low — ~30 LOC, fetch kind 30166, exclude dead relays |
 | 4 | **Learn from delivery** (Thompson Sampling) | 84-89% [75–96] | same | Low — ~80 LOC + DB table, replace `random()` with `sampleBeta()` |
+| 4+ | **Learn relay speed** (latency discount) | same | +10-16pp completeness @2s | 1 line — `score *= 1/(1 + latencyMs/1000)` on top of Step 4 |
 
 *Steps 1a and 1b are alternative entry points — 1a replaces your routing layer, 1b augments it. Step 1b already includes Thompson Sampling (it's the same ~80 LOC). Steps 2-4 are incremental enhancements that apply to the 1a path. Going from Step 0 to Step 4 takes your 1yr recall from 8% to 84-89%. [min–max] ranges show the spread across tested profiles — your recall depends on your follow graph size and relay diversity. All values are 6-profile means except Thompson variants (4-profile mean with NIP-66, 5 learning sessions; FD+Thompson=84%, Welshman+Thompson=89%, Hybrid+Thompson=89%). Feed TTFE = time to first event (all algorithms share the same fast relay). "+2s" = EOSE-race grace period; "instant completeness" = all events arrive with first EOSE (1-2 relay setups). 1yr recall is the more informative metric — 7d masks relay retention problems that dominate real-world performance. Latency data from 7 cross-profile benchmarks (194–2,784 follows).*
 
@@ -171,7 +172,36 @@ Two relays finish instantly but miss half the events. Twenty relays find nearly 
 
 *Latency data from 7 cross-profile benchmarks (194–2,784 follows, 178–1,234 relays). See [OUTBOX-REPORT.md § 8.6](OUTBOX-REPORT.md#86-latency-simulation) for full data.*
 
-### 5. 20 relay connections is enough
+### 5. Make your feed fill in faster by learning relay speed
+
+TTFE (first event) is fast and algorithm-independent — 530-670ms regardless of algorithm. But *how fast the full feed populates* is improvable. Adding a latency discount to Thompson scoring steers selection toward fast relays, so more events arrive within the first 2 seconds.
+
+**The change:** Multiply each relay's Thompson score by `1 / (1 + latencyMs / 1000)`. Learn `latencyMs` from your own connect+query measurements using an exponential moving average (EWMA, α=0.3). Cold start = no latency data = discount of 1.0 (identical to base Thompson).
+
+```typescript
+// After Thompson scoring, add one line:
+const latencyMs = relayStats.get(relay)?.latencyMs;  // EWMA from past queries
+const discount = latencyMs !== undefined ? 1 / (1 + latencyMs / 1000) : 1.0;
+const score = quality * (1 + Math.log(weight)) * sampleBeta(alpha, beta) * discount;
+```
+
+The discount is hyperbolic, not exponential — a slow-but-reliable relay at 2s still competes (discount 0.33) if it has strong delivery. A fast relay at 200ms gets 0.83. A 5s relay is near-excluded at 0.17.
+
+**Cross-profile results (6 profiles × 5 sessions, 7d window, Welshman+Thompson+Latency):**
+
+| Profile size | Completeness @2s gain | Recall cost | Verdict |
+|:---:|:---:|:---:|---|
+| < 500 follows | **+10-11pp** | −0.5 to −1pp | Clear win — near-free improvement |
+| 500–1000 follows | **+16pp** | −8pp | Best sweet spot — biggest @2s gain |
+| 1000+ follows | +5-6pp | −11 to −14pp | Steep tradeoff — tune or skip |
+
+**What to do:** For apps targeting typical users (< 500 follows), add the latency discount unconditionally — it's a 1-line change with near-zero recall cost. For apps targeting power users (1000+ follows), either make the discount strength tunable or skip it if total recall matters more than feed population speed.
+
+**Why learn latency yourself:** Your measured connect+query times reflect your users' actual experience. Each relay's performance varies by client location, time of day, and load. The EWMA adapts to this naturally — a relay that gets slow gets deprioritized, one that speeds up gets promoted. Persist the EWMA alongside your Thompson Sampling stats (same DB table, one extra column).
+
+*Data: 6 profiles (194–2,795 follows), 5 learning sessions each, 7d window, NIP-66 liveness filtered, cap@20. FD+Thompson+Latency shows the same pattern with ~2× the recall cost — Welshman variant is strictly safer. See [OUTBOX-REPORT.md § 8.6](OUTBOX-REPORT.md#86-latency-aware-thompson-sampling) for per-profile tables and session progression.*
+
+### 6. 20 relay connections is enough
 
 All algorithms reach within 1-2% of their unlimited ceiling at 20 relays.
 
@@ -275,7 +305,8 @@ CREATE TABLE relay_stats (
   times_selected INTEGER DEFAULT 0,
   events_delivered INTEGER DEFAULT 0,
   events_expected INTEGER DEFAULT 0,
-  last_selected_at INTEGER
+  last_selected_at INTEGER,
+  latency_ms REAL           -- optional: EWMA of connect+query time (§5)
 );
 ```
 
