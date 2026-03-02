@@ -95,12 +95,12 @@ export function welshmanThompson(
   } else {
     notes.push("Thompson Sampling: cold start (uniform priors)");
   }
-  if (relayLatencies?.size) {
+  if (relayLatencies != null) {
     notes.push(`Latency discount: ${relayLatencies.size} relays with latency data, ${latencyUsed} lookups applied`);
   }
 
   return {
-    name: relayLatencies?.size ? "Welshman+Thompson+Latency" : "Welshman+Thompson",
+    name: relayLatencies != null ? "Welshman+Thompson+Latency" : "Welshman+Thompson",
     relayAssignments,
     pubkeyAssignments,
     orphanedPubkeys,

@@ -137,7 +137,8 @@ export function computeNip66Correlation(
     }
   }
 
-  const n = Math.max(openPairs.length, readPairs.length);
+  const relayUnion = new Set([...openPairs.map(p => p.url), ...readPairs.map(p => p.url)]);
+  const n = relayUnion.size;
 
   const medianDataAgeMinutes = dataAges.length > 0
     ? median(toSortedNumericArray(dataAges)) / 60

@@ -315,7 +315,7 @@ export function printNip66Correlation(corr: Nip66CorrelationResult): void {
 
   function formatRow(label: string, stats: typeof corr.openVsConnect): string {
     const r = stats.spearmanR != null ? stats.spearmanR.toFixed(2) : "N/A";
-    const mae = fmtMs(stats.maeMs);
+    const mae = stats.n > 0 ? fmtMs(stats.maeMs) : "N/A";
     const bias = stats.medianRatio != null ? `${stats.medianRatio.toFixed(1)}x` : "N/A";
     const cols = [
       pad(label, widths[0], "left"),
@@ -323,9 +323,9 @@ export function printNip66Correlation(corr: Nip66CorrelationResult): void {
       pad(r, widths[2]),
       pad(mae, widths[3]),
       pad(bias, widths[4]),
-      pad(stats.topKOverlap[5] != null ? pct(stats.topKOverlap[5]) : "N/A", widths[5]),
-      pad(stats.topKOverlap[10] != null ? pct(stats.topKOverlap[10]) : "N/A", widths[6]),
-      pad(stats.topKOverlap[20] != null ? pct(stats.topKOverlap[20]) : "N/A", widths[7]),
+      pad(stats.n > 0 && stats.topKOverlap[5] != null ? pct(stats.topKOverlap[5]) : "N/A", widths[5]),
+      pad(stats.n > 0 && stats.topKOverlap[10] != null ? pct(stats.topKOverlap[10]) : "N/A", widths[6]),
+      pad(stats.n > 0 && stats.topKOverlap[20] != null ? pct(stats.topKOverlap[20]) : "N/A", widths[7]),
     ];
     return cols.join("  ");
   }

@@ -93,12 +93,12 @@ export function fdThompson(
   } else {
     notes.push("FD+Thompson: cold start (uniform priors)");
   }
-  if (relayLatencies?.size) {
+  if (relayLatencies != null) {
     notes.push(`Latency discount: ${relayLatencies.size} relays with latency data, ${latencyUsed} lookups applied`);
   }
 
   return {
-    name: relayLatencies?.size ? "FD+Thompson+Latency" : "FD+Thompson",
+    name: relayLatencies != null ? "FD+Thompson+Latency" : "FD+Thompson",
     relayAssignments,
     pubkeyAssignments,
     orphanedPubkeys,

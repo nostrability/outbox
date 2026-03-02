@@ -594,7 +594,7 @@ ILP, Streaming Coverage, and Spectral Clustering frequently hit the theoretical 
 - Baseline: query ALL declared write relays for each author, plus additional relays needed by baselines (primal.net, damus.io, nos.lol)
 - Authors classified as **testable-reliable** (events found + ≥50% declared relays responded), **testable-partial** (<50% responded), **zero-baseline** (no events, relays responded), or **unreliable** (no events, relays unresponsive)
 - Events per (relay, author) pair capped at 10,000 to eliminate recency bias
-- 22 algorithms tested across 6 time windows (7d to 3 years)
+- 22 algorithms (+ 2 latency-aware variants) tested across 6 time windows (7d to 3 years)
 
 **Baseline limitations:** The baseline is a lower bound, not ground truth. If a relay is down or slow during the baseline query, events stored there are missed — making the baseline incomplete and all recall percentages conservative. Relay success rates during baseline construction range from 31% (ODELL, 1,199 relays) to 55% (fiatjaf, 234 relays), meaning 45-69% of declared relays did not respond. The "testable-reliable" author filter (≥50% declared relays responded) mitigates this by excluding authors whose baseline is likely incomplete, but some undercount is inherent. All recall percentages in this report should be read as "at least X%" rather than exact values.
 

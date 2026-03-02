@@ -136,7 +136,9 @@ export function updateRelayScores(
       if (outcome?.connected) {
         const measured = outcome.connectTimeMs + outcome.queryTimeMs;
         const prev = entry.latencyObservations ?? 0;
-        entry.latencyMs = prev === 0 ? measured : (entry.latencyMs! * 0.7 + measured * 0.3);
+        entry.latencyMs = (prev === 0 || !Number.isFinite(entry.latencyMs))
+          ? measured
+          : (entry.latencyMs! * 0.7 + measured * 0.3);
         entry.latencyObservations = prev + 1;
       }
     }

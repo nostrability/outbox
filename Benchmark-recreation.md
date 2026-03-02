@@ -33,7 +33,7 @@ cd bench
 
 ## On-Paper Relay Mapping
 
-Computes relay-to-pubkey assignments from NIP-65 data. Runs all 22 algorithms against the same input. No relay connections beyond the initial data fetch.
+Computes relay-to-pubkey assignments from NIP-65 data. Runs all 24 registered algorithm variants against the same input. No relay connections beyond the initial data fetch.
 
 ### Single profile
 
