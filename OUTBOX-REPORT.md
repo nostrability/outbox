@@ -1042,7 +1042,15 @@ Big Relays reaches full completeness at +0ms on most profiles (only 1-2 relays w
 
 2. **TTFE is algorithm-independent and profile-size-independent.** 527-668ms across all 7 profiles and all algorithms. The fastest relay in any 20-relay set responds in under 700ms.
 
-3. **The latency-recall tradeoff is fundamental.** Fewer relays = faster completeness but lower recall. More relays = higher recall but slower convergence. There is no free lunch — the question is which timeout to set, not which algorithm to pick.
+3. **Coverage and latency are directly opposed.** This is the fundamental tradeoff — more relays = more events found, but longer to collect them:
+
+    | Relays queried | Recall ceiling | At first EOSE | At +2s | At +5s |
+    |:---:|:---:|:---:|:---:|:---:|
+    | 2 (Big Relays) | 50–77% | 100% | 100% | 100% |
+    | 4 (Ditto-Mew) | 62–86% | 8–84% | 85–100% | 85–100% |
+    | 20 (Outbox) | 81–98% | 0–62% | 76–99% | 89–100% |
+
+    Two relays finish instantly but miss half the events. Twenty relays find nearly everything but take 2-5s to converge. Hybrid outbox side-steps this: show app relay events immediately (2-4 relay speed), stream in outbox events in the background (20-relay coverage).
 
 4. **Dead relays are the main latency risk.** Each timeout burns 15s. Telluride's 35 timeouts across 1,234 relays means: without NIP-66 filtering, some concurrency slots sit idle for 15s while dead relays fail to respond. NIP-66 pre-filtering is as much a latency optimization as a connection budget one.
 

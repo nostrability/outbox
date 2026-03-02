@@ -149,7 +149,15 @@ Feed queries to 20 outbox relays produce the first event in **530-670ms** across
 | **+2s** | 76–99% | **Sweet spot.** Gets 85-99% for most profiles. Large follow sets (2,784) get 76–87%. |
 | **+5s** | 89–100% | Nearly complete. Only Telluride (2,784 follows) below 100% due to timeouts. |
 
-**The pattern**: Big Relays (2 relays) and Ditto-Mew (4 app relays) get 100% of their recall instantly — but their recall is low (50-86%). Outbox algorithms (20 relays) have higher recall but take 2-5s to collect it. **Hybrid outbox** bridges this: show app relay events immediately, stream in outbox events as they arrive.
+**Coverage and latency are directly opposed.** More relays = more events found, but longer to collect them all. This is the fundamental tradeoff:
+
+| Relays queried | Recall ceiling | At first EOSE | At +2s | At +5s |
+|:---:|:---:|:---:|:---:|:---:|
+| 2 (Big Relays) | 50–77% | 100% | 100% | 100% |
+| 4 (Ditto-Mew) | 62–86% | 8–84% | 85–100% | 85–100% |
+| 20 (Outbox) | 81–98% | 0–62% | 76–99% | 89–100% |
+
+Two relays finish instantly but miss half the events. Twenty relays find nearly everything but take 2-5s to converge. **Hybrid outbox side-steps this**: show app relay events immediately (2-4 relay speed), stream in outbox events in the background (20-relay coverage). The user sees *something* in <600ms and *everything* within 2-5s.
 
 **Profile-view latency.** Querying an author's top 3 NIP-65 write relays for a profile view takes **750-920ms median** (96-100% hit rate). This is algorithm-independent — every profile view does the same outbox lookup.
 

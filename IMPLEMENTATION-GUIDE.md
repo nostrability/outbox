@@ -214,6 +214,16 @@ function eoseRace(pool, relays, filter, graceMs = 2000) {
 }
 ```
 
+**Coverage and latency are directly opposed.** More relays = more events, but longer to collect them:
+
+| Relays queried | Recall ceiling | At first EOSE | At +2s | At +5s |
+|:---:|:---:|:---:|:---:|:---:|
+| 2 (Big Relays) | 50–77% | 100% | 100% | 100% |
+| 4 (Ditto-Mew) | 62–86% | 8–84% | 85–100% | 85–100% |
+| 20 (Outbox) | 81–98% | 0–62% | 76–99% | 89–100% |
+
+Two relays finish instantly but miss half the events. Twenty relays find nearly everything but take 2-5s. Hybrid outbox side-steps this: show app relay events immediately, stream in outbox events in the background.
+
 **Grace period decision matrix** (from 7-profile benchmark, EOSE-race simulation):
 
 | Grace period | Completeness range | Best for |
