@@ -309,5 +309,6 @@ export async function runPhase2(
     profileViewLatency,
     _baselines: baselines,
     _cache: cache,
+    _relayOutcomes: outcomesForLatency,
   };
 }

@@ -413,6 +413,22 @@ export interface AlgorithmVerification {
   latency?: AlgorithmLatencyStats;
 }
 
+export interface LatencyCorrelationStats {
+  n: number;
+  spearmanR: number | null;              // null if n < 5
+  maeMs: number;                         // mean absolute error
+  medianRatio: number | null;            // measured / nip66 (bias)
+  topKOverlap: Record<number, number>;   // K → fraction overlap
+}
+
+export interface Nip66CorrelationResult {
+  n: number;                             // relays paired
+  openVsConnect: LatencyCorrelationStats;
+  readVsQuery: LatencyCorrelationStats;
+  medianDataAgeMinutes: number | null;   // how fresh NIP-66 data was
+  monitorPubkeys: string[];              // which monitors contributed
+}
+
 export interface Phase2Result {
   options: Phase2Options;
   since: number;
@@ -439,10 +455,14 @@ export interface Phase2Result {
   algorithms: AlgorithmVerification[];
   /** Profile-view latency simulation (algorithm-independent). Only for fresh runs. */
   profileViewLatency?: ProfileViewLatencyStats;
+  /** NIP-66 RTT vs measured latency correlation. Only for fresh runs with NIP-66 data. */
+  nip66Correlation?: Nip66CorrelationResult;
   /** Baselines map, available for score persistence. Not serialized to JSON. */
   _baselines?: Map<Pubkey, PubkeyBaseline>;
   /** Query cache, available for score persistence. Not serialized to JSON. */
   _cache?: unknown;
+  /** Relay outcomes from fresh Phase 2 run. Not serialized to JSON. */
+  _relayOutcomes?: ReadonlyMap<RelayUrl, import("./relay-pool.ts").RelayOutcome>;
 }
 
 // --- NIP-66 types ---
