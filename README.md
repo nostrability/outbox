@@ -48,7 +48,7 @@ Your relay picker optimizes for "who publishes where" on paper, but the relay th
 
 17 relay selection algorithms (8 extracted from real clients, 9 experimental), tested against 7 real Nostr profiles (194-2,784 follows), across 6 time windows (7 days to 3 years), with and without NIP-66 liveness filtering. Every algorithm connected to real relays and queried for real events. Latency benchmarks across all 7 profiles measure TTFE, EOSE-race convergence, and profile-view timing.
 
-Full methodology: [OUTBOX-REPORT.md](OUTBOX-REPORT.md) | Reproduce results: [Benchmark-recreation.md](Benchmark-recreation.md) | Produced for [nostrability#69](https://github.com/niclas-pfeifer/nostrability/issues/69)
+Full methodology: [OUTBOX-REPORT.md](OUTBOX-REPORT.md) | Reproduce results: [Benchmark-recreation.md](Benchmark-recreation.md) | Produced for [nostrability#69](https://github.com/nostrability/nostrability/issues/69)
 
 *Benchmark data collected February 2026. Relay state changes continuously — relative algorithm rankings should be stable; absolute recall percentages will vary on re-run.*
 
@@ -508,7 +508,7 @@ analysis/
 - [Implementation Guide](IMPLEMENTATION-GUIDE.md) — Detailed recommendations with code examples
 - [Cross-Client Comparison](analysis/cross-client-comparison.md) — How 15 clients make each decision
 - [Benchmark Recreation](Benchmark-recreation.md) — Reproduce all results
-- [nostrability#69](https://github.com/niclas-pfeifer/nostrability/issues/69) — Parent issue
+- [nostrability#69](https://github.com/nostrability/nostrability/issues/69) — Parent issue
 - [NIP-65](https://github.com/nostr-protocol/nips/blob/master/65.md) — Relay List Metadata specification
 - [Building Nostr](https://building-nostr.coracle.social) — Protocol architecture guide (relay routing, content migration, bootstrapping)
 - [replicatr](https://github.com/coracle-social/replicatr) — Event replication daemon for relay list changes (negentropy sync)
