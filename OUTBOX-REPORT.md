@@ -349,9 +349,9 @@ To quantify the relay list pollution problem, we probed NIP-11 info documents fo
 | no-nip11 | 2,378 | 17.1% | 491 | 20.8% |
 | offline | 4,753 | 34.3% | 1,146 | 48.6% |
 
-**Only 37% of relay-user pairs point to normal content relays.** The remaining 63% are offline (34%), missing NIP-11 (17%), paid (7%), restricted writes (4%), or auth-gated (0.5%). Nearly half (48.6%) of all unique relay URLs encountered were offline at probe time.
+**46% of relay-user pairs point to relays that won't serve content** — offline (34%), paid (7%), restricted writes (4%), or auth-gated (0.5%). Another 17% lack NIP-11 info documents but are likely functional (NIP-11 is voluntary — ~500 functional relays don't serve it, per nostr.watch). Only 37% are confirmed open content relays via NIP-11. Nearly half (48.6%) of all unique relay URLs encountered were offline at probe time.
 
-**Caveat: NIP-11 is voluntary.** The 491 relays (17% of pairs) classified as "no-nip11" may be fully functional — they simply don't serve an info document. Per nostr.watch, ~500 functional relays lack NIP-11. Our probe classifies these conservatively as unknown rather than dead, but the "37% content" figure understates the true count of usable relays. NIP-66 liveness data (which tests WebSocket connectivity, not HTTP info documents) is a better signal for filtering dead relays.
+NIP-11 cannot determine relay liveness on its own — it's an HTTP info document, not a connectivity test. Use NIP-66 liveness data (WebSocket connectivity) to filter dead relays.
 
 The most common offline relays appear in 32-34 of 36 profiles — widely listed but long dead: `relay.nostr.band`, `relay.nostr.bg`, `nostr.orangepill.dev`, `nostr.zbd.gg`, `relay.current.fyi`, `relayable.org`. These waste connection budget on every feed load.
 
