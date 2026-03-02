@@ -999,6 +999,8 @@ See [bench/src/algorithms/ditto-outbox.ts](bench/src/algorithms/ditto-outbox.ts)
 | ValderDama (1,082) | 635 | 658ms | 874ms | 14 | 542ms | 912ms |
 | Telluride (2,747) | 1,234 | 611ms | 829ms | 35 | 527ms | 791ms |
 
+*Follow counts differ slightly from earlier sections (e.g., ODELL 1,777 vs 1,779) because these latency benchmarks were run at a different time — follow counts change as users follow/unfollow people. The differences are small (<2%) and don't affect timing conclusions.*
+
 Feed TTFE is algorithm-invariant: it depends on the fastest relay in the selected set, and all outbox algorithms include at least one fast relay. TTFE ranges from 527ms (Telluride) to 668ms (jb55). Profile-view TTFE (top 3 write relays per author, algorithm-independent) ranges from 717ms to 1.0s median, with 96-100% hit rates.
 
 **EOSE-race simulation.** The key question for app devs: when you query 20 relays in parallel, the fastest sends EOSE first. How much recall have you captured at that point, and how much more do you get by waiting?

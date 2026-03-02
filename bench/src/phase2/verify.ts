@@ -390,7 +390,7 @@ export function computeProfileViewLatency(
 
     authorCount++;
 
-    // Take top N write relays (sorted by those that delivered events first)
+    // Take first N write relays (Set insertion order, no sorting applied)
     const relayList = [...writeRelays].slice(0, maxRelaysPerProfile);
     totalRelaysQueried += relayList.length;
 

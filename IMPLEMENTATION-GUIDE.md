@@ -153,7 +153,7 @@ See [README.md § Delivery check](README.md#delivery-check-self-healing) for cod
 
 Every relay query faces a tradeoff: wait longer → more events, but slower UI. The right timeout depends on what you're loading. Benchmarked across 7 profiles (194–2,784 follows):
 
-```
+```text
 What are you loading?
 │
 ├─ Main feed (timeline)

@@ -153,7 +153,7 @@ export function printPhase2Table(result: Phase2Result): void {
         pad(fmtMs(lat.queryP80Ms), lWidths[3]),
         pad(fmtMs(lat.queryMaxMs), lWidths[4]),
         pad(String(lat.timeoutCount), lWidths[5]),
-        pad(fmtMs(lat.timeoutTaxMs || null), lWidths[6]),
+        pad(fmtMs(lat.timeoutTaxMs ?? null), lWidths[6]),
         pad(relayStr, lWidths[7]),
         pad(comma(lat.totalEvents), lWidths[8]),
       ].join(" | ");
