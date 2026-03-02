@@ -351,13 +351,15 @@ To quantify the relay list pollution problem, we probed NIP-11 info documents fo
 
 **Only 37% of relay-user pairs point to normal content relays.** The remaining 63% are offline (34%), missing NIP-11 (17%), paid (7%), restricted writes (4%), or auth-gated (0.5%). Nearly half (48.6%) of all unique relay URLs encountered were offline at probe time.
 
+**Caveat: NIP-11 is voluntary.** The 491 relays (17% of pairs) classified as "no-nip11" may be fully functional — they simply don't serve an info document. Per nostr.watch, ~500 functional relays lack NIP-11. Our probe classifies these conservatively as unknown rather than dead, but the "37% content" figure understates the true count of usable relays. NIP-66 liveness data (which tests WebSocket connectivity, not HTTP info documents) is a better signal for filtering dead relays.
+
 The most common offline relays appear in 32-34 of 36 profiles — widely listed but long dead: `relay.nostr.band`, `relay.nostr.bg`, `nostr.orangepill.dev`, `nostr.zbd.gg`, `relay.current.fyi`, `relayable.org`. These waste connection budget on every feed load.
 
 Paid relays like `nostr.wine`, `nostr.land`, `atlas.nostr.land` appear in 34/36 profiles. While some paid relays serve content to readers without payment, others require authentication or payment for any access. The `filter.nostr.wine/*` pattern alone accounts for 104 unique URLs (per-user broadcast proxies).
 
 Restricted-write relays like `pyramid.fiatjaf.com` (34/36 users), `nostr.einundzwanzig.space` (32/36), and `nostr.thank.eu` (28/36) are community or personal relays that won't serve general content queries.
 
-*Classification: `content` = no restriction flags; `paid` = `limitation.payment_required: true`; `auth-gated` = `limitation.auth_required: true`; `restricted` = `limitation.restricted_writes: true` without paid/auth; `no-nip11` = no NIP-11 response; `offline` = connection failed. Probed with 5s HTTP timeout, `Accept: application/nostr+json`. Data: [`bench/.cache/nip11_probe_*.json`](bench/.cache/).*
+*Classification: `content` = no restriction flags; `paid` = `limitation.payment_required: true`; `auth-gated` = `limitation.auth_required: true`; `restricted` = `limitation.restricted_writes: true` without paid/auth; `no-nip11` = no NIP-11 response (relay may still be functional — NIP-11 is voluntary); `offline` = connection failed. Probed with 5s HTTP timeout, `Accept: application/nostr+json`. Data: [`bench/.cache/nip11_probe_*.json`](bench/.cache/).*
 
 ### 5.4 Centralization Pressure
 
