@@ -188,6 +188,7 @@ function computeAlgorithmLatency(
   eoseTimeoutMs = 15000,
   concurrency = 20,
 ): AlgorithmLatencyStats {
+  concurrency = Math.max(1, concurrency);
   const algRelays = new Set(result.relayAssignments.keys());
 
   let relaysWithOutcomes = 0;

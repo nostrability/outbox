@@ -1048,7 +1048,7 @@ Big Relays reaches full completeness at +0ms on most profiles (only 1-2 relays w
     |:---:|:---:|:---:|:---:|:---:|
     | 2 (Big Relays) | 50–77% | 100% | 100% | 100% |
     | 4 (Ditto-Mew) | 62–86% | 8–84% | 85–100% | 85–100% |
-    | 20 (Outbox) | 81–98% | 0–62% | 76–99% | 89–100% |
+    | 20 (Outbox) | 81–98% | 0–62% | 86–99% | 89–100% |
 
     Two relays finish instantly but miss half the events. Twenty relays find nearly everything but take 2-5s to converge. Hybrid outbox side-steps this: show app relay events immediately (2-4 relay speed), stream in outbox events in the background (20-relay coverage).
 
@@ -1092,7 +1092,7 @@ Based on patterns observed across all implementations and benchmark results:
 
 8. **Support NIP-17 DM relays.** Only 4 of 10 mature implementations fully route DMs via kind 10050 relays. Kind 10050 is straightforward to implement and provides meaningful privacy benefits for direct messaging.
 
-9. **EOSE-race with 2s grace is the practical feed timeout.** Across 7 profiles, waiting 2s after the first relay finishes captures 76-99% of eventual recall — enough for feeds, where showing *most* events quickly beats showing *all* events slowly. The tradeoff is fundamental: 2 relays give instant completeness (100% at +0ms) but low absolute recall (50-77%). 20 outbox relays give high recall (81-98%) but need 2-5s to converge. Hybrid outbox bridges this — app relay events arrive instantly, outbox events stream in. For completeness-critical paths (archival, search), 5s gets to ~100% on all but the largest profiles (2,700+ follows need 15s due to timeout overhead).
+9. **EOSE-race with 2s grace is the practical feed timeout.** Across 7 profiles, waiting 2s after the first relay finishes captures 86-99% of eventual recall — enough for feeds, where showing *most* events quickly beats showing *all* events slowly. The tradeoff is fundamental: 2 relays give instant completeness (100% at +0ms) but low absolute recall (50-77%). 20 outbox relays give high recall (81-98%) but need 2-5s to converge. Hybrid outbox bridges this — app relay events arrive instantly, outbox events stream in. For completeness-critical paths (archival, search), 5s gets to ~100% on all but the largest profiles (2,700+ follows need 15s due to timeout overhead).
 
 10. **Aggregator results are surprisingly poor.** Primal reaches 32% recall at 7d (6-profile mean) and <1% at 3yr — worse than Popular+Random (damus + nos.lol + 2 random relays) at every window. This is unexpected: an aggregator that proxies tens if not hundreds of relays should in theory outperform 4 random connections. This may indicate a limitation in the benchmark methodology rather than a real-world indictment of aggregators.
 
