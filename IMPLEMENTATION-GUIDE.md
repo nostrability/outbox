@@ -147,18 +147,99 @@ migration — it works equally well for delivery verification.
 
 See [README.md § Delivery check](README.md#delivery-check-self-healing) for code.
 
-### 4. Cap at 20 connections
+### 4. Set timeouts by use case (latency-coverage tradeoff)
+
+**Impact: determines how fast your UI feels vs how much content users see**
+
+Every relay query faces a tradeoff: wait longer → more events, but slower UI. The right timeout depends on what you're loading. Benchmarked across 7 profiles (194–2,784 follows):
+
+```
+What are you loading?
+│
+├─ Main feed (timeline)
+│  └─ EOSE-race: show events as they stream in,
+│     cut off at first EOSE + 2s grace
+│     → First event: 530-670ms
+│     → 85-99% completeness at cutoff
+│     → Done in 2-3s total wall-clock
+│
+├─ Profile view
+│  └─ Query author's top 3 write relays + app relays in parallel
+│     3s timeout
+│     → 750-920ms median TTFE, 96-100% hit rate
+│
+├─ Event lookup / reply context
+│  └─ Try relay hint from e-tag first (500ms timeout)
+│     Fall back to author's write relays (2s timeout)
+│
+├─ Search / archival
+│  └─ Query all selected relays, 15s timeout per relay
+│     → ~100% completeness, accept 5-15s latency
+│
+└─ Notification badge / unread count
+   └─ EOSE-race: first EOSE + 500ms grace
+      → 70-76% completeness, sub-second total
+```
+
+**EOSE-race implementation.** Query all relays in parallel. When the first relay sends EOSE, start a grace timer. Cut off when the timer fires:
+
+```typescript
+function eoseRace(pool, relays, filter, graceMs = 2000) {
+  const events = new Map();  // deduplicate by event ID
+  let firstEose = false;
+  let graceTimer;
+
+  return new Promise(resolve => {
+    const sub = pool.subscribe(relays, filter, {
+      onevent(event) {
+        if (!events.has(event.id)) {
+          events.set(event.id, event);
+          onNewEvent(event);  // render immediately
+        }
+      },
+      oneose() {
+        if (!firstEose) {
+          firstEose = true;
+          graceTimer = setTimeout(() => {
+            sub.close();
+            resolve([...events.values()]);
+          }, graceMs);
+        }
+      }
+    });
+
+    // Hard timeout: 15s regardless
+    setTimeout(() => { sub.close(); resolve([...events.values()]); }, 15000);
+  });
+}
+```
+
+**Grace period decision matrix** (from 7-profile benchmark, EOSE-race simulation):
+
+| Grace period | Completeness range | Best for |
+|:---:|:---:|---|
+| +0ms | 0–62% | Only 1-2 relay setups (Big Relays, Ditto-Mew) |
+| +500ms | 5–93% | Notification badges, unread counts |
+| +1s | 5–93% | Unreliable — too variable across profile sizes |
+| **+2s** | **76–99%** | **Main feeds — best balance of speed and coverage** |
+| +5s | 89–100% | Archival, search, completeness-critical paths |
+
+The 0–62% range at +0ms means: if your algorithm queries 20 relays, the first EOSE arrives from the fastest relay but 19 others haven't reported yet. Waiting 2s lets most of them finish. For profiles with 2,000+ follows (more relays, more variance), +2s gets 76-87% — consider +5s for completeness-critical use cases.
+
+*Data: 7 cross-profile benchmarks (194–2,784 follows). See [README.md § Latency](README.md#4-latency-when-to-stop-waiting-for-relays) for the summary and [OUTBOX-REPORT.md § 8.6](OUTBOX-REPORT.md#86-latency-simulation) for full data.*
+
+### 5. Cap at 20 connections
 
 All algorithms reach within 1-2% of their unlimited ceiling by 20
 connections. Greedy at 10 already achieves 93-97% of its unlimited coverage.
 
-### 5. Target 2-3 relays per author
+### 6. Target 2-3 relays per author
 
 1 relay = fragile (relay goes down or silently drops a write, you lose events).
 2 = redundancy. 3+ = diminishing returns. 7 of 9 implementations with
 per-pubkey limits default to 2 or 3.
 
-### 6. Handle missing relay lists gracefully
+### 7. Handle missing relay lists gracefully
 
 On paper, 20-44% of followed users lack kind 10002 — but [dead account
 analysis](bench/NIP66-COMPARISON-REPORT.md#5-dead-account-analysis) shows
@@ -183,7 +264,7 @@ automates this server-side via negentropy sync, but is a proof-of-concept (not
 production). Client-side detection of "relay listed but no data from this
 author" would catch both missing relay lists and stale migrations.
 
-### 7. Diversify bootstrap relays
+### 8. Diversify bootstrap relays
 
 8/13 analyzed clients hardcode relay.damus.io. 6/13 depend on purplepag.es
 for indexing. Consider diversifying:

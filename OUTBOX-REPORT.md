@@ -983,6 +983,83 @@ The algorithm models [Ditto-Mew](https://gitlab.com/soapbox-pub/ditto-mew)'s arc
 
 See [bench/src/algorithms/ditto-outbox.ts](bench/src/algorithms/ditto-outbox.ts) for the benchmark implementation and [bench/src/algorithms/ditto-mew.ts](bench/src/algorithms/ditto-mew.ts) for the baseline.
 
+### 8.6 Latency Simulation
+
+**What this measures:** How fast do events arrive when querying outbox relays? When should a client stop waiting? This uses per-relay timing data (connect latency, query time, EOSE timing) collected during Phase 2 baseline queries to simulate parallel relay queries for each algorithm's relay set. No additional network calls — timing is replayed from baseline collection.
+
+**7 profiles tested** (1-day window, `--verify --no-phase2-cache`):
+
+| Profile (follows) | Relays queried | Connect p50 | Query p50 | Timeouts | Feed TTFE | Profile-view TTFE |
+|---|---:|---:|---:|---:|---:|---:|
+| fiatjaf (194) | 178 | 651ms | 843ms | 3 | 581ms | 1.0s |
+| Gato (399) | 183 | 911ms | 1.3s | 3 | 545ms | 753ms |
+| hodlbod (449) | 483 | 659ms | 894ms | 10 | 573ms | 836ms |
+| jb55 (945) | 731 | 605ms | 808ms | 15 | 668ms | 920ms |
+| ODELL (1,777) | 281 | 700ms | 954ms | 6 | 556ms | 717ms |
+| ValderDama (1,082) | 635 | 658ms | 874ms | 14 | 542ms | 912ms |
+| Telluride (2,747) | 1,234 | 611ms | 829ms | 35 | 527ms | 791ms |
+
+Feed TTFE is algorithm-invariant: it depends on the fastest relay in the selected set, and all outbox algorithms include at least one fast relay. TTFE ranges from 527ms (Telluride) to 668ms (jb55). Profile-view TTFE (top 3 write relays per author, algorithm-independent) ranges from 717ms to 1.0s median, with 96-100% hit rates.
+
+**EOSE-race simulation.** The key question for app devs: when you query 20 relays in parallel, the fastest sends EOSE first. How much recall have you captured at that point, and how much more do you get by waiting?
+
+Completeness at first EOSE + grace period (% of eventual recall achieved), for representative algorithms:
+
+**Greedy Set-Cover (20 relays, no learning):**
+
+| Grace | fiatjaf | Gato | hodlbod | jb55 | ODELL | ValderDama | Telluride |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| +0ms | 7.7% | 62.1% | 0.0% | 0.1% | 0.1% | 2.9% | 1.3% |
+| +500ms | 72.6% | 63.1% | 11.4% | 8.0% | 88.8% | 8.5% | 5.6% |
+| +1s | 78.1% | 66.8% | 83.4% | 19.2% | 92.7% | 85.4% | 5.6% |
+| +2s | 94.6% | 98.0% | 93.3% | 95.4% | 98.5% | 86.2% | 86.3% |
+| +5s | 100% | 100% | 99.4% | 99.9% | 100% | 100% | 89.0% |
+
+**Ditto+Outbox Thompson (hybrid: 4 app relays + outbox):**
+
+| Grace | fiatjaf | Gato | hodlbod | jb55 | ODELL | ValderDama | Telluride |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| +0ms | 60.5% | 59.2% | 7.7% | 0.5% | 78.3% | 0.4% | 3.8% |
+| +500ms | 65.6% | 60.8% | 23.2% | 22.2% | 92.3% | 16.3% | 11.1% |
+| +1s | 70.7% | 65.2% | 82.8% | 42.3% | 93.4% | 86.6% | 15.1% |
+| +2s | 86.6% | 96.8% | 94.9% | 94.8% | 98.0% | 90.7% | 86.8% |
+| +5s | 100% | 99.7% | 100% | 100% | 100% | 100% | 89.8% |
+
+**Big Relays (2 relays, no outbox) and Ditto-Mew (4 app relays):**
+
+| Grace | Big Relays (all profiles) | Ditto-Mew range |
+|---:|---:|---:|
+| +0ms | 88.7–100% | 7.9–83.9% |
+| +2s | 88.7–100% | 84.8–100% |
+
+Big Relays reaches full completeness at +0ms on most profiles (only 1-2 relays with events, so first EOSE = last EOSE). But absolute recall is 50-77%. Ditto-Mew similarly front-loads events from 4 app relays, reaching 81-95% completeness quickly. The hybrid approach combines both: app relay events arrive instantly, outbox events fill in over 2-5s.
+
+**Key findings:**
+
+1. **+2s grace captures 86-99% of recall for most profiles.** This is the recommended default for feeds. Only Telluride (2,784 follows, 1,234 relays) and ValderDama (1,082 follows) stay below 90% at +2s. For these large profiles, +5s gets to 89-100%.
+
+2. **TTFE is algorithm-independent and profile-size-independent.** 527-668ms across all 7 profiles and all algorithms. The fastest relay in any 20-relay set responds in under 700ms.
+
+3. **The latency-recall tradeoff is fundamental.** Fewer relays = faster completeness but lower recall. More relays = higher recall but slower convergence. There is no free lunch — the question is which timeout to set, not which algorithm to pick.
+
+4. **Dead relays are the main latency risk.** Each timeout burns 15s. Telluride's 35 timeouts across 1,234 relays means: without NIP-66 filtering, some concurrency slots sit idle for 15s while dead relays fail to respond. NIP-66 pre-filtering is as much a latency optimization as a connection budget one.
+
+5. **Profile-view latency is consistent.** 717ms–1.0s median across all profiles, 96-100% hit rate, ~2.9 relays queried per author. This is the per-author outbox lookup cost — predictable and manageable.
+
+**Progressive completeness** (% of eventual recall at wall-clock time, Greedy Set-Cover):
+
+| Time | fiatjaf | Gato | hodlbod | jb55 | ODELL | ValderDama | Telluride |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| @1s | 68.4% | 62.1% | 0.0% | 5.7% | 0.1% | 5.2% | 1.3% |
+| @2s | 88.3% | 66.8% | 83.4% | 19.2% | 94.7% | 85.7% | 5.6% |
+| @5s | 100% | 100% | 99.4% | 99.9% | 100% | 100% | 89.0% |
+| @10s | 100% | 100% | 100% | 100% | 100% | 100% | 89.2% |
+| @15s | 100% | 100% | 100% | 100% | 100% | 100% | 100% |
+
+Telluride's slow convergence (89% at @5s, 100% only at @15s) is driven by timeout overhead: 35 timed-out relays in a 20-concurrency pool means some batches wait the full 15s EOSE timeout.
+
+*Latency simulation uses per-relay timing from baseline queries. It models parallel WebSocket connections with the same concurrency as the live benchmark (20 concurrent). Timing includes connection establishment (DNS+TCP+TLS+WS upgrade) and query execution through EOSE. See [`bench/src/phase2/verify.ts`](bench/src/phase2/verify.ts) for the simulation code and [`bench/src/phase2/probe.ts`](bench/src/phase2/probe.ts) for the standalone relay latency probe.*
+
 ---
 
 ## 9. Observations
@@ -1005,7 +1082,9 @@ Based on patterns observed across all implementations and benchmark results:
 
 8. **Support NIP-17 DM relays.** Only 4 of 10 mature implementations fully route DMs via kind 10050 relays. Kind 10050 is straightforward to implement and provides meaningful privacy benefits for direct messaging.
 
-9. **Aggregator results are surprisingly poor.** Primal reaches 32% recall at 7d (6-profile mean) and <1% at 3yr — worse than Popular+Random (damus + nos.lol + 2 random relays) at every window. This is unexpected: an aggregator that proxies tens if not hundreds of relays should in theory outperform 4 random connections. This may indicate a limitation in the benchmark methodology rather than a real-world indictment of aggregators.
+9. **EOSE-race with 2s grace is the practical feed timeout.** Across 7 profiles, waiting 2s after the first relay finishes captures 76-99% of eventual recall — enough for feeds, where showing *most* events quickly beats showing *all* events slowly. The tradeoff is fundamental: 2 relays give instant completeness (100% at +0ms) but low absolute recall (50-77%). 20 outbox relays give high recall (81-98%) but need 2-5s to converge. Hybrid outbox bridges this — app relay events arrive instantly, outbox events stream in. For completeness-critical paths (archival, search), 5s gets to ~100% on all but the largest profiles (2,700+ follows need 15s due to timeout overhead).
+
+10. **Aggregator results are surprisingly poor.** Primal reaches 32% recall at 7d (6-profile mean) and <1% at 3yr — worse than Popular+Random (damus + nos.lol + 2 random relays) at every window. This is unexpected: an aggregator that proxies tens if not hundreds of relays should in theory outperform 4 random connections. This may indicate a limitation in the benchmark methodology rather than a real-world indictment of aggregators.
 
 ---
 
