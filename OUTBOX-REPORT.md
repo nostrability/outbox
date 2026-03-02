@@ -6,7 +6,7 @@
 
 **An analysis of NIP-65 outbox/inbox relay routing across 15 Nostr clients and libraries**
 
-*Produced for [nostrability#69](https://github.com/niclas-pfeifer/nostrability/issues/69)*
+*Produced for [nostrability#69](https://github.com/nostrability/nostrability/issues/69)*
 
 *Benchmark data collected February 2026. Relay state changes continuously — results are a snapshot of network conditions at benchmark time. Relay availability, retention policies, and event counts will differ on re-run. Relative algorithm rankings should be stable; absolute recall percentages will vary.*
 
