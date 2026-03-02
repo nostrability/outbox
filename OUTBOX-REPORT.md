@@ -592,7 +592,7 @@ ILP, Streaming Coverage, and Spectral Clustering frequently hit the theoretical 
 - Baseline: query ALL declared write relays for each author, plus additional relays needed by baselines (primal.net, damus.io, nos.lol)
 - Authors classified as **testable-reliable** (events found + ≥50% declared relays responded), **testable-partial** (<50% responded), **zero-baseline** (no events, relays responded), or **unreliable** (no events, relays unresponsive)
 - Events per (relay, author) pair capped at 10,000 to eliminate recency bias
-- 14 algorithms tested across 6 time windows (7d to 3 years)
+- 22 algorithms tested across 6 time windows (7d to 3 years)
 
 **Baseline limitations:** The baseline is a lower bound, not ground truth. If a relay is down or slow during the baseline query, events stored there are missed — making the baseline incomplete and all recall percentages conservative. Relay success rates during baseline construction range from 31% (ODELL, 1,199 relays) to 55% (fiatjaf, 234 relays), meaning 45-69% of declared relays did not respond. The "testable-reliable" author filter (≥50% declared relays responded) mitigates this by excluding authors whose baseline is likely incomplete, but some undercount is inherent. All recall percentages in this report should be read as "at least X%" rather than exact values.
 
@@ -738,8 +738,10 @@ Single-seed results can be misleading. To quantify run-to-run variability, we ra
 | Profile | Follows | Welshman seeds 0–4 | Mean ± std | P+R seeds 0–4 | Mean ± std |
 |---------|:-------:|---------------------|:----------:|----------------|:----------:|
 | fiatjaf | 194 | 37.8, 20.2, 23.3, 16.9, 25.2 | 24.7% ± 8.0pp | 11.8, 18.9, 20.1, 14.9, 23.0 | 17.7% ± 4.4pp |
-| jb55 | 655 | 27.0, 26.8, 30.5, 36.5, 27.8 | 29.7% ± 4.1pp | 22.1, 23.0, 23.7, 23.4, 22.6 | 23.0% ± 0.6pp |
+| jb55 | 655\* | 27.0, 26.8, 30.5, 36.5, 27.8 | 29.7% ± 4.1pp | 22.1, 23.0, 23.7, 23.4, 22.6 | 23.0% ± 0.6pp |
 | ODELL | 1,779 | 21.0, 18.5, 17.6, 19.4, 17.0 | 18.7% ± 1.6pp | 20.2, 18.9, 18.9, 19.2, 18.3 | 19.1% ± 0.7pp |
+
+*\*jb55's follow count was 655 when this variance analysis was run (earlier data snapshot); later benchmarks show 943-945. Follow counts change as users follow/unfollow.*
 
 Key observations:
 - **Variance decreases with follow count.** fiatjaf (194 follows) has ±8pp Welshman std; ODELL (1,779 follows) has ±1.6pp. Larger follow lists average out per-relay randomness.
@@ -1012,7 +1014,7 @@ Sections 8.3–8.5 model relay quality as Bernoulli (delivered/not). This sectio
 
 **Key findings:**
 
-1. **TTFE remains algorithm-independent.** All four variants consistently hit the same TTFE (587–722ms per session). The fastest relay in the follow graph is always selected regardless of latency discount. This confirms the Section 8.6.1 finding: TTFE is determined by the single fastest relay, which every algorithm includes.
+1. **TTFE remains algorithm-independent.** All four variants consistently hit the same TTFE (587–722ms per session). The fastest relay in the follow graph is always selected regardless of latency discount. This confirms the Section 8.7 finding: TTFE is determined by the single fastest relay, which every algorithm includes.
 
 2. **Tail latency improves significantly.** FD+Thompson+Latency achieves p50 of 1.4–1.5s (vs 1.6–1.9s base) and p80 of 2.0–2.1s (vs 2.2–2.3s base) by sessions 4–7. The discount steers relay selection away from slow relays that drag down the median and upper percentiles.
 
