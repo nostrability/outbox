@@ -11,11 +11,11 @@ What's your starting point?
 │  │
 │  ├─ Can you rewrite your relay routing layer?
 │  │  └─ Yes → Full outbox (Steps 1a → 4 in README)
-│  │           Best recall (84-89% [75–96] 1yr), biggest engineering investment
+│  │           Best recall (85-92% 7d; 1yr under re-benchmarking), biggest engineering investment
 │  │
 │  └─ Need to preserve feed latency or can't change routing?
 │     └─ Hybrid outbox — add outbox queries to profile/event/thread hooks
-│        89% [86–93] 1yr recall (after learning), ~80 LOC, no routing layer changes
+│        ~80 LOC, no routing layer changes; 1yr recall under re-benchmarking
 │        See README § Hybrid outbox for code
 │
 ├─ Basic outbox (real-time feeds)?
@@ -25,9 +25,9 @@ What's your starting point?
 │
 ├─ Historical event recall (archival, search)?
 │  ├─ Can persist state across sessions?
-│  │  ├─ Using Welshman/Coracle?  → Welshman+Thompson Sampling (89% [82–96] 1yr)
-│  │  ├─ Using rust-nostr?        → FD+Thompson (84% [75–92] 1yr after 5 sessions)
-│  │  └─ Using app relays?        → Hybrid+Thompson (89% [86–93] 1yr, no routing changes)
+│  │  ├─ Using Welshman/Coracle?  → Welshman+Thompson Sampling (92% 7d; 1yr under re-benchmarking)
+│  │  ├─ Using rust-nostr?        → FD+Thompson (1yr under re-benchmarking)
+│  │  └─ Using app relays?        → Hybrid+Thompson (1yr under re-benchmarking, no routing changes)
 │  └─ Stateless?                  → Filter Decomposition (25% [19–32] 1yr) or
 │                                   Weighted Stochastic / Welshman (24% [12–38] 1yr)
 │
@@ -47,7 +47,7 @@ relays that retain history.
 
 ### 1. Learn from what actually works
 
-**Impact: +60-70pp event recall after 2-3 sessions**
+**Impact: +40-57pp event recall at 7d after 2-3 sessions (1yr gains under re-benchmarking)**
 
 Every analyzed client picks relays statelessly — recompute from NIP-65 data
 each time, with no memory of which relays actually delivered events.
@@ -57,12 +57,13 @@ Thompson Sampling adds learning to any stochastic relay scoring. On session 1,
 the scorer has learned which relays actually deliver and recall jumps dramatically
 (1yr event recall, cap@20, NIP-66 filtered):
 
-| Profile (follows) | Session 1 (stateless) | Session 3+ (learned) | Improvement |
-|---|---|---|---|
-| Gato (399) | 31.2% | **95.5%** | +64pp |
-| ODELL (1,779) | 29.1% | **90.5%** | +61pp |
-| Telluride (2,784) | 17.5% | **89.5%** | +72pp |
-| 4-profile mean | 23% [15–31] | **89%** [82–96] | +66pp |
+*⚠️ The 1yr multi-session numbers previously shown here were inflated by a phase2 cache bug. See [README § methodology note](README.md#methodology-note-phase2-cache-bug). Genuine 7d data from HJO benchmark:*
+
+| Profile (follows) | Window | Session 1 | Session 3+ | Improvement |
+|---|---|---|---|---|
+| fiatjaf (194) | 7d | 88.6% | **95.0%** | +6pp |
+| Gato (399) | 7d | ~40% | **~85%** | ~+45pp |
+| Telluride (2,784) | 7d | ~35% | **~92%** | ~+57pp |
 
 Thompson converges in 2-3 sessions. The gains are largest at long time windows
 and large follow counts, where the relay selection problem is hardest. Small
@@ -106,15 +107,16 @@ ordering with `sampleBeta(α, β)` scoring — no popularity weight. After 5 lea
 sessions (cap@20, NIP-66 filtered), FD+Thompson reaches **83.9% event recall** [75–92] at 1yr
 vs baseline FD's 23.1% — converging within 2-3 sessions. Welshman+Thompson leads by
 ~5pp (89.4% [82–96]) due to the popularity weight, but FD+Thompson is a drop-in upgrade for
-existing rust-nostr code with no structural changes needed.
+existing rust-nostr code with no structural changes needed. *Note: the 1yr multi-session numbers (83.9%, 89.4%) previously cited here were inflated by a phase2 cache bug — see [README § methodology note](README.md#methodology-note-phase2-cache-bug). Session 1 comparison (FD+Thompson 31.8% vs FD 23.1%) and relative rankings are genuine.*
 See [README.md § FD+Thompson](README.md#fdthompson-for-rust-nostr) for code.
 
 **For app-relay clients (Ditto-Mew, or any client with hardcoded relay URLs):**
 Hybrid+Thompson keeps your app relays for the main feed and adds Thompson-scored
-outbox queries only for profile views, event lookups, and thread traversal. After
-2 sessions, hybrid reaches **89.4% event recall** [86–93] at 1yr — within 4.5pp of full
-Welshman+Thompson (93.9% [89–98]) — with ~80 LOC and no routing layer changes. Converges
-faster than full outbox because the app relay floor provides a strong initial signal.
+outbox queries only for profile views, event lookups, and thread traversal.
+~80 LOC and no routing layer changes. Converges faster than full outbox because
+the app relay floor provides a strong initial signal. *Note: the 1yr multi-session
+numbers previously cited here (89.4%, 93.9%) were inflated by a phase2 cache bug — see
+[README § methodology note](README.md#methodology-note-phase2-cache-bug). Re-benchmarking in progress.*
 See [README.md § Hybrid outbox](README.md#hybrid-outbox-for-app-relay-clients) for code
 and [OUTBOX-REPORT.md § 8.5](OUTBOX-REPORT.md#85-hybrid-outbox-app-relay-broadcast--per-author-thompson) for full benchmark data.
 
