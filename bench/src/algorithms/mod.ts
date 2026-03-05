@@ -34,6 +34,7 @@ import { bigRelaysBaseline } from "./big-relays.ts";
 import { fdThompson } from "./fd-thompson.ts";
 import { dittoMew } from "./ditto-mew.ts";
 import { dittoOutbox } from "./ditto-outbox.ts";
+import { voyageMultiphase } from "./voyage-multiphase.ts";
 
 export interface AlgorithmEntry {
   id: string;
@@ -239,6 +240,14 @@ export const ALGORITHM_REGISTRY: AlgorithmEntry[] = [
     nativeCap: false,
     stochastic: true,
     defaults: { writeLimit: 3 },
+  },
+  {
+    id: "voyage",
+    name: "Voyage Multi-Phase",
+    fn: voyageMultiphase,
+    nativeCap: true,
+    stochastic: false,
+    defaults: { maxConnections: 25, maxRelaysPerUser: 2 },
   },
 ];
 
