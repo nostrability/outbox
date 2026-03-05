@@ -129,7 +129,7 @@ deno task bench 76c71aae3a491f1d9eec47cba17e229cda4113a0bbb6e6ae1776d7643e29cafa
 deno task bench <hex> --algorithms greedy,ndk,welshman,nostur,rust-nostr,direct,jumble,ditto-mew
 deno task bench <hex> --algorithms ilp,matching,spectral,mab,streaming,stochastic-greedy,hybrid
 deno task bench <hex> --algorithms primal,popular-random,big-relays
-deno task bench <hex> --algorithms welshman-thompson,fd-thompson,ditto-outbox,greedy-epsilon
+deno task bench <hex> --algorithms welshman-thompson,fd-thompson,ditto-outbox,greedy-epsilon,ndk-thompson,ndk-thompson-unified
 ```
 
 ### Connection budget sweep
@@ -194,6 +194,22 @@ Thompson Sampling persists relay scores to `.cache/relay_scores_*.json` between
 sessions. Each run loads the previous session's scores and updates them with
 Phase 2 verification results.
 
+### NDK+Thompson multi-session benchmark
+
+Compare NDK baseline vs NDK+Thompson across learning sessions:
+
+```bash
+# 5 learning sessions for a single profile
+for session in 1 2 3 4 5; do
+  deno task bench <hex> --verify --verify-window 31536000 \
+    --algorithms ndk,ndk-thompson,ndk-thompson-unified,welshman-thompson \
+    --nip66-filter liveness --no-phase2-cache --output table
+done
+```
+
+NDK+Thompson converges by session 3. The Priority variant preserves NDK's
+selected-first cascade and is more stable than the Unified variant.
+
 ## Parameters
 
 | Parameter | Default | Description |
@@ -253,4 +269,6 @@ On-paper mapping results should be nearly identical within a few days. Event ret
 | `jumble` | Jumble Coverage Pruning |
 | `big-relays` | Big Relays (damus+nos.lol) |
 | `ditto-mew` | Ditto-Mew (4 app relays) |
+| `ndk-thompson` | NDK+Thompson (Priority) |
+| `ndk-thompson-unified` | NDK+Thompson (Unified) |
 | `ditto-outbox` | Ditto+Outbox Thompson |

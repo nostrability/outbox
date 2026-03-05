@@ -35,6 +35,7 @@ import { fdThompson } from "./fd-thompson.ts";
 import { dittoMew } from "./ditto-mew.ts";
 import { dittoOutbox } from "./ditto-outbox.ts";
 import { voyageMultiphase } from "./voyage-multiphase.ts";
+import { ndkThompson, ndkThompsonUnified } from "./ndk-thompson.ts";
 
 export interface AlgorithmEntry {
   id: string;
@@ -248,6 +249,22 @@ export const ALGORITHM_REGISTRY: AlgorithmEntry[] = [
     nativeCap: true,
     stochastic: false,
     defaults: { maxConnections: 25, maxRelaysPerUser: 2 },
+  },
+  {
+    id: "ndk-thompson",
+    name: "NDK+Thompson (Priority)",
+    fn: ndkThompson,
+    nativeCap: true,
+    stochastic: true,
+    defaults: { maxRelaysPerUser: 2 },
+  },
+  {
+    id: "ndk-thompson-unified",
+    name: "NDK+Thompson (Unified)",
+    fn: ndkThompsonUnified,
+    nativeCap: true,
+    stochastic: true,
+    defaults: { maxRelaysPerUser: 2 },
   },
 ];
 

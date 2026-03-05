@@ -77,6 +77,28 @@ of what Coracle already ships.
 
 See [README.md § Thompson Sampling](README.md#thompson-sampling) for complete code including the full integration loop (startup → score → select → observe → persist).
 
+**For NDK users:** NDK+Thompson integrates Thompson scoring into NDK's existing
+priority-based architecture. NDK's priority cascade (connected > selected > popular)
+is preserved — Thompson replaces the popularity ranking in the third tier. After
+5 learning sessions (1yr, NIP-66 liveness, cap@20):
+
+| Profile (follows) | NDK baseline | NDK+Thompson | Gain | Sessions to converge |
+|---|---|---|---|---|
+| Gato (399) | 16.4% | 22.8% | +6pp | 2-3 |
+| Telluride (2,784) | 22.7% | 38.0% | +15pp | 3 |
+
+The gains are smaller than Welshman+Thompson (+60-70pp) because NDK's selected-first
+priority cascade short-circuits Thompson scoring — if already-connected relays satisfy
+the per-author target, the Thompson scorer is never consulted. Two integration strategies
+were benchmarked: *Priority* (preserve cascade) and *Unified* (replace cascade with 1.5x
+bonus). Priority is more stable and recommended for production integration. The remaining
+gap to Welshman+Thompson (~89%) represents the structural advantage of per-user relay
+budgeting vs NDK's popularity-weighted selection.
+
+See [bench/src/algorithms/ndk-thompson.ts](bench/src/algorithms/ndk-thompson.ts) for the
+benchmark implementation and [analysis/clients/ndk-applesauce-nostrudel.md](analysis/clients/ndk-applesauce-nostrudel.md)
+for NDK-specific integration points.
+
 **For rust-nostr / Filter Decomposition users:** FD+Thompson is a variant that fits
 Filter Decomposition's per-author structure directly. It replaces lexicographic relay
 ordering with `sampleBeta(α, β)` scoring — no popularity weight. After 5 learning
