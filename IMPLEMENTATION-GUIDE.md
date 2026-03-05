@@ -84,16 +84,17 @@ is preserved — Thompson replaces the popularity ranking in the third tier. Aft
 
 | Profile (follows) | NDK baseline | NDK+Thompson | Gain | Sessions to converge |
 |---|---|---|---|---|
-| Gato (399) | 16.4% | 22.8% | +6pp | 2-3 |
-| Telluride (2,784) | 22.7% | 38.0% | +15pp | 3 |
+| Gato (399) | 16.0% | 20.9% | +5pp | 4 |
+| Telluride (2,784) | 22.4% | 37.8% | +15pp | 3 |
 
-The gains are smaller than Welshman+Thompson (+60-70pp) because NDK's selected-first
-priority cascade short-circuits Thompson scoring — if already-connected relays satisfy
-the per-author target, the Thompson scorer is never consulted. Two integration strategies
-were benchmarked: *Priority* (preserve cascade) and *Unified* (replace cascade with 1.5x
-bonus). Priority is more stable and recommended for production integration. The remaining
-gap to Welshman+Thompson (~89%) represents the structural advantage of per-user relay
-budgeting vs NDK's popularity-weighted selection.
+In same-benchmark runs, Welshman+Thompson outperforms NDK+Thompson by ~3-9pp
+(26.7% vs 24.1% for Gato, 45.4% vs 41.4% for Telluride). The gap is structural:
+NDK's selected-first priority cascade short-circuits Thompson scoring — if
+already-connected relays satisfy the per-author target, the Thompson scorer is never
+consulted. Welshman's per-user relay budgeting gives Thompson full control over
+selection. Two integration strategies were benchmarked: *Priority* (preserve cascade)
+and *Unified* (replace cascade with 1.5x bonus). Priority is more stable and
+recommended for production integration.
 
 See [bench/src/algorithms/ndk-thompson.ts](bench/src/algorithms/ndk-thompson.ts) for the
 benchmark implementation and [analysis/clients/ndk-applesauce-nostrudel.md](analysis/clients/ndk-applesauce-nostrudel.md)

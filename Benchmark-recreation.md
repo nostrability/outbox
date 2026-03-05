@@ -207,7 +207,7 @@ for session in 1 2 3 4 5; do
 done
 ```
 
-NDK+Thompson converges by session 3. The Priority variant preserves NDK's
+NDK+Thompson converges by session 3-4. The Priority variant preserves NDK's
 selected-first cascade and is more stable than the Unified variant.
 
 ## Parameters

@@ -30,7 +30,7 @@ If you're building on an existing library, here's where you stand and what to do
 | If you use… | You're at step… | Next upgrade | Details |
 |---|:---:|---|---|
 | **Welshman/Coracle** | 2 (stochastic) | Add Thompson Sampling — replace `random()` with `sampleBeta()` | [analysis/clients/welshman-coracle.md](analysis/clients/welshman-coracle.md) |
-| **NDK** | 1 (priority-based) | Add Thompson Sampling — +15pp event recall for large follow sets | [analysis/clients/ndk-applesauce-nostrudel.md](analysis/clients/ndk-applesauce-nostrudel.md) |
+| **NDK** | 1 (priority-based) | Add Thompson Sampling — +5-15pp event recall (scales with follow count) | [analysis/clients/ndk-applesauce-nostrudel.md](analysis/clients/ndk-applesauce-nostrudel.md) |
 | **Applesauce/noStrudel** | 1 (greedy set-cover) | Add stochastic factor, then Thompson | [analysis/clients/ndk-applesauce-nostrudel.md](analysis/clients/ndk-applesauce-nostrudel.md) |
 | **Gossip** | 1 (greedy set-cover) | Add stochastic factor or Thompson | [analysis/clients/gossip.md](analysis/clients/gossip.md) |
 | **rust-nostr** | 1 (filter decomp) | Add FD+Thompson — same per-author structure, learns from delivery | [analysis/clients/rust-nostr-voyage-nosotros-wisp-shopstr.md](analysis/clients/rust-nostr-voyage-nosotros-wisp-shopstr.md) |
@@ -47,7 +47,7 @@ Your relay picker optimizes for "who publishes where" on paper, but the relay th
 
 ## What we tested
 
-24 relay selection algorithms (9 from real clients, 6 experimental-actionable, 7 academic, 2 baselines — plus 2 latency-aware variants), tested against 7 real Nostr profiles (194-2,784 follows), across 6 time windows (7 days to 3 years), with and without NIP-66 liveness filtering. Every algorithm connected to real relays and queried for real events. Latency benchmarks across all 7 profiles measure TTFE, EOSE-race convergence, and profile-view timing.
+25 relay selection algorithms (10 from real clients, 6 experimental-actionable, 7 academic, 2 baselines — plus 2 latency-aware variants), tested against 7 real Nostr profiles (194-2,784 follows), across 6 time windows (7 days to 3 years), with and without NIP-66 liveness filtering. Every algorithm connected to real relays and queried for real events. Latency benchmarks across all 7 profiles measure TTFE, EOSE-race convergence, and profile-view timing.
 
 Full methodology: [OUTBOX-REPORT.md](OUTBOX-REPORT.md) | Reproduce results: [Benchmark-recreation.md](Benchmark-recreation.md) | Produced for [nostrability#69](https://github.com/nostrability/nostrability/issues/69)
 
@@ -114,10 +114,10 @@ The relay that's "best on paper" isn't always the one that delivers events. Gree
 
 | Profile (follows) | NDK baseline | NDK+Thompson (S3-5 avg) | Gain |
 |---|---|---|---|
-| Gato (399) | 16.4% | 22.8% | **+6pp** |
-| Telluride (2,784) | 22.7% | 38.0% | **+15pp** |
+| Gato (399) | 16.0% | 20.9% | **+5pp** |
+| Telluride (2,784) | 22.4% | 37.8% | **+15pp** |
 
-NDK's priority cascade (selected-first > popularity > lexicographic) limits Thompson's gains compared to Welshman+Thompson — the cascade short-circuits scoring when connected relays satisfy the per-author target. The Priority variant (preserving the cascade) is more stable than the Unified variant (replacing it with a 1.5x bonus). Thompson converges by session 3 for both profiles. The improvements are meaningful but smaller than Welshman+Thompson (~89%) because NDK's architecture constrains how much Thompson can steer relay selection. A deeper refactor of the priority cascade would unlock the remaining gap.
+NDK's priority cascade (selected-first > popularity > lexicographic) limits Thompson's influence — the cascade short-circuits scoring when connected relays satisfy the per-author target. The Priority variant (preserving the cascade) is more stable than the Unified variant (replacing it with a 1.5x bonus). Thompson converges by session 3 for Telluride and session 4 for Gato. In same-benchmark runs, Welshman+Thompson outperforms NDK+Thompson by ~3-9pp (26.7% vs 24.1% for Gato, 45.4% vs 41.4% for Telluride). This gap is structural — Welshman's per-user relay budgeting gives Thompson full scoring control, while NDK's cascade constrains it to the third tier.
 
 *Note: Small profiles (<200 follows) may see minimal gains — the 20-relay budget already covers most combinations.*
 
@@ -228,7 +228,7 @@ All deployed client algorithms plus key experimental ones:
 | **Filter Decomposition** | rust-nostr | 25% [19–32] | 77% [71–88] | Per-author top-N write relays; strong at long windows |
 | **Welshman Stochastic** | Coracle | 24% [12–38] | 83% [75–93] | Best stateless deployed algorithm for archival — 1.5× Greedy at 1yr |
 | **Greedy Set-Cover** | Gossip, Applesauce, Wisp | 16% [12–20] | 84% [77–94] | Best on-paper coverage; degrades sharply for history |
-| **NDK+Thompson** | *not yet deployed* | 38% [23–38] | — | Upgrade path for NDK — learns from delivery, preserves priority cascade |
+| **NDK+Thompson** | *not yet deployed* | 29% [21–38] | — | Upgrade path for NDK — learns from delivery, preserves priority cascade |
 | **NDK Priority** | NDK | 16% [12–19] | 83% [77–92] | Similar to Greedy; connected > selected > popular |
 | **Coverage Sort** | Nostur | 16% [9–22] | 65% [55–80] | Skip-top-relays heuristic costs 5-12% coverage |
 
@@ -241,14 +241,14 @@ All deployed client algorithms plus key experimental ones:
 | Big Relays | 8% [5–12] | 61% [45–70] | Just damus+nos.lol — the "do nothing" baseline |
 | Primal Aggregator\*\*\* | <1% [0.2–1.6] | 32% [25–37] | Single caching relay — 100% assignment but low actual recall |
 
-*1yr and 7d recall: 6-profile means from cross-profile benchmarks (Section 8.2 of [OUTBOX-REPORT.md](OUTBOX-REPORT.md)). [min–max] ranges show the spread across tested profiles (194–1,779 follows for the 6-profile set; Thompson variants use a 4-profile set up to 2,784 follows) — your recall will land somewhere in this range depending on your follow graph. All testable-reliable authors, 20-connection cap except Direct Mapping. Thompson = 4-profile mean with NIP-66, 5 learning sessions (FD+Thompson=84%, Welshman+Thompson=89%, Hybrid+Thompson=89%, NDK+Thompson=38% [23–38]). Welshman+Thompson 7d = 92% (4-profile mean, Section 8.3); FD+Thompson, Hybrid+Thompson, and NDK+Thompson were not benchmarked at 7d (—). All Thompson variants converge within 2-3 sessions. Hybrid converges by session 2. NDK+Thompson converges by session 3 but yields smaller gains (+6-15pp) due to the priority cascade limiting Thompson's influence. Stochastic algorithms have additional run-to-run variance on top of the cross-profile range (see [variance analysis](OUTBOX-REPORT.md#82-approximating-real-world-conditions-event-verification)). Ditto-Mew baseline = 4-profile mean with NIP-66.*
+*1yr and 7d recall: 6-profile means from cross-profile benchmarks (Section 8.2 of [OUTBOX-REPORT.md](OUTBOX-REPORT.md)). [min–max] ranges show the spread across tested profiles (194–1,779 follows for the 6-profile set; Thompson variants use a 4-profile set up to 2,784 follows) — your recall will land somewhere in this range depending on your follow graph. All testable-reliable authors, 20-connection cap except Direct Mapping. Thompson = 4-profile mean with NIP-66, 5 learning sessions (FD+Thompson=84%, Welshman+Thompson=89%, Hybrid+Thompson=89%, NDK+Thompson=29% [21–38], 2-profile mean). Welshman+Thompson 7d = 92% (4-profile mean, Section 8.3); FD+Thompson, Hybrid+Thompson, and NDK+Thompson were not benchmarked at 7d (—). All Thompson variants converge within 2-3 sessions. Hybrid converges by session 2. NDK+Thompson converges by session 3-4 but yields smaller gains (+5-15pp) due to the priority cascade limiting Thompson's influence. Stochastic algorithms have additional run-to-run variance on top of the cross-profile range (see [variance analysis](OUTBOX-REPORT.md#82-approximating-real-world-conditions-event-verification)). Ditto-Mew baseline = 4-profile mean with NIP-66.*
 
 *\*\*Direct Mapping uses unlimited connections (all declared write relays, typically 50-200+). Its high recall reflects connection count, not algorithmic superiority.*
 
 *\*\*\*Primal's low recall may reflect a benchmark methodology limitation (querying a caching aggregator as if it were a standard relay) rather than a definitive measure of aggregator quality. App devs using Primal should test against their own use cases.*
 
 <details>
-<summary>All 22 algorithms</summary>
+<summary>All 25 algorithms</summary>
 
 **Deployed in clients:**
 
@@ -262,6 +262,7 @@ All deployed client algorithms plus key experimental ones:
 | Direct Mapping | Amethyst (feeds) | All declared write relays |
 | Primal Aggregator | Primal | Single aggregator relay |
 | Jumble Coverage Pruning | Jumble | Coverage-weighted pruning |
+| Voyage Multi-Phase | Voyage | Lexicographic boolean tuple scoring, autopilot max 25 relays |
 | Ditto-Mew (4 app relays) | Ditto (broadcast) | 4 hardcoded app relays, no per-author routing |
 
 **Baselines:**

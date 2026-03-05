@@ -53,11 +53,11 @@ NDK+Thompson integrates Thompson scoring into NDK's priority cascade, replacing 
 
 **Key findings:**
 
-1. **Thompson works in NDK's architecture** — the priority cascade does NOT neutralize it. Gains scale with profile size: +6pp for 400 follows, +15pp for 2800 follows.
+1. **Thompson works in NDK's architecture** — the priority cascade does NOT neutralize it. Gains scale with profile size: +5pp for 400 follows, +15pp for 2800 follows.
 2. **NDK baseline stays flat** — deterministic, no learning. NDK+Thompson improves over sessions while baseline stays at ~16-23%.
 3. **Priority variant is more stable** than Unified. The Unified variant (1.5x bonus replacing hard cascade) shows inconsistent results (Telluride S2: 22% vs 34.5% for Priority).
 4. **Welshman+Thompson still outperforms by ~8pp** (30% vs 22% for Gato, 44% vs 38% for Telluride). This gap is structural — Welshman's per-user relay budgeting vs NDK's popularity-weighted cascade.
-5. **Convergence by session 3** — most of the learning happens in sessions 1-3. Sessions 4-5 show stable results.
+5. **Convergence by session 3-4** — Telluride stabilizes at session 3, Gato at session 4 (session 3 dips due to stochastic variance). Sessions 4-5 show stable results.
 6. **Concentration improves** — NDK+Thompson distributes load more evenly (Gini: 0.82→0.77, HHI: 0.299→0.234 for Telluride).
 
 ### Upgrade Path
