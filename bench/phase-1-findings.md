@@ -55,6 +55,44 @@ Direct Mapping                 | 69.1% | 69.6% | 71.6% | 71.6% | 71.6% | 72.7% |
 5. **NIP-65 adoption is the bottleneck.** Best algorithm vs ceiling gap: 1-3%. Missing relay lists: 20-44%.
 6. **Coverage vs concentration tradeoff.** Greedy packs onto few relays (Gini 0.77). Stochastic spreads load (0.51) at cost of lower coverage.
 
+### Voyage: Connection Budget vs 1yr Event Recall
+
+Voyage's multi-phase algorithm uses `pubkeyCache` deduplication in Phase 1 — each pubkey is assigned to exactly 1 relay before moving on. This means the top 5-13 relays absorb all follows, and the 25-connection budget goes mostly unused. The redundancy pass (Phase 4) adds second-relay coverage within those same relays but never opens new connections.
+
+**1yr event recall across 6 profiles (NIP-66 liveness filter):**
+
+| Profile | Follows | Voyage (5-13 relays) | Greedy @20 | Welshman @20 | Nostur @20 |
+|---------|--------:|---------------------:|-----------:|-------------:|-----------:|
+| fiatjaf | 194 | 6.4% | 28.8% | 32.8% | 27.3% |
+| hodlbod | 452 | 12.9% | 16.7% | 48.5% | 33.8% |
+| Kieran | 377 | 4.2% | 8.7% | 15.2% | 18.9% |
+| jb55 | 908 | 8.7% | 17.1% | 27.8% | 23.4% |
+| ODELL | 1,779 | 6.4% | 10.8% | 16.8% | 23.3% |
+| Derek Ross | 1,330 | 9.8% | 18.6% | 26.7% | 26.3% |
+| **Mean** | | **8.1%** | **16.8%** | **28.0%** | **25.5%** |
+
+Voyage uses roughly half the relay budget of other algorithms and gets roughly half the recall. The connection budget is not the constraint — the algorithm itself saturates early.
+
+### The Latency-Coverage Tradeoff
+
+Fewer relays means faster time-to-first-event (TTFE) but lower recall. The benchmark data reveals this tension clearly:
+
+| Algorithm | Relays (fiatjaf) | 1yr Recall | TTFE | Progressive @2s |
+|-----------|--:|-------:|------:|------:|
+| Voyage | 8 | 6.4% | 608ms | 62.7% |
+| Greedy @20 | 20 | 28.8% | 608ms | 22.0% |
+| Welshman @20 | 20 | 32.8% | 608ms | 21.0% |
+
+Voyage achieves the **best progressive completeness at 2s** (62.7% of its eventual recall) because fewer relays means less waiting. But its eventual recall ceiling is so low (6.4%) that 62.7% of 6.4% is worse than 22.0% of 28.8% in absolute terms.
+
+This is a fundamental tradeoff: connecting to more relays increases recall but adds latency from slow/dead relays. The NIP-66 liveness filter helps by removing dead relays, but the optimal balance depends on the use case:
+
+- **Feed load (background sync):** Maximize recall — the user won't notice a few extra seconds of relay negotiation
+- **Interactive navigation (tap on profile):** Minimize TTFE — connect to 2-3 relays, accept lower recall
+- **Hybrid:** Use more connections for feed, fewer for profile views
+
+No client currently adapts its connection budget per use case. Voyage's low connection count is better suited for interactive profile views than feed loading.
+
 ## Client Mapping
 
 | Client | Benchmark proxy | Gap vs best |
@@ -65,6 +103,7 @@ Direct Mapping                 | 69.1% | 69.6% | 71.6% | 71.6% | 71.6% | 72.7% |
 | Amethyst | direct-mapping | ~3-5% |
 | rust-nostr clients | filter-decomposition | ~3-5% |
 | Nostur | greedy-coverage-sort | ~5-12% |
+| Voyage | voyage-multiphase | ~8-25% |
 
 ## Methodology
 
