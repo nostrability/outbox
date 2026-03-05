@@ -23,9 +23,9 @@ import type {
  * Phase 3 (orphan distribution): Pubkeys not yet assigned get distributed
  *   across already-selected relays from Phase 1.
  *
- * Phase 4 (redundancy pass): Pubkeys mapped to only 1 relay get added to
- *   additional already-selected relays (ensures ≥2 relays per pubkey where
- *   possible).
+ * Phase 4 (redundancy pass): Pubkeys mapped to fewer than maxRelaysPerUser
+ *   relays get added to additional already-selected relays (ensures
+ *   ≥maxRelaysPerUser relays per pubkey where possible).
  *
  * Deterministic: replaces Voyage's takeRandom()/shuffled() with sorted-by-hex.
  * MAX_KEYS=750 never binds at profile sizes ≤2,784.
@@ -107,7 +107,8 @@ export function voyageMultiphase(
     }
   }
 
-  // ── Phase 4: Redundancy pass (ensure ≥2 relays per pubkey) ────────
+  // ── Phase 4: Redundancy pass (ensure ≥maxRelaysPerUser relays per pubkey) ──
+  // Voyage's upstream hardcodes == 1, but we generalize to honor maxRelaysPerUser.
   // Build a temporary pubkey→relayCount map from current result
   const pubkeyRelayCount = new Map<Pubkey, number>();
   for (const [, pubkeys] of result) {
@@ -116,30 +117,35 @@ export function voyageMultiphase(
     }
   }
 
-  const singleCoveredPubkeys = new Set<Pubkey>(
+  const underCoveredPubkeys = new Set<Pubkey>(
     [...pubkeyRelayCount.entries()]
-      .filter(([, count]) => count === 1)
+      .filter(([, count]) => count < _maxRelaysPerUser)
       .map(([pk]) => pk),
   );
 
-  if (singleCoveredPubkeys.size > 0) {
+  if (underCoveredPubkeys.size > 0) {
     // Deterministic: iterate selected relays sorted by URL
     const relayKeys = [...result.keys()].sort();
     for (const relay of relayKeys) {
-      if (singleCoveredPubkeys.size === 0) break;
+      if (underCoveredPubkeys.size === 0) break;
       const selectedPubkeys = result.get(relay)!;
       const maxKeys = MAX_KEYS - selectedPubkeys.size;
       if (maxKeys <= 0) continue;
 
-      // Add single-covered pubkeys not already on this relay
-      const addable = [...singleCoveredPubkeys]
+      // Add under-covered pubkeys not already on this relay
+      const addable = [...underCoveredPubkeys]
         .filter((pk) => !selectedPubkeys.has(pk))
         .sort()
         .slice(0, maxKeys);
 
       for (const pk of addable) {
         selectedPubkeys.add(pk);
-        singleCoveredPubkeys.delete(pk);
+        // Recount: if this pubkey now has enough relays, remove from set
+        const newCount = (pubkeyRelayCount.get(pk) ?? 0) + 1;
+        pubkeyRelayCount.set(pk, newCount);
+        if (newCount >= _maxRelaysPerUser) {
+          underCoveredPubkeys.delete(pk);
+        }
       }
     }
   }
@@ -174,7 +180,7 @@ export function voyageMultiphase(
       `Phase 1: top ${maxConnections} relays by coverage (deterministic)`,
       "Phase 2: skipped (no event history in static benchmark)",
       "Phase 3: orphans distributed to selected relays",
-      "Phase 4: redundancy pass (single-covered → ≥2 relays)",
+      `Phase 4: redundancy pass (under-covered → ≥${_maxRelaysPerUser} relays)`,
     ],
   };
 }

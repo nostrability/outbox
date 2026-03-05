@@ -61,6 +61,8 @@ Voyage's multi-phase algorithm uses `pubkeyCache` deduplication in Phase 1 — e
 
 **1yr event recall across 6 profiles (NIP-66 liveness filter):**
 
+Follow counts below reflect the contact-list snapshot at benchmark time (March 2026) and may differ from counts in the assignment-coverage table above, which used an earlier snapshot.
+
 | Profile | Follows | Voyage (5-13 relays) | Greedy @20 | Welshman @20 | Nostur @20 |
 |---------|--------:|---------------------:|-----------:|-------------:|-----------:|
 | fiatjaf | 194 | 6.4% | 28.8% | 32.8% | 27.3% |
@@ -91,7 +93,7 @@ This is a fundamental tradeoff: connecting to more relays increases recall but a
 - **Interactive navigation (tap on profile):** Minimize TTFE — connect to 2-3 relays, accept lower recall
 - **Hybrid:** Use more connections for feed, fewer for profile views
 
-No client currently adapts its connection budget per use case. Voyage's low connection count is better suited for interactive profile views than feed loading.
+None of the benchmarked clients in this study (as of March 2026) adapt their connection budget per use case. Voyage's low connection count is better suited for interactive profile views than feed loading.
 
 ## Client Mapping
 
