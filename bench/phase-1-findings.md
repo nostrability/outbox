@@ -1,6 +1,6 @@
 # On-Paper Relay Mapping: Algorithm Comparison
 
-6 relay selection strategies benchmarked against identical real-world NIP-65 data across 11 profiles.
+7 relay selection strategies benchmarked against real-world NIP-65 data. The original 6 algorithms were tested across 11 profiles for assignment coverage; Voyage was added later and tested across 6 profiles for 1yr event recall.
 
 ## Results
 
@@ -57,7 +57,7 @@ Direct Mapping                 | 69.1% | 69.6% | 71.6% | 71.6% | 71.6% | 72.7% |
 
 ### Voyage: Connection Budget vs 1yr Event Recall
 
-Voyage's multi-phase algorithm uses `pubkeyCache` deduplication in Phase 1 — each pubkey is assigned to exactly 1 relay before moving on. This means the top 5-13 relays absorb all follows, and the 25-connection budget goes mostly unused. The redundancy pass (Phase 4) adds second-relay coverage within those same relays but never opens new connections.
+Voyage's multi-phase algorithm uses `pubkeyCache` deduplication in Phase 1 — each pubkey is assigned to exactly 1 relay before moving on. This means the top 5-13 relays absorb all follows, and the 25-connection budget goes mostly unused. The redundancy pass (Phase 4) adds additional relay coverage within those same relays but never opens new connections.
 
 **1yr event recall across 6 profiles (NIP-66 liveness filter):**
 
@@ -73,11 +73,11 @@ Follow counts below reflect the contact-list snapshot at benchmark time (March 2
 | Derek Ross | 1,330 | 9.8% | 18.6% | 26.7% | 26.3% |
 | **Mean** | | **8.1%** | **16.8%** | **28.0%** | **25.5%** |
 
-Voyage uses roughly half the relay budget of other algorithms and gets roughly half the recall. The connection budget is not the constraint — the algorithm itself saturates early.
+Voyage uses 5-13 relays vs 20 for other algorithms and gets roughly half the recall of greedy (8.1% vs 16.8%) and under a third of Welshman (28.0%). The connection budget is not the constraint — the algorithm itself saturates early.
 
 ### The Latency-Coverage Tradeoff
 
-Fewer relays means faster time-to-first-event (TTFE) but lower recall. The benchmark data reveals this tension clearly:
+Fewer relays means faster convergence to full recall but a lower recall ceiling. TTFE (time-to-first-event) depends on the fastest relay in the set, not the number of relays — so TTFE can be identical across algorithms. The real difference shows up in progressive completeness: what fraction of the algorithm's eventual recall is achieved by a given time.
 
 | Algorithm | Relays (fiatjaf) | 1yr Recall | TTFE | Progressive @2s |
 |-----------|--:|-------:|------:|------:|
@@ -85,7 +85,7 @@ Fewer relays means faster time-to-first-event (TTFE) but lower recall. The bench
 | Greedy @20 | 20 | 28.8% | 608ms | 22.0% |
 | Welshman @20 | 20 | 32.8% | 608ms | 21.0% |
 
-Voyage achieves the **best progressive completeness at 2s** (62.7% of its eventual recall) because fewer relays means less waiting. But its eventual recall ceiling is so low (6.4%) that 62.7% of 6.4% is worse than 22.0% of 28.8% in absolute terms.
+Voyage achieves the **best progressive completeness at 2s** (62.7% of its eventual recall) because fewer relays finish sooner. But its eventual recall ceiling is so low (6.4%) that 62.7% of 6.4% = 4.0% absolute recall is worse than 22.0% of 28.8% = 6.3% absolute recall for greedy.
 
 This is a fundamental tradeoff: connecting to more relays increases recall but adds latency from slow/dead relays. The NIP-66 liveness filter helps by removing dead relays, but the optimal balance depends on the use case:
 
@@ -97,7 +97,7 @@ None of the benchmarked clients in this study (as of March 2026) adapt their con
 
 ## Client Mapping
 
-| Client | Benchmark proxy | Gap vs best |
+| Client | Benchmark proxy | Assignment gap vs best |
 |--------|----------------|-------------|
 | Gossip | greedy-set-cover | -- (winner) |
 | NDK (noStrudel) | priority-based | ~0-1% |
@@ -105,11 +105,13 @@ None of the benchmarked clients in this study (as of March 2026) adapt their con
 | Amethyst | direct-mapping | ~3-5% |
 | rust-nostr clients | filter-decomposition | ~3-5% |
 | Nostur | greedy-coverage-sort | ~5-12% |
-| Voyage | voyage-multiphase | ~8-25% |
+| Voyage | voyage-multiphase | ~0%* |
+
+*Voyage matches greedy on assignment coverage (both hit the NIP-65 ceiling) but uses far fewer relays (5-13 vs 20). The gap appears in 1yr event recall: ~8% mean vs greedy's ~17% (see Voyage section above).
 
 ## Methodology
 
-- 6 algorithms, all capped at 20 WebSocket connections
+- 7 algorithms, capped at 20 WebSocket connections (Voyage: 25 native cap)
 - Relay lists from purplepag.es, relay.damus.io, nos.lol
 - Strict filtering: no localhost, IP-only, ws://, known aggregators
 - Deterministic tie-breaking, seedable PRNG (seed=0)
