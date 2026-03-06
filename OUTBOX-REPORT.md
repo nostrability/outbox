@@ -760,7 +760,7 @@ Key observations:
 >
 > **Trustworthy Thompson data:** 7d HJO benchmark (6 profiles × 5 sessions, genuine), NDK+Thompson 1yr (collected with `--no-phase2-cache`), and all S1 values.
 >
-> **Fix:** Cache code fixed (schema v2 stores per-relay event IDs). Batch script updated to use `--no-phase2-cache`. Re-benchmarking in progress.
+> **Fix:** Cache code fixed (schema v2 stores per-relay event IDs). Batch script updated to use `--no-phase2-cache`. 1yr Thompson re-benchmarked (6 profiles × 5 sessions, genuine): Welshman+Thompson = 42% [28-47], FD+Thompson = 40% [27-44]. See README for updated tables.
 
 A second round of benchmarks expanded the test matrix: 4 profiles across 3 time windows, 5 learning sessions per configuration, with and without NIP-66 liveness filtering (120 total runs). Two new algorithms were added: Welshman+Thompson Sampling (learning from event delivery) and Greedy+ε-Explore (5% random exploration).
 
@@ -941,7 +941,7 @@ The algorithm is a direct upgrade path for rust-nostr: same per-author structure
 
 **Key findings:**
 
-1. **Both Thompson variants exceed their stateless baselines in session 1.** FD+Thompson averages 31.8% event recall from a single session vs Filter Decomposition's 23.1% at 1yr — a +38% relative improvement. *Note: The previously reported multi-session numbers (83.9%, 89.4%) are inflated by the cache bug. Genuine 1yr multi-session gains are under re-benchmarking.*
+1. **Both Thompson variants exceed their stateless baselines in session 1.** FD+Thompson averages 31.8% event recall from a single session vs Filter Decomposition's 23.1% at 1yr — a +38% relative improvement. *Note: The S2+ numbers in the table above are inflated by the cache bug. Genuine 1yr re-benchmark (6 profiles × 5 sessions): Welshman+Thompson = 42% [28-47], FD+Thompson = 40% [27-44]. See README for updated tables.*
 
 2. **Welshman+Thompson leads by 5-7pp at all profile sizes after convergence.** The `(1 + log(weight))` popularity factor provides a consistent advantage — the popularity signal helps identify relays that retain events across all follow-count scales, not just large graphs. The gap is narrowest on Gato (3.6pp) and widest on fiatjaf (6.9pp).
 
@@ -1003,7 +1003,7 @@ The algorithm models [Ditto-Mew](https://gitlab.com/soapbox-pub/ditto-mew)'s arc
 
 4. **The Ditto-Mew baseline (4 app relays, no outbox) averages 6.2% at 1yr (genuine).** This is comparable to Big Relays (5.1%) — 4 major relays capture roughly the same fraction of 1yr-old events as 2 major relays. The value of app relays is latency and reliability, not historical recall.
 
-5. **Hybrid outbox is a viable ship-first strategy.** For clients with hardcoded app relays, hybrid outbox + Thompson is ~80 LOC with no routing layer changes. *The previously claimed 89% 1yr recall is from cache-inflated data — genuine 1yr recall under re-benchmarking.*
+5. **Hybrid outbox is a viable ship-first strategy.** For clients with hardcoded app relays, hybrid outbox + Thompson is ~80 LOC with no routing layer changes. *The previously claimed 89% 1yr recall is from cache-inflated data — genuine full outbox Welshman+Thompson = 42% [28-47] at 1yr. Hybrid-specific re-benchmark is pending.*
 
 See [bench/src/algorithms/ditto-outbox.ts](bench/src/algorithms/ditto-outbox.ts) for the benchmark implementation and [bench/src/algorithms/ditto-mew.ts](bench/src/algorithms/ditto-mew.ts) for the baseline.
 
