@@ -25,14 +25,20 @@ for name in $NAMES; do
   eval "pk=\$PK_${name}"
   logfile="$LOGDIR/${name}.log"
 
-  if [ -f "$logfile" ] && grep -q "Phase 2" "$logfile" 2>/dev/null; then
+  if [ -f "${logfile}.done" ]; then
     echo "SKIP (already done): $name"
     continue
   fi
 
   echo "=== $name (3yr, base algorithms) === $(date)"
-  deno task bench "$pk" --algorithms "$ALGOS" $COMMON > "$logfile" 2>&1 || true
-  grep -E '(Greedy|Stochastic|Priority|Filter Decomp)' "$logfile" | grep -E 'Recall' | head -4
+  deno task bench "$pk" --algorithms "$ALGOS" $COMMON > "${logfile}.tmp" 2>&1
+  if [ $? -eq 0 ]; then
+    mv "${logfile}.tmp" "$logfile"
+    touch "${logfile}.done"
+    grep -E '(Greedy|Stochastic|Priority|Filter Decomposition)' "$logfile" | grep -E 'Recall' | head -4
+  else
+    echo "FAILED: $name (3yr base) — see ${logfile}.tmp"
+  fi
   echo
   echo "--- Cooling 60s ---"
   sleep 60

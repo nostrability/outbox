@@ -1,0 +1,11 @@
+[0m[32mTask[0m [0m[36mbench[0m deno run --allow-net --allow-read --allow-write main.ts "2c65940725bbf10b452197fba41c6cb14afd41e28e0be22aab49bf246b0c84e3" "--algorithms" "greedy,welshman,ndk,rust-nostr" "--verify" "--verify-window" "94608000" "--nip66-filter" "liveness" "--no-phase2-cache" "--fast" "--output" "table"
+Target: 2c65940725bbf10b...
+Seed: 0 | Filter: strict | Runs: 3
+[fetch] Connecting to 3 indexer relays...
+[fetch] wss://purplepag.es: WebSocket error: NetworkError: failed to connect to WebSocket: tcp open error
+[fetch] wss://relay.damus.io: WebSocket error: NetworkError: failed to connect to WebSocket: tcp open error
+[fetch] wss://nos.lol: WebSocket error: NetworkError: failed to connect to WebSocket: tcp open error
+Fatal error: Error: Failed to connect to any indexer relay
+    at fetchBenchmarkInput (file:///Users/e/Desktop/develop/nostrability/outbox/bench/src/fetch.ts:239:11)
+    at eventLoopTick (ext:core/01_core.js:187:7)
+    at async main (file:///Users/e/Desktop/develop/nostrability/outbox/bench/main.ts:199:13)

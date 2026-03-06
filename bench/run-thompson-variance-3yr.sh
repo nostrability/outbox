@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Thompson variance measurement: 10 independent runs × 5 sessions, 3yr
 # Each independent run starts with fresh Thompson scores (alpha=1, beta=1)
+# Includes base algorithms (welshman, rust-nostr, ndk) for paired delta measurement
 # Spread out to avoid relay rate limiting
 set -uo pipefail
 
-ALGOS="welshman-thompson,fd-thompson,ndk-thompson"
+# Base + Thompson together for paired deltas (evp)
+ALGOS="welshman,rust-nostr,ndk,welshman-thompson,fd-thompson,ndk-thompson"
 WINDOW=94608000
 COMMON="--verify --verify-window $WINDOW --nip66-filter liveness --no-phase2-cache --fast --output table"
 
@@ -42,15 +44,20 @@ for run in $(seq 1 $TOTAL_RUNS); do
       eval "pk=\$PK_${name}"
       logfile="$RUNDIR/${name}_s${session}.log"
 
-      # Skip if already completed
-      if [ -f "$logfile" ] && grep -q "Phase 2" "$logfile" 2>/dev/null; then
+      if [ -f "${logfile}.done" ]; then
         echo "SKIP: run$run ${name}_s${session}"
         continue
       fi
 
       echo "[Run $run S$session] $name — $(date)"
-      deno task bench "$pk" --algorithms "$ALGOS" $COMMON > "$logfile" 2>&1 || true
-      grep -E '(Welshman\+Thompson|FD\+Thompson|NDK\+Thompson)' "$logfile" | grep -E 'Recall' | head -3
+      deno task bench "$pk" --algorithms "$ALGOS" $COMMON > "${logfile}.tmp" 2>&1
+      if [ $? -eq 0 ]; then
+        mv "${logfile}.tmp" "$logfile"
+        touch "${logfile}.done"
+        grep -E '(Welshman\+Thompson|FD\+Thompson|NDK\+Thompson|Stochastic|Filter Decomposition|Priority)' "$logfile" | grep -E 'Recall' | head -6
+      else
+        echo "FAILED: run$run ${name}_s${session} — see ${logfile}.tmp"
+      fi
       echo "--- cooling 45s ---"
       sleep 45
     done

@@ -23,16 +23,22 @@ for session in $(seq 1 $SESSIONS); do
     eval "pk=\$PK_${name}"
     logfile="$LOGDIR/${name}_s${session}.log"
 
-    # Skip if already completed
-    if [ -f "$logfile" ] && grep -q "Phase 2" "$logfile" 2>/dev/null; then
+    # Skip if already completed successfully
+    if [ -f "${logfile}.done" ]; then
       echo "SKIP (already done): ${name}_s${session}"
       continue
     fi
 
     echo "=== Session $session: $name (1yr) ==="
-    deno task bench "$pk" --algorithms "$ALGOS" $COMMON > "$logfile" 2>&1 || true
+    if deno task bench "$pk" --algorithms "$ALGOS" $COMMON > "${logfile}.tmp" 2>&1; then
+      mv "${logfile}.tmp" "$logfile"
+      touch "${logfile}.done"
+    else
+      echo "FAILED: ${name}_s${session} (exit $?), see ${logfile}.tmp"
+      continue
+    fi
     # Extract headline metrics
-    grep -E '(Greedy|Welshman|FD\+)' "$logfile" | grep -E 'Recall' | head -4
+    grep -E '(Greedy|Weighted Stochastic|Welshman|FD\+)' "$logfile" | grep -E 'Recall' | head -4
     echo
     sleep 30
   done
