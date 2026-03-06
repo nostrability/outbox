@@ -1,0 +1,167 @@
+[0m[32mTask[0m [0m[36mbench[0m deno run --allow-net --allow-read --allow-write main.ts "6a0c596c1484eae2e8131a030f269944921e52619c1dd143a029c64ea6cd9731" "--algorithms" "welshman-thompson,fd-thompson,ndk-thompson" "--verify" "--verify-window" "31536000" "--nip66-filter" "liveness" "--no-phase2-cache" "--fast" "--output" "table"
+Target: 6a0c596c1484eae2...
+Seed: 0 | Filter: strict | Runs: 3
+Using cached data (fetched 2026-03-06T15:55:23.264Z)
+
+=== Fetch Quality ===
+Indexers: wss://purplepag.es (0 events, 885ms), wss://relay.damus.io (131 events, 487ms), wss://nos.lol (236 events, 682ms)
+Follows: 399 | With relay list: 231 (57.9%) | Missing: 168 (42.1%) | Filtered-to-empty: 8
+Filter profile: strict | Filtered URLs: 109 (6 localhost, 32 insecure ws, 7 IP-only, 57 known-bad, 7 malformed)
+Unique valid write relays: 567 | Seed: 0
+[nip66] Using cached monitor data (1040 relays)
+
+=== NIP-66 Liveness Filter (liveness) ===
+Monitor data: 1040 relays
+Candidate relays: 567
+  Known alive: 183
+  Unknown (removed): 384
+  .onion preserved: 18
+  Parse-failed preserved: 0
+  Authors filtered to empty: 2
+Relays after filter: 183
+[relay-scores] Loaded 23 relay priors (session 2, from 2026-03-06T16:40:53.355Z)
+
+Thompson Sampling [welshman-thompson]: loaded 23 relay priors (session 2)
+[relay-scores] Loaded 24 relay priors (session 2, from 2026-03-06T16:40:53.373Z)
+
+Thompson Sampling [fd-thompson]: loaded 24 relay priors (session 2)
+[relay-scores] Loaded 26 relay priors (session 2, from 2026-03-06T16:40:53.376Z)
+
+Thompson Sampling [ndk-thompson]: loaded 26 relay priors (session 2)
+
+=== Regime A: Fixed 20 Connections ===
+  Algorithm                      |  Relays |   Assign% |  Orphans |  Alg.Orph |  Avg/pk |   Gini |    HHI
+  -------------------------------+---------+-----------+----------+-----------+---------+--------+-------
+  Welshman+Thompson (cap@20)     |      20 |     56.6% (0.0sd) | 173.33333333333334 | 5.333333333333333 |     2.6 |   0.63 |  0.139
+  FD+Thompson (cap@20)           |      20 |     55.3% (0.0sd) | 178.33333333333334 | 10.333333333333334 |     2.4 |   0.57 |  0.122
+  NDK+Thompson (Priority)        |      20 |     56.4% (0.0sd) |      174 |         6 |     1.9 |   0.70 |  0.184
+
+=== Phase 2: Event Verification ===
+Window: 31536000s | Kinds: 1 | Concurrency: 20
+[baseline] Querying 183 relays for 229 authors (window: 31536000s)
+[pool] CLOSED from wss://relay.nosflare.com: auth-required: authentication required to subscribe
+[pool] CLOSED from wss://greensoul.space: auth-required: only authenticated users can read from this relay
+[pool] CLOSED from wss://aggr.nostr.land: auth-required: auth required for aggregator
+[baseline] Progress: 50/183 relays queried
+[baseline] Progress: 100/183 relays queried
+[pool] CLOSED from wss://creatr.nostr.wine: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://relay.getalby.com/v1: blocked: Request rejected
+[pool] CLOSED from wss://relay.nostraddress.com: auth-required: authentication required to subscribe
+[baseline] Progress: 150/183 relays queried
+[pool] CLOSED from wss://relay.nsec.app: blocked: we only keep kind 24133 or 24135
+[pool] CLOSED from wss://impromptu.relays.land: auth-required: all requests must be authenticated
+[baseline] Progress: 183/183 relays queried
+[phase2] Subscription timeouts (no EOSE): 4
+[phase2] CLOSED messages received: 8
+  wss://relay.nosflare.com: auth-required: authentication required to subscribe
+  wss://greensoul.space: auth-required: only authenticated users can read from this relay
+  wss://aggr.nostr.land: auth-required: auth required for aggregator
+  wss://creatr.nostr.wine: auth-required: please authenticate before sending REQs
+  wss://relay.getalby.com/v1: blocked: Request rejected
+  wss://relay.nostraddress.com: auth-required: authentication required to subscribe
+  wss://relay.nsec.app: blocked: we only keep kind 24133 or 24135
+  wss://impromptu.relays.land: auth-required: all requests must be authenticated
+
+=== Phase 2: Event Verification (365d window) ===
+Baseline: 183 relays queried (61.2% success), 24s
+  Timing: connect 740ms median (1.7s p95) | query 1.3s median (5.0s p95) | 4 timeouts (4 relays)
+  Authors: 229 with relay data
+    Testable (reliable): 98 | Testable (partial): 4 | Zero events: 121 | Unreliable: 6
+  Baseline events: 26,352 (mean 258.4/author, median 45)
+  Events per (relay,pubkey) capped at: 10000
+
+  Headline metrics (98 testable-reliable authors, 26,215 baseline events):
+
+  Algorithm                        |   Evt Recall |   Auth Recall |  Relay OK% |     TTFE |      p50 |      p80 | Timeouts
+  ---------------------------------+--------------+---------------+------------+----------+----------+----------+---------
+  Welshman+Thompson (seed=0, single run) |        31.9% |         90.8% |      85.0% |    693ms |     2.5s |     3.2s |        0
+  FD+Thompson (seed=0, single run) |        29.5% |         89.8% |      90.0% |    708ms |     2.2s |     2.9s |        0
+  NDK+Thompson (Priority) (seed=0, single run) |        20.4% |         85.7% |      95.0% |    693ms |     2.0s |     2.7s |        0
+
+  Per-author recall distribution:
+  Algorithm                        |   Median |  % at 0% |      p25 |      p75
+  ---------------------------------+----------+----------+----------+---------
+  Welshman+Thompson (seed=0, single run) |   100.0% |     9.2% |    86.4% |   100.0%
+  FD+Thompson (seed=0, single run) |   100.0% |    10.2% |    90.9% |   100.0%
+  NDK+Thompson (Priority) (seed=0, single run) |    96.9% |    14.3% |    11.8% |   100.0%
+
+  Latency simulation (parallel relay query):
+  Algorithm                        |     TTFE |      p50 |      p80 |      Max |   TO |   TO Tax |   Relays |   Events
+  ---------------------------------+----------+----------+----------+----------+------+----------+----------+---------
+  Welshman+Thompson (seed=0, single run) |    693ms |     2.5s |     3.2s |     7.7s |    0 |      0ms | 17/17/20 |   14,554
+  FD+Thompson (seed=0, single run) |    708ms |     2.2s |     2.9s |     7.7s |    0 |      0ms | 18/18/20 |   14,154
+  NDK+Thompson (Priority) (seed=0, single run) |    693ms |     2.0s |     2.7s |     3.4s |    0 |      0ms | 14/19/20 |   10,613
+  (Relays: with-events/connected/total | TO Tax: ceil(timeouts/concurrency) × EOSE timeout)
+
+  Progressive completeness (% of recall achieved by time):
+  Algorithm                        |      @1s |      @2s |      @5s |     @10s |     @15s
+  ---------------------------------+----------+----------+----------+----------+---------
+  Welshman+Thompson (seed=0, single run) |     0.7% |    44.3% |   100.0% |   100.0% |   100.0%
+  FD+Thompson (seed=0, single run) |     1.1% |    48.7% |    88.4% |   100.0% |   100.0%
+  NDK+Thompson (Priority) (seed=0, single run) |     0.4% |    46.5% |   100.0% |   100.0% |   100.0%
+
+  EOSE-race simulation (stop after first EOSE + grace period):
+  Algorithm                        |     +0ms |   +200ms |   +500ms |      +1s |      +2s
+  ---------------------------------+----------+----------+----------+----------+---------
+  Welshman+Thompson (seed=0, single run) |     0.7% |     0.7% |    10.0% |    44.3% |    64.1%
+  FD+Thompson (seed=0, single run) |     1.1% |     1.1% |    18.4% |    44.7% |    64.1%
+  NDK+Thompson (Priority) (seed=0, single run) |     0.4% |     0.4% |     6.4% |    46.5% |    57.9%
+  (First EOSE: Welshman+Thompson (seed=0, single run)=897ms, FD+Thompson (seed=0, single run)=897ms, NDK+Thompson (Priority) (seed=0, single run)=934ms)
+
+  Profile-view latency (per-author outbox query, top 3 write relays):
+    Authors simulated: 102 | Hit rate: 99.0%
+    TTFE: 1.5s median, 1.4s mean, 1.8s p95
+    Relays/profile: 2.8 queried, 2.0 with events, 0.00 timeouts
+
+  Feed vs profile-view TTFE comparison:
+  Algorithm                        |  Feed TTFE |  Profile TTFE |    Delta
+  ---------------------------------+------------+---------------+---------
+  Welshman+Thompson (seed=0, single run) |      693ms |          1.5s |   +847ms
+  FD+Thompson (seed=0, single run) |      708ms |          1.5s |   +832ms
+  NDK+Thompson (Priority) (seed=0, single run) |      693ms |          1.5s |   +847ms
+
+  Including partial-baseline authors (102 testable authors, 26,352 baseline events):
+
+  Algorithm                        |   Evt Recall |   Auth Recall
+  ---------------------------------+--------------+--------------
+  Welshman+Thompson (seed=0, single run) |        32.2% |         91.2%
+  FD+Thompson (seed=0, single run) |        29.6% |         88.2%
+  NDK+Thompson (Priority) (seed=0, single run) |        20.9% |         86.3%
+
+=== NIP-66 RTT vs Measured Latency (123 relays, data age: 30min) ===
+                             N   Spearman r      MAE    Bias    Top5   Top10   Top20
+------------------------  ----  -----------  -------  ------  ------  ------  ------
+rttOpen vs connect         123        -0.20    764ms    1.1x    0.0%    0.0%   10.0%
+rttRead vs query           110        -0.30     1.3s    6.2x    0.0%    0.0%    0.0%
+(Bias = measured/nip66, >1 = NIP-66 underestimates. TopK = overlap of K fastest relays.)
+Monitor: 9bbbb845e5b6..., 9b85d54cc4bc..., 9ba1d7892cd0..., b2c949c0fb79..., 0b01aa38c2cc..., http-api...
+[relay-scores] Updated scores for welshman-thompson: 26 relays, session 3
+[relay-scores] Degrading relays (4): wss://relay.damus.io, wss://relay.snort.social, wss://nostr-pub.wellorder.net, wss://nostr.oxtr.dev
+[relay-scores] Saved to .cache/relay_scores_6a0c596c1484eae2_31536000_liveness_welshman-thompson.json
+
+Thompson Sampling [welshman-thompson] learning state:
+  Session: 3
+  Relays with observations: 26
+  Mean prior α: 13.6, β: 16.6
+  Relays with strong preference (α>5): 14
+  Relays learned to avoid (β>5): 13
+[relay-scores] Updated scores for fd-thompson: 26 relays, session 3
+[relay-scores] Degrading relays (4): wss://relay.damus.io, wss://relay.snort.social, wss://nostr-pub.wellorder.net, wss://nostr.oxtr.dev
+[relay-scores] Saved to .cache/relay_scores_6a0c596c1484eae2_31536000_liveness_fd-thompson.json
+
+Thompson Sampling [fd-thompson] learning state:
+  Session: 3
+  Relays with observations: 26
+  Mean prior α: 13.4, β: 13.2
+  Relays with strong preference (α>5): 13
+  Relays learned to avoid (β>5): 13
+[relay-scores] Updated scores for ndk-thompson: 29 relays, session 3
+[relay-scores] Degrading relays (2): wss://nostr.land, wss://yestr.me
+[relay-scores] Saved to .cache/relay_scores_6a0c596c1484eae2_31536000_liveness_ndk-thompson.json
+
+Thompson Sampling [ndk-thompson] learning state:
+  Session: 3
+  Relays with observations: 29
+  Mean prior α: 9.4, β: 11.8
+  Relays with strong preference (α>5): 9
+  Relays learned to avoid (β>5): 10
