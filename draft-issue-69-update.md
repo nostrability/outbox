@@ -16,7 +16,7 @@ https://how-nostr-works.pages.dev/#/outbox
 
 ### Benchmark & Implementation Guide
 
-https://github.com/nostrability/outbox — 22 algorithms benchmarked across 7 real profiles (194-2,784 follows), 6 time windows, with and without NIP-66 liveness filtering. Per-client analysis, code examples, and upgrade paths.
+https://github.com/nostrability/outbox — 25 algorithms benchmarked across 7 real profiles (194-2,784 follows), 6 time windows, with and without NIP-66 liveness filtering. Per-client analysis, code examples, and upgrade paths.
 
 ---
 
@@ -72,7 +72,7 @@ Having outbox ✅ is not enough — algorithm quality determines whether events 
 
 > Is it technically possible to measure the effectiveness of various outbox implementations, as measured by notes not found?
 
-**Yes.** 22 algorithms benchmarked across 7 profiles, 6 time windows, with real relay connections and real events. Full methodology and reproduction instructions: [Benchmark-recreation.md](https://github.com/nostrability/outbox/blob/main/Benchmark-recreation.md)
+**Yes.** 25 algorithms benchmarked across 7 profiles, 6 time windows, with real relay connections and real events. Full methodology and reproduction instructions: [Benchmark-recreation.md](https://github.com/nostrability/outbox/blob/main/Benchmark-recreation.md)
 
 > For those who have implemented, in what conditions does your algo fail?
 

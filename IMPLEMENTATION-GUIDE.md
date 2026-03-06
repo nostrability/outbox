@@ -88,8 +88,10 @@ is preserved — Thompson replaces the popularity ranking in the third tier. Aft
 | Gato (399) | 16.0% | 20.9% | +5pp | 4 |
 | Telluride (2,784) | 22.4% | 37.8% | +15pp | 3 |
 
-In same-benchmark runs, Welshman+Thompson outperforms NDK+Thompson by ~3-9pp
-(26.7% vs 24.1% for Gato, 45.4% vs 41.4% for Telluride). The gap is structural:
+In same-benchmark single-run comparisons (S5, same relay state), Welshman+Thompson
+outperforms NDK+Thompson by ~3-9pp (26.7% vs 24.1% for Gato, 45.4% vs 41.4% for
+Telluride — single-run S5 values, slightly different from the S3-5 averages above).
+The gap is structural:
 NDK's selected-first priority cascade short-circuits Thompson scoring — if
 already-connected relays satisfy the per-author target, the Thompson scorer is never
 consulted. Welshman's per-user relay budgeting gives Thompson full control over

@@ -119,7 +119,7 @@ The relay that's "best on paper" isn't always the one that delivers events. Gree
 | Gato (399) | 16.0% | 20.9% | **+5pp** |
 | Telluride (2,784) | 22.4% | 37.8% | **+15pp** |
 
-NDK's priority cascade (selected-first > popularity > lexicographic) limits Thompson's influence — the cascade short-circuits scoring when connected relays satisfy the per-author target. The Priority variant (preserving the cascade) is more stable than the Unified variant (replacing it with a 1.5x bonus). Thompson converges by session 3 for Telluride and session 4 for Gato. In same-benchmark runs, Welshman+Thompson outperforms NDK+Thompson by ~3-9pp (26.7% vs 24.1% for Gato, 45.4% vs 41.4% for Telluride). This gap is structural — Welshman's per-user relay budgeting gives Thompson full scoring control, while NDK's cascade constrains it to the third tier.
+NDK's priority cascade (selected-first > popularity > lexicographic) limits Thompson's influence — the cascade short-circuits scoring when connected relays satisfy the per-author target. The Priority variant (preserving the cascade) is more stable than the Unified variant (replacing it with a 1.5x bonus). Thompson converges by session 3 for Telluride and session 4 for Gato. In same-benchmark single-run comparisons (S5, same relay state), Welshman+Thompson outperforms NDK+Thompson by ~3-9pp (26.7% vs 24.1% for Gato, 45.4% vs 41.4% for Telluride — these are single-run S5 values, slightly different from the S3-5 averages in the table above). This gap is structural — Welshman's per-user relay budgeting gives Thompson full scoring control, while NDK's cascade constrains it to the third tier.
 
 *Note: Small profiles (<200 follows) may see minimal gains — the 20-relay budget already covers most combinations.*
 
@@ -243,7 +243,7 @@ All deployed client algorithms plus key experimental ones:
 | Big Relays | 8% [5–12] | 61% [45–70] | Just damus+nos.lol — the "do nothing" baseline |
 | Primal Aggregator\*\*\* | <1% [0.2–1.6] | 32% [25–37] | Single caching relay — 100% assignment but low actual recall |
 
-*1yr and 7d recall: 6-profile means from cross-profile benchmarks (Section 8.2 of [OUTBOX-REPORT.md](OUTBOX-REPORT.md)). [min–max] ranges show the spread across tested profiles (194–1,779 follows for the 6-profile set; Thompson variants use a 4-profile set up to 2,784 follows) — your recall will land somewhere in this range depending on your follow graph. All testable-reliable authors, 20-connection cap except Direct Mapping. ‡Thompson 1yr multi-session numbers are under re-benchmarking — previous values (84-89%) were inflated by a [phase2 cache bug](#methodology-note-phase2-cache-bug). NDK+Thompson 1yr = 29% [21–38] (2-profile mean, genuine, collected with `--no-phase2-cache`). Welshman+Thompson 7d = 92% (4-profile mean, Section 8.3, genuine). All Thompson variants converge within 2-3 sessions. NDK+Thompson converges by session 3-4 but yields smaller gains (+5-15pp) due to the priority cascade limiting Thompson's influence. Stochastic algorithms have additional run-to-run variance on top of the cross-profile range (see [variance analysis](OUTBOX-REPORT.md#82-approximating-real-world-conditions-event-verification)). Ditto-Mew baseline = 4-profile mean with NIP-66.*
+*1yr and 7d recall: 6-profile means from cross-profile benchmarks (Section 8.2 of [OUTBOX-REPORT.md](OUTBOX-REPORT.md)). [min–max] ranges show the spread across tested profiles (194–1,779 follows for the 6-profile set; Thompson variants use a 4-profile set up to 2,784 follows) — your recall will land somewhere in this range depending on your follow graph. All testable-reliable authors, 20-connection cap except Direct Mapping. ‡Thompson 1yr multi-session numbers are under re-benchmarking — previous values (84-89%) were inflated by a [phase2 cache bug](#methodology-note-phase2-cache-bug). NDK+Thompson 1yr = 29% [21–38] (2-profile mean, genuine, collected with `--no-phase2-cache`). Welshman+Thompson 7d = 92% (4-profile mean, Section 8.3, genuine). Welshman+Thompson and FD+Thompson converge within 2-3 sessions. NDK+Thompson converges by session 3-4 (slower due to the priority cascade limiting Thompson's influence) and yields smaller gains (+5-15pp). Stochastic algorithms have additional run-to-run variance on top of the cross-profile range (see [variance analysis](OUTBOX-REPORT.md#82-approximating-real-world-conditions-event-verification)). Ditto-Mew baseline = 4-profile mean with NIP-66.*
 
 *\*\*Direct Mapping uses unlimited connections (all declared write relays, typically 50-200+). Its high recall reflects connection count, not algorithmic superiority.*
 
@@ -577,7 +577,7 @@ IMPLEMENTATION-GUIDE.md       How to implement the recommendations above
 Benchmark-recreation.md       Step-by-step reproduction instructions
 bench/                        Benchmark tool (Deno/TypeScript)
   main.ts                     CLI entry point
-  src/algorithms/             24 algorithm implementations
+  src/algorithms/             25 algorithm implementations (+2 latency-aware variants)
   src/phase2/                 Event verification + baseline cache
   src/nip66/                  NIP-66 relay liveness filter
   src/relay-scores.ts         Thompson Sampling score persistence

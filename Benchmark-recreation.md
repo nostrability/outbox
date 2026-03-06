@@ -269,6 +269,7 @@ On-paper mapping results should be nearly identical within a few days. Event ret
 | `jumble` | Jumble Coverage Pruning |
 | `big-relays` | Big Relays (damus+nos.lol) |
 | `ditto-mew` | Ditto-Mew (4 app relays) |
+| `voyage` | Voyage Multi-Phase |
 | `ndk-thompson` | NDK+Thompson (Priority) |
 | `ndk-thompson-unified` | NDK+Thompson (Unified) |
 | `ditto-outbox` | Ditto+Outbox Thompson |
