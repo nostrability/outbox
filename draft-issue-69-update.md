@@ -54,7 +54,7 @@ Having outbox ✅ is not enough — algorithm quality determines whether events 
 
 **1. Relay list pollution is worse than expected.** NIP-11 probes of 13,867 relay-user pairs across 36 profiles: only **37% point to functional content relays**. 34% are offline, 11% are paid/restricted, 17% have no NIP-11 (likely OK). The most common dead relays (relay.nostr.band, nostr.orangepill.dev, nostr.zbd.gg) appear in 32-34 of 36 profiles. 20-44% of follows don't have a kind 10002 at all. ([source](https://github.com/nostrability/outbox#relay-list-pollution-is-worse-than-expected))
 
-**2. NIP-66 liveness filtering gives a 45% wall-clock speedup.** Dead relays waste ~15 seconds of timeout each. Filtering them out raises relay success rate from ~30% to ~75%. This is a latency/efficiency win — it removes relays that would never respond. No client currently does this. ([NIP-66 comparison report](https://github.com/nostrability/outbox/blob/main/bench/NIP66-COMPARISON-REPORT.md)) ([NIP-66 discussion](#issuecomment-2689166816))
+**2. NIP-66 liveness filtering gives a 45% wall-clock speedup.** Dead relays waste ~15 seconds of timeout each. Filtering them out raises relay success rate from ~30% to ~75%. This is a latency/efficiency win — it removes relays that would never respond. No client currently does this. ([NIP-66 comparison report](https://github.com/nostrability/outbox/blob/main/bench/NIP66-COMPARISON-REPORT.md)) ([NIP-66 discussion](https://github.com/nostrability/nostrability/issues/69#issuecomment-2689166816))
 
 **3. Learning beats static optimization.** Thompson Sampling — tracking which relays actually deliver events — is the single biggest available upgrade: +40-57pp recall at 7d after 2-3 learning sessions (genuine HJO data). 1yr gains are smaller, limited by relay retention (+5-15pp from genuine NDK+Thompson data). No client implements it yet. ([Thompson Sampling details](https://github.com/nostrability/outbox#thompson-sampling))
 
@@ -80,7 +80,7 @@ Having outbox ✅ is not enough — algorithm quality determines whether events 
 
 > Has anyone measured and compared the success/failure rate across implementations?
 
-**Yes.** Head-to-head benchmarks across all 9 client algorithms plus 13 experimental/academic/baseline algorithms. Results: greedy set-cover wins on-paper relay assignment (23/26 profiles) but degrades to 16% event recall at 1yr. Stochastic variants reach 24%. Thompson Sampling: 85-92% at 7d (genuine); 1yr multi-session numbers under re-benchmarking. ([full results](https://github.com/nostrability/outbox/blob/main/OUTBOX-REPORT.md))
+**Yes.** Head-to-head benchmarks across all 10 client algorithms plus 15 experimental/academic/baseline algorithms. Results: greedy set-cover wins on-paper relay assignment (23/26 profiles) but degrades to 16% event recall at 1yr. Stochastic variants reach 24%. Thompson Sampling: 85-92% at 7d (genuine); 1yr multi-session numbers under re-benchmarking. ([full results](https://github.com/nostrability/outbox/blob/main/OUTBOX-REPORT.md))
 
 ---
 
