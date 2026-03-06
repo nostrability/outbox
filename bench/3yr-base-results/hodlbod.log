@@ -1,0 +1,147 @@
+[0m[32mTask[0m [0m[36mbench[0m deno run --allow-net --allow-read --allow-write main.ts "97c70a44366a6535c145b333f973ea86dfdc2d7a99da618c40c64705ad98e322" "--algorithms" "greedy,welshman,ndk,rust-nostr" "--verify" "--verify-window" "94608000" "--nip66-filter" "liveness" "--no-phase2-cache" "--fast" "--output" "table"
+Target: 97c70a44366a6535...
+Seed: 0 | Filter: strict | Runs: 3
+[fetch] Connecting to 3 indexer relays...
+[fetch] wss://purplepag.es: connected (1077ms)
+[fetch] wss://relay.damus.io: connected (292ms)
+[fetch] wss://nos.lol: connected (834ms)
+[fetch] Fetching kind 3 (contact list) for 97c70a44...
+[fetch] 452 follows to fetch relay lists for
+[fetch] Fetched relay lists: 200/452
+[fetch] Fetched relay lists: 400/452
+[fetch] Received 403 relay list events
+
+=== Fetch Quality ===
+Indexers: wss://purplepag.es (453 events, 1077ms), wss://relay.damus.io (297 events, 292ms), wss://nos.lol (401 events, 834ms)
+Follows: 452 | With relay list: 394 (87.2%) | Missing: 58 (12.8%) | Filtered-to-empty: 9
+Filter profile: strict | Filtered URLs: 140 (6 localhost, 13 insecure ws, 8 IP-only, 113 known-bad)
+Unique valid write relays: 483 | Seed: 0
+[nip66] Using cached monitor data (1036 relays)
+
+=== NIP-66 Liveness Filter (liveness) ===
+Monitor data: 1036 relays
+Candidate relays: 483
+  Known alive: 252
+  Unknown (removed): 231
+  .onion preserved: 10
+  Parse-failed preserved: 0
+  Authors filtered to empty: 3
+Relays after filter: 252
+
+=== Regime A: Fixed 20 Connections ===
+  Algorithm                      |  Relays |   Assign% |  Orphans |  Alg.Orph |  Avg/pk |   Gini |    HHI
+  -------------------------------+---------+-----------+----------+-----------+---------+--------+-------
+  Greedy Set-Cover               |      20 |     84.5% |       70 |        12 |     1.9 |   0.79 |  0.305
+  Weighted Stochastic (cap@20)   |      20 |     84.6% (0.0sd) | 69.66666666666667 | 11.666666666666666 |     2.5 |   0.55 |  0.119
+  Priority-Based (NDK)           |      20 |     83.8% |       73 |        15 |     1.9 |   0.81 |  0.313
+  Filter Decomposition (cap@20)  |      20 |     83.2% |       76 |        18 |     2.3 |   0.54 |  0.131
+
+=== Phase 2: Event Verification ===
+Window: 94608000s | Kinds: 1 | Concurrency: 20
+[baseline] Querying 252 relays for 391 authors (window: 94608000s)
+[pool] CLOSED from wss://hole.v0l.io: error: queries not allowed
+[pool] CLOSED from wss://relay.getalby.com/v1: blocked: Request rejected
+[baseline] Progress: 50/252 relays queried
+[pool] CLOSED from wss://greensoul.space: auth-required: only authenticated users can read from this relay
+[pool] CLOSED from wss://sendit.nosflare.com: restricted: this relay does not accept REQs
+[pool] CLOSED from wss://relay.nosflare.com: auth-required: authentication required to subscribe
+[pool] CLOSED from wss://creatr.nostr.wine: auth-required: please authenticate before sending REQs
+[baseline] Progress: 100/252 relays queried
+[pool] CLOSED from wss://david.nostr1.com: auth-required: you must auth
+[pool] CLOSED from wss://inbox.nostr.wine: blocked: this relay does not store any of the kinds in this request
+[pool] CLOSED from wss://relay.shawnyeager.com/chat: auth-required: all requests must be authenticated
+[pool] CLOSED from wss://auth.nostr1.com: auth-required: you must auth
+[baseline] Progress: 150/252 relays queried
+[pool] CLOSED from wss://aggr.nostr.land: auth-required: auth required for aggregator
+[pool] CLOSED from wss://bostr.erechorse.com: auth-required: authentication is required to perform this action.
+[pool] CLOSED from wss://relay.nsec.app: blocked: we only keep kind 24133 or 24135
+[baseline] Progress: 200/252 relays queried
+[pool] CLOSED from wss://relay.danieldaquino.me/private: auth-required: this query requires you to be authenticated
+[pool] CLOSED from wss://relay.albylabs.com: blocked: Request rejected
+[pool] CLOSED from wss://aplaceinthesun.nostr1.com: auth-required: you must auth
+[baseline] Progress: 250/252 relays queried
+[baseline] Progress: 252/252 relays queried
+[phase2] Subscription timeouts (no EOSE): 11
+[phase2] CLOSED messages received: 16
+  wss://hole.v0l.io: error: queries not allowed
+  wss://relay.getalby.com/v1: blocked: Request rejected
+  wss://greensoul.space: auth-required: only authenticated users can read from this relay
+  wss://sendit.nosflare.com: restricted: this relay does not accept REQs
+  wss://relay.nosflare.com: auth-required: authentication required to subscribe
+  wss://creatr.nostr.wine: auth-required: please authenticate before sending REQs
+  wss://david.nostr1.com: auth-required: you must auth
+  wss://inbox.nostr.wine: blocked: this relay does not store any of the kinds in this request
+  wss://relay.shawnyeager.com/chat: auth-required: all requests must be authenticated
+  wss://auth.nostr1.com: auth-required: you must auth
+
+=== Phase 2: Event Verification (1095d window) ===
+Baseline: 252 relays queried (82.5% success), 35s
+  Timing: connect 705ms median (1.4s p95) | query 1.3s median (6.9s p95) | 11 timeouts (11 relays)
+  Authors: 391 with relay data
+    Testable (reliable): 271 | Testable (partial): 0 | Zero events: 118 | Unreliable: 2
+  Baseline events: 94,480 (mean 348.6/author, median 83)
+  Events per (relay,pubkey) capped at: 10000
+
+  Headline metrics (271 testable-reliable authors, 94,480 baseline events):
+
+  Algorithm                        |   Evt Recall |   Auth Recall |  Relay OK% |     TTFE |      p50 |      p80 | Timeouts
+  ---------------------------------+--------------+---------------+------------+----------+----------+----------+---------
+  Greedy Set-Cover                 |        10.6% |         78.6% |     100.0% |    532ms |     3.4s |     4.3s |        0
+  Weighted Stochastic (seed=0, single run) |        20.0% |         81.5% |     100.0% |    532ms |     3.5s |     5.1s |        0
+  Priority-Based (NDK)             |         9.1% |         77.9% |      90.0% |    532ms |     3.3s |     4.6s |        0
+  Filter Decomposition (cap@20)    |        16.0% |         84.9% |     100.0% |    532ms |     3.5s |     5.1s |        0
+
+  Per-author recall distribution:
+  Algorithm                        |   Median |  % at 0% |      p25 |      p75
+  ---------------------------------+----------+----------+----------+---------
+  Greedy Set-Cover                 |    12.4% |    21.4% |     0.5% |    82.9%
+  Weighted Stochastic (seed=0, single run) |    20.0% |    18.5% |     1.0% |   100.0%
+  Priority-Based (NDK)             |    11.5% |    22.1% |     0.5% |    75.5%
+  Filter Decomposition (cap@20)    |    53.1% |    15.1% |     2.8% |   100.0%
+
+  Latency simulation (parallel relay query):
+  Algorithm                        |     TTFE |      p50 |      p80 |      Max |   TO |   TO Tax |   Relays |   Events
+  ---------------------------------+----------+----------+----------+----------+------+----------+----------+---------
+  Greedy Set-Cover                 |    532ms |     3.4s |     4.3s |    13.9s |    0 |      0ms | 19/20/20 |   39,669
+  Weighted Stochastic (seed=0, single run) |    532ms |     3.5s |     5.1s |    13.9s |    0 |      0ms | 19/20/20 |   39,881
+  Priority-Based (NDK)             |    532ms |     3.3s |     4.6s |    13.9s |    0 |      0ms | 17/18/20 |   38,089
+  Filter Decomposition (cap@20)    |    532ms |     3.5s |     5.1s |    13.9s |    0 |      0ms | 19/20/20 |   29,907
+  (Relays: with-events/connected/total | TO Tax: ceil(timeouts/concurrency) × EOSE timeout)
+
+  Progressive completeness (% of recall achieved by time):
+  Algorithm                        |      @1s |      @2s |      @5s |     @10s |     @15s
+  ---------------------------------+----------+----------+----------+----------+---------
+  Greedy Set-Cover                 |     0.0% |     2.3% |    82.7% |    99.7% |   100.0%
+  Weighted Stochastic (seed=0, single run) |     0.0% |     5.0% |    90.4% |    99.8% |   100.0%
+  Priority-Based (NDK)             |     0.0% |     6.7% |    77.6% |    99.6% |   100.0%
+  Filter Decomposition (cap@20)    |     0.0% |     8.2% |    72.7% |    99.8% |   100.0%
+
+  EOSE-race simulation (stop after first EOSE + grace period):
+  Algorithm                        |     +0ms |   +200ms |   +500ms |      +1s |      +2s
+  ---------------------------------+----------+----------+----------+----------+---------
+  Greedy Set-Cover                 |     2.2% |     2.2% |     2.3% |    33.8% |    57.4%
+  Weighted Stochastic (seed=0, single run) |     1.2% |     2.5% |     5.0% |    17.5% |    74.8%
+  Priority-Based (NDK)             |     1.8% |     2.1% |     4.6% |     6.7% |    50.5%
+  Filter Decomposition (cap@20)    |     3.4% |     5.6% |     8.2% |    21.7% |    25.8%
+  (First EOSE: Greedy Set-Cover=1.5s, Weighted Stochastic (seed=0, single run)=1.5s, Priority-Based (NDK)=1.2s, Filter Decomposition (cap@20)=1.4s)
+
+  Profile-view latency (per-author outbox query, top 3 write relays):
+    Authors simulated: 271 | Hit rate: 100.0%
+    TTFE: 532ms median, 929ms mean, 1.7s p95
+    Relays/profile: 2.9 queried, 2.7 with events, 0.02 timeouts
+
+  Feed vs profile-view TTFE comparison:
+  Algorithm                        |  Feed TTFE |  Profile TTFE |    Delta
+  ---------------------------------+------------+---------------+---------
+  Greedy Set-Cover                 |      532ms |         532ms |     +0ms
+  Weighted Stochastic (seed=0, single run) |      532ms |         532ms |     +0ms
+  Priority-Based (NDK)             |      532ms |         532ms |     +0ms
+  Filter Decomposition (cap@20)    |      532ms |         532ms |     +0ms
+
+=== NIP-66 RTT vs Measured Latency (231 relays, data age: 50min) ===
+                             N   Spearman r      MAE    Bias    Top5   Top10   Top20
+------------------------  ----  -----------  -------  ------  ------  ------  ------
+rttOpen vs connect         231        -0.03    527ms    1.2x    0.0%    0.0%    5.0%
+rttRead vs query           212        -0.07     1.6s    8.3x    0.0%   10.0%   15.0%
+(Bias = measured/nip66, >1 = NIP-66 underestimates. TopK = overlap of K fastest relays.)
+Monitor: 9bbbb845e5b6..., 9ba0ce3dcc28..., 9ba1d7892cd0..., 63019a1fc7c4..., 0b01aa38c2cc..., b2c949c0fb79..., 9ba6484003e8..., http-api...
