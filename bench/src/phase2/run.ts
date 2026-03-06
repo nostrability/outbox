@@ -93,18 +93,16 @@ export async function runPhase2(
       relayCount,
     );
     if (cached) {
-      baselines = cached;
+      baselines = cached.baselines;
       cacheHit = true;
-      // Populate QueryCache from cached baselines so verify can use it
-      for (const baseline of baselines.values()) {
-        for (const relay of baseline.relaysWithEvents) {
-          // We know this relay had events for this pubkey, but we don't have
-          // per-relay event IDs in the cache. Set the full event set for each
-          // relay that had events (conservative: overestimates per-relay coverage,
-          // but baseline eventIds is the union across all relays anyway).
-          cache.set(relay, baseline.pubkey, baseline.eventIds);
+      // Populate QueryCache from cached per-relay event ID mappings
+      for (const [relay, pubkeyMap] of cached.perRelayEventIds) {
+        for (const [pubkey, eventIds] of pubkeyMap) {
+          cache.set(relay, pubkey, eventIds);
         }
-        // For relays that succeeded but had no events, set empty
+      }
+      // For relays that succeeded but had no events, set empty
+      for (const baseline of baselines.values()) {
         for (const relay of baseline.relaysSucceeded) {
           if (!baseline.relaysWithEvents.has(relay)) {
             cache.set(relay, baseline.pubkey, new Set());
@@ -204,6 +202,7 @@ export async function runPhase2(
       followCount,
       relayCount,
       baselines,
+      cache,
     ).catch((e) => console.error(`[phase2-cache] Write failed: ${e}`));
   }
 

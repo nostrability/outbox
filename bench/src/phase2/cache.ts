@@ -9,6 +9,7 @@
  * TTL: 4 hours (relay state shouldn't change much in a benchmark session)
  */
 
+import type { QueryCache } from "../relay-pool.ts";
 import type {
   Pubkey,
   PubkeyBaseline,
@@ -16,12 +17,14 @@ import type {
 } from "../types.ts";
 
 const CACHE_DIR = ".cache";
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const DEFAULT_TTL_MS = 4 * 3600 * 1000; // 4 hours
 
 interface SerializedBaseline {
   pubkey: Pubkey;
   eventIds: string[];
+  /** Per-relay event ID mappings — preserves which relay returned which events. */
+  perRelayEventIds: Record<string, string[]>;
   relaysQueried: number;
   relaysSucceeded: string[];
   relaysFailed: string[];
@@ -31,7 +34,7 @@ interface SerializedBaseline {
 }
 
 interface Phase2CacheEnvelope {
-  schemaVersion: 1;
+  schemaVersion: number;
   pubkey: string;
   windowSeconds: number;
   since: number;
@@ -55,10 +58,20 @@ function cacheFilePath(
   return `${CACHE_DIR}/phase2_${prefix}_${window}_${followCount}_${relayCount}.json`;
 }
 
-function serializeBaseline(baseline: PubkeyBaseline): SerializedBaseline {
+function serializeBaseline(baseline: PubkeyBaseline, cache: QueryCache): SerializedBaseline {
+  // Extract per-relay event IDs from the QueryCache
+  const perRelayEventIds: Record<string, string[]> = {};
+  for (const relay of baseline.relaysWithEvents) {
+    const ids = cache.get(relay, baseline.pubkey);
+    if (ids && ids.size > 0) {
+      perRelayEventIds[relay] = [...ids];
+    }
+  }
+
   return {
     pubkey: baseline.pubkey,
     eventIds: [...baseline.eventIds],
+    perRelayEventIds,
     relaysQueried: baseline.relaysQueried,
     relaysSucceeded: [...baseline.relaysSucceeded],
     relaysFailed: [...baseline.relaysFailed],
@@ -81,19 +94,28 @@ function deserializeBaseline(s: SerializedBaseline): PubkeyBaseline {
   };
 }
 
+export interface Phase2CacheResult {
+  baselines: Map<Pubkey, PubkeyBaseline>;
+  /** Per-relay event ID mappings for populating the QueryCache accurately. */
+  perRelayEventIds: Map<string, Map<string, Set<string>>>; // relay → pubkey → eventIds
+}
+
 export async function readPhase2Cache(
   pubkey: string,
   windowSeconds: number,
   followCount: number,
   relayCount: number,
-): Promise<Map<Pubkey, PubkeyBaseline> | null> {
+): Promise<Phase2CacheResult | null> {
   const path = cacheFilePath(pubkey, windowSeconds, followCount, relayCount);
 
   try {
     const raw = await Deno.readTextFile(path);
     const envelope = JSON.parse(raw) as Phase2CacheEnvelope;
 
-    if (envelope.schemaVersion !== SCHEMA_VERSION) return null;
+    if (envelope.schemaVersion !== SCHEMA_VERSION) {
+      console.error(`[phase2-cache] Schema version mismatch (got ${envelope.schemaVersion}, need ${SCHEMA_VERSION}) — re-collecting`);
+      return null;
+    }
 
     const age = Date.now() - envelope.fetchedAt;
     if (age > envelope.ttlMs) {
@@ -111,15 +133,27 @@ export async function readPhase2Cache(
     }
 
     const baselines = new Map<Pubkey, PubkeyBaseline>();
+    const perRelayEventIds = new Map<string, Map<string, Set<string>>>();
+
     for (const s of envelope.baselines) {
       baselines.set(s.pubkey, deserializeBaseline(s));
+
+      // Reconstruct per-relay event ID mappings
+      for (const [relay, ids] of Object.entries(s.perRelayEventIds)) {
+        let relayMap = perRelayEventIds.get(relay);
+        if (!relayMap) {
+          relayMap = new Map();
+          perRelayEventIds.set(relay, relayMap);
+        }
+        relayMap.set(s.pubkey, new Set(ids));
+      }
     }
 
     console.error(
       `[phase2-cache] Using cached baseline (${baselines.size} authors, ` +
       `fetched ${new Date(envelope.fetchedAt).toISOString()})`,
     );
-    return baselines;
+    return { baselines, perRelayEventIds };
   } catch {
     return null;
   }
@@ -132,6 +166,7 @@ export async function writePhase2Cache(
   followCount: number,
   relayCount: number,
   baselines: Map<Pubkey, PubkeyBaseline>,
+  cache: QueryCache,
 ): Promise<void> {
   await Deno.mkdir(CACHE_DIR, { recursive: true });
 
@@ -149,7 +184,7 @@ export async function writePhase2Cache(
   }
 
   const envelope: Phase2CacheEnvelope = {
-    schemaVersion: 1,
+    schemaVersion: SCHEMA_VERSION,
     pubkey,
     windowSeconds,
     since,
@@ -160,7 +195,7 @@ export async function writePhase2Cache(
     relaySuccessRate: totalQueried > 0 ? totalSucceeded / totalQueried : 0,
     totalRelaysQueried: totalQueried,
     totalRelaysSucceeded: totalSucceeded,
-    baselines: [...baselines.values()].map(serializeBaseline),
+    baselines: [...baselines.values()].map((b) => serializeBaseline(b, cache)),
   };
 
   // Write-to-temp-then-rename for crash safety

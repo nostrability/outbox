@@ -90,11 +90,12 @@ for pi in "${!PROFILES[@]}"; do
           run_if_needed "$key" \
             deno task bench "$npub" --verify --verify-window "$window" \
               --verify-concurrency "$CONCURRENCY" --algorithms "$ALGOS" \
-              --nip66-filter liveness --fast
+              --nip66-filter liveness --no-phase2-cache --fast
         else
           run_if_needed "$key" \
             deno task bench "$npub" --verify --verify-window "$window" \
-              --verify-concurrency "$CONCURRENCY" --algorithms "$ALGOS" --fast
+              --verify-concurrency "$CONCURRENCY" --algorithms "$ALGOS" \
+              --no-phase2-cache --fast
         fi
 
         completed=$((completed + 1))

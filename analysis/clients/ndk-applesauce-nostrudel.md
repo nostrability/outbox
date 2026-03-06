@@ -23,6 +23,54 @@ Outbox is enabled by default — any app calling `ndk.subscribe()` with author f
 - Temporary relay connections auto-disconnect after 30s of non-use. Prevents connection bloat from one-off outbox relays.
 - System-wide disconnect detection: >50% of relays disconnecting within 5s triggers coordinated reconnection with reset backoff (handles sleep/wake cycles).
 - No hard connection cap. Minimizes *new* connections via priority system rather than limiting total count.
+- `relay-ranking.ts` has a TODO: "Here is the place where the relay scoring can be used to modify the weights of the relays" — the integration point for Thompson.
+- `score.ts` is a placeholder: `export type NDKRelayScore = number;` with TODO "this will probably get more sophisticated."
+- `OutboxItem` has an unused `relayUrlScores: Map<string, number>` field — ready for Thompson scores.
+
+### Benchmark Results: NDK+Thompson Sampling
+
+NDK+Thompson integrates Thompson scoring into NDK's priority cascade, replacing the popularity-based ranking in the third tier. Two variants were tested (1yr, NIP-66 liveness, cap@20, 5 learning sessions):
+
+**Gato (399 follows, 106 testable-reliable authors):**
+
+| Session | NDK Baseline | NDK+Thompson (Priority) | NDK+Thompson (Unified) | Welshman+Thompson |
+|---|---|---|---|---|
+| S1 (cold) | 16.6% | 20.2% | 19.8% | 25.3% |
+| S2 | 16.3% | 22.0% | 24.3% | 26.6% |
+| S3 | 15.1% | 17.0% | 18.6% | 30.0% |
+| S4 | 16.4% | 22.8% | 26.1% | 28.9% |
+| S5 | 16.4% | 22.8% | 21.1% | 30.6% |
+
+**Telluride (2,784 follows, 1241-1296 testable-reliable authors):**
+
+| Session | NDK Baseline | NDK+Thompson (Priority) | NDK+Thompson (Unified) | Welshman+Thompson |
+|---|---|---|---|---|
+| S1 (cold) | 22.9% | 22.9% | 27.8% | 44.3% |
+| S2 | 22.6% | 34.5% | 22.0% | 45.8% |
+| S3 | 24.1% | 37.6% | 38.7% | 49.0% |
+| S4 | 22.7% | 38.3% | 39.9% | 44.3% |
+| S5 | 20.4% | 37.6% | 38.0% | 43.6% |
+
+**Key findings:**
+
+1. **Thompson works in NDK's architecture** — the priority cascade does NOT neutralize it. Gains scale with profile size: +5pp for 400 follows, +15pp for 2800 follows.
+2. **NDK baseline stays flat** — deterministic, no learning. NDK+Thompson improves over sessions while baseline stays at ~16-23%.
+3. **Priority variant is more stable** than Unified. The Unified variant (1.5x bonus replacing hard cascade) shows inconsistent results (Telluride S2: 22% vs 34.5% for Priority).
+4. **Welshman+Thompson still outperforms by ~8pp** (30% vs 22% for Gato, 44% vs 38% for Telluride). This gap is structural — Welshman's per-user relay budgeting vs NDK's popularity-weighted cascade.
+5. **Convergence by session 3-4** — Telluride stabilizes at session 3, Gato at session 4 (session 3 dips due to stochastic variance). Sessions 4-5 show stable results.
+6. **Concentration improves** — NDK+Thompson distributes load more evenly (Gini: 0.82→0.77, HHI: 0.299→0.234 for Telluride).
+
+### Upgrade Path
+
+**Minimal integration (recommended):** Add Thompson scoring to `getTopRelaysForAuthors()` in `relay-ranking.ts`, replacing the raw popularity count with `(1 + Math.log(popularity)) * sampleBeta(α, β)`. Preserve the priority cascade. This is the "Priority" variant benchmarked above.
+
+**Integration points in NDK codebase:**
+- `core/src/relay/score.ts` — extend `NDKRelayScore` with Beta distribution params
+- `core/src/outbox/relay-ranking.ts` — replace popularity sort with Thompson-scored sort
+- `core/src/outbox/index.ts` — pass scorer to `chooseRelayCombinationForPubkeys()`
+- `core/src/outbox/tracker.ts` — persist Thompson priors via cache adapter (addresses existing TODO)
+
+**Estimated effort:** ~80 LOC for Beta sampler + Thompson scorer, ~20 LOC for relay-ranking integration, ~15 LOC for cache adapter interface. See `bench/src/algorithms/ndk-thompson.ts` for the benchmark implementation that models this integration.
 
 ---
 
