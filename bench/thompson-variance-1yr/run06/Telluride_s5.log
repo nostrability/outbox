@@ -1,0 +1,10 @@
+[0m[32mTask[0m [0m[36mbench[0m deno run --allow-net --allow-read --allow-write main.ts "2c65940725bbf10b452197fba41c6cb14afd41e28e0be22aab49bf246b0c84e3" "--algorithms" "welshman-thompson,fd-thompson,ndk-thompson" "--verify" "--verify-window" "31536000" "--nip66-filter" "liveness" "--no-phase2-cache" "--fast" "--output" "table"
+Target: 2c65940725bbf10b...
+Seed: 0 | Filter: strict | Runs: 3
+[fetch] Connecting to 3 indexer relays...
+[fetch] wss://purplepag.es: connected (934ms)
+[fetch] wss://relay.damus.io: WebSocket error: NetworkError: failed to connect to WebSocket: Invalid status code 400 Bad Request
+[fetch] wss://nos.lol: connected (707ms)
+[fetch] Fetching kind 3 (contact list) for 2c659407...
+[fetch] 0 follows found. Nothing to analyze.
+0 follows found. Nothing to analyze.
