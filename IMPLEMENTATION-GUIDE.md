@@ -55,7 +55,9 @@ Thompson's gain depends on time window — the binding constraint shifts from re
 | **1yr** | 30% → 39% ± 2.7 SE | +9pp | **+30%** | 0pp to +15pp |
 | **3yr** | 19% → 26% | +7pp | **+37%** | All significant (delta/SE > 4) |
 
-The relative gain grows with window length: Thompson finds 30% more events at 1yr and 37% more at 3yr, because the baseline drops faster than Thompson does. At 7d, the baseline is already strong so relative gains are small. Per-profile spread is wide: profiles with diverse relay graphs benefit most (+15pp / +50% relative for hodlbod, jb55, ODELL); small or lucky profiles see near-zero gain.
+The relative gain grows with window length: Thompson finds 30% more events at 1yr and 37% more at 3yr, because the baseline drops faster than Thompson does. At 7d, the baseline is already strong so relative gains are small.
+
+**Thompson's value appears to scale with relay graph complexity.** Profiles with 400-1,800 follows see +55-60% relative gains (hodlbod, jb55, ODELL) — the relay graph is large enough that random selection consistently misses good relays, giving Thompson room to learn. The smallest benchmarked profile (fiatjaf, 194 follows) sees near-zero gain, likely because a 20-connection budget already covers most relay combinations for a small follow graph. Whether this pattern holds broadly, and where the crossover point lies, is being tested with additional profiles (84–1,746 follows).
 
 ### 1. Learn from what actually works
 
