@@ -1,0 +1,42 @@
+[0m[32mTask[0m [0m[36mbench[0m deno run --allow-net --allow-read --allow-write main.ts "32e1827635450ebb3c5a7d12c1f8e7b2b514439ac10a67eef3d9fd9c5c68e245" "--algorithms" "welshman,rust-nostr,ndk,welshman-thompson,fd-thompson,ndk-thompson" "--verify --verify-window 94608000 --nip66-filter liveness --no-phase2-cache --fast --output table"
+Target: 32e1827635450ebb...
+Seed: 0 | Filter: strict | Runs: 10
+[fetch] Connecting to 3 indexer relays...
+[fetch] wss://purplepag.es: connected (1068ms)
+[fetch] wss://relay.damus.io: connected (264ms)
+[fetch] wss://nos.lol: connected (692ms)
+[fetch] Fetching kind 3 (contact list) for 32e18276...
+[fetch] 908 follows to fetch relay lists for
+[fetch] Fetched relay lists: 200/908
+[fetch] Fetched relay lists: 400/908
+[fetch] Fetched relay lists: 600/908
+[fetch] Fetched relay lists: 800/908
+[fetch] Received 660 relay list events
+
+=== Fetch Quality ===
+Indexers: wss://purplepag.es (909 events, 1068ms), wss://relay.damus.io (453 events, 264ms), wss://nos.lol (659 events, 692ms)
+Follows: 908 | With relay list: 646 (71.1%) | Missing: 262 (28.9%) | Filtered-to-empty: 14
+Filter profile: strict | Filtered URLs: 238 (6 localhost, 33 insecure ws, 6 IP-only, 191 known-bad, 2 malformed)
+Unique valid write relays: 726 | Seed: 0
+
+=== Regime A: Fixed 20 Connections ===
+  Algorithm                      |  Relays |   Assign% |  Orphans |  Alg.Orph |  Avg/pk |   Gini |    HHI
+  -------------------------------+---------+-----------+----------+-----------+---------+--------+-------
+  Weighted Stochastic (cap@20)   |      20 |     69.9% (0.0sd) |    273.5 |      11.5 |     2.5 |   0.53 |  0.108
+  Filter Decomposition (cap@20)  |      20 |     66.1% |      308 |        46 |     2.1 |   0.56 |  0.144
+  Priority-Based (NDK)           |      20 |     70.0% |      272 |        10 |     1.9 |   0.82 |  0.322
+  Welshman+Thompson (cap@20)     |      20 |     69.9% (0.0sd) |    273.5 |      11.5 |     2.5 |   0.53 |  0.108
+  FD+Thompson (cap@20)           |      20 |     66.3% (0.0sd) |    305.8 |      43.8 |     2.0 |   0.47 |  0.097
+  NDK+Thompson (Priority)        |      20 |     70.0% (0.0sd) |    272.5 |      10.5 |     1.9 |   0.70 |  0.172
+
+=== Regime B: Fixed 2 Relays/Author ===
+  Algorithm                      |  Relays |   Assign% |   Attain% |  Avg/pk
+  -------------------------------+---------+-----------+-----------+--------
+  Weighted Stochastic            |   100.5 |     71.1% |     96.4% |     2.0
+  Filter Decomposition           |     284 |     71.1% |     96.4% |     2.0
+  Priority-Based (NDK)           |      50 |     71.1% |     96.4% |     2.0
+  Welshman+Thompson              |   100.5 |     71.1% |     96.4% |     2.0
+  FD+Thompson                    |     285 |     71.1% |     96.4% |     2.0
+  NDK+Thompson (Priority)        |    54.2 |     71.1% |     96.4% |     2.0
+
+JSON results written to: results/32e1827635450ebb_1772890929770.json
