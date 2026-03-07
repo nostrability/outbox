@@ -11,7 +11,7 @@ What's your starting point?
 │  │
 │  ├─ Can you rewrite your relay routing layer?
 │  │  └─ Yes → Full outbox (Steps 1a → 4 in README)
-│  │           Best recall (39% [26-45] 1yr; 84-92% 7d), biggest engineering investment
+│  │           Best recall (+9pp at 1yr → 39% [26-45]; +4-7pp at 7d → 84-92%), biggest engineering investment
 │  │
 │  └─ Need to preserve feed latency or can't change routing?
 │     └─ Hybrid outbox — add outbox queries to profile/event/thread hooks
@@ -25,7 +25,7 @@ What's your starting point?
 │
 ├─ Historical event recall (archival, search)?
 │  ├─ Can persist state across sessions?
-│  │  ├─ Using Welshman/Coracle?  → Welshman+Thompson Sampling (39% [26-45] 1yr; 84-92% 7d)
+│  │  ├─ Using Welshman/Coracle?  → Welshman+Thompson Sampling (+9pp at 1yr → 39% [26-45]; +4-7pp at 7d)
 │  │  ├─ Using rust-nostr?        → FD+Thompson (37% [25-44] 1yr; learns from delivery)
 │  │  └─ Using app relays?        → Hybrid+Thompson (1yr under re-benchmarking, no routing changes)
 │  └─ Stateless?                  → Filter Decomposition (25% [19–32] 1yr) or
@@ -45,9 +45,21 @@ relays that retain history.
 
 ## Recommendations (ordered by impact)
 
+### Key learning: how much does Thompson actually help?
+
+Thompson's gain depends on time window — the binding constraint shifts from relay selection (short windows) to relay retention (long windows):
+
+| Window | Baseline → Thompson | Mean gain | Per-profile range |
+|:---:|:---:|:---:|:---:|
+| **7d** | 79-90% → 84-92% | +4pp (WT) / +7pp (FD) | -1pp to +11pp |
+| **1yr** | 30% → 39% ± 2.7 SE | +9pp | 0pp to +15pp |
+| **3yr** | 19% → 26% | +7pp | All significant (delta/SE > 4) |
+
+At 7d, the baseline is already strong — most relays retain recent events. At 1yr, Thompson learns which relays actually keep history (+9pp), but can't recover events pruned by all relays. At 3yr, retention is the hard ceiling. The +9pp 1yr mean is robust (10-run validated, N=6 profiles) but the per-profile spread is wide: profiles with diverse relay graphs benefit most (+15pp for hodlbod, jb55, ODELL); small or lucky profiles see near-zero gain.
+
 ### 1. Learn from what actually works
 
-**Impact: +9pp event recall at 1yr (10-run validated) after 3-5 sessions (6-profile mean; +0 to +15pp range). At 7d: +40-57pp.**
+**Impact: +9pp event recall at 1yr (10-run validated) after 3-5 sessions (6-profile mean; +0 to +15pp range). At 7d: +4-7pp mean gain.**
 
 Every analyzed client picks relays statelessly — recompute from NIP-65 data
 each time, with no memory of which relays actually delivered events.
@@ -67,7 +79,7 @@ the scorer has learned which relays actually deliver and recall jumps dramatical
 | Telluride (2,784) | 38.4% | 42.0 ± 0.9 | +4pp |
 | **6-profile mean** | **30.4%** | **39.0 ± 2.7 SE** | **+9pp** |
 
-*10-run variance study (6 profiles × 10 independent 5-session sequences, NIP-66 liveness, `--no-phase2-cache`). At 7d, gains are larger: 84-92% after learning (HJO benchmark).*
+*10-run variance study (6 profiles × 10 independent 5-session sequences, NIP-66 liveness, `--no-phase2-cache`). At 7d, gains are smaller (+4-7pp) because the baseline is already 79-90% (HJO benchmark).*
 
 Thompson converges in 3-5 sessions. The gains are largest for mid-size profiles
 (400-2000 follows), where relay diversity means there are good relays to discover.

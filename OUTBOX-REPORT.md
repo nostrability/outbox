@@ -754,6 +754,16 @@ Key observations:
 
 ### 8.3 Expanded Benchmark: NIP-66 Filter, Thompson Sampling, and Multi-Session Learning
 
+**Key learning: how much does Thompson actually help?** Thompson's gain is real but depends on time window. The binding constraint shifts from relay selection to relay retention as the window grows:
+
+| Window | Stochastic baseline | Thompson (5 sessions) | Mean gain | What limits further gains |
+|:---:|:---:|:---:|:---:|---|
+| **7d** | 79-90% | 84-92% | +4pp (WT) / +7pp (FD) | Baseline already high — most relays retain recent events |
+| **1yr** | 30% | 39% ± 2.7 SE | +9pp | Relay retention: events pruned after 6-12 months |
+| **3yr** | 19% | 26% | +7pp | Severe retention: most relays empty beyond 2 years |
+
+*7d from HJO benchmark (6 profiles × 5 sessions). 1yr from 10-run variance study (6 profiles × 10 independent 5-session sequences, `--no-phase2-cache`). 3yr from paired deltas (WT +7.2pp SE 1.1, FD +8.6pp SE 1.0, NDK +8.8pp SE 1.7 — all delta/SE > 4). Per-profile 1yr spread: 0pp (fiatjaf) to +15pp (hodlbod, jb55, ODELL). Profiles where the 20-relay budget already covers most relay combinations see near-zero gain.*
+
 > **⚠️ Methodology note — phase2 cache bug:** The multi-session Thompson results in this section (and Sections 8.4–8.5) were collected using `run-benchmark-batch.sh`, which did **not** use `--no-phase2-cache`. The phase2 baseline cache had a lossy serialization bug: it stored the **union** of event IDs across all relays but lost per-relay mappings. When loaded in sessions 2+, the full union was assigned to every relay that had events, inflating verification recall. A deterministic algorithm (NDK baseline) jumped from ~16% (S1) to ~96% (S2+) despite selecting the same relays — proving the inflation.
 >
 > **Affected data:** All S2+ recall values in the Thompson learning curve table, 5-session comparison tables, and session progression tables in Sections 8.3–8.5. Session 1 values are genuine (no cache). Relative comparisons between algorithms are directionally valid (the bug inflated all algorithms equally). Single-session and stateless algorithm numbers (NIP-66 filter effect, algorithm comparison averaged across sessions, event distribution) are unaffected.
@@ -856,7 +866,7 @@ A small fraction of prolific authors produce the majority of events. This power-
 
 **Key findings from expanded benchmarks:**
 
-1. **Thompson Sampling is the first relay selection algorithm that closes the feedback loop** — and it works. At 7d: genuine HJO data shows +40-57pp gains. At 1yr: 10-run variance study confirms Welshman+Thompson = 39.0% ± 2.7 SE (+9pp over stochastic baseline), FD+Thompson = 37.2% ± 2.8 SE, NDK+Thompson = 30.8% ± 3.8 SE. At 3yr: paired deltas of +7-9pp are statistically significant (delta/SE > 4 for all three algorithm pairs). Per-profile std is typically 1-5pp, with outliers on fiatjaf (8-11pp) and Gato NDK+T (11pp). FD controlled comparison (same-run S1→S5) shows +14pp mean gain at 1yr.
+1. **Thompson Sampling is the first relay selection algorithm that closes the feedback loop** — and it works. At 7d: HJO data shows +4pp (WT) / +7pp (FD) mean S1→S5 gain (per-profile range: -1pp to +11pp — the baseline is already 79-90%). At 1yr: 10-run variance study confirms Welshman+Thompson = 39.0% ± 2.7 SE (+9pp over stochastic baseline), FD+Thompson = 37.2% ± 2.8 SE, NDK+Thompson = 30.8% ± 3.8 SE. At 3yr: paired deltas of +7-9pp are statistically significant (delta/SE > 4 for all three algorithm pairs). Per-profile std is typically 1-5pp, with outliers on fiatjaf (8-11pp) and Gato NDK+T (11pp). FD controlled comparison (same-run S1→S5) shows +14pp mean gain at 1yr.
 
 2. **NIP-66 liveness filtering is high-value, low-effort.** It requires no algorithmic changes — just remove dead relays before running any algorithm. The impact is largest for stochastic algorithms and larger follow counts.
 

@@ -4,7 +4,7 @@
 
 1. **Filter dead relays first** ([NIP-66](https://github.com/nostr-protocol/nips/blob/master/66.md)) — only 37% of relay-user pairs in NIP-65 lists point to normal content relays ([NIP-11 survey](#relay-list-pollution-is-worse-than-expected)). The rest are offline, paid, restricted, or missing. Removing them stops you wasting connection budget on relays that will never respond (success rate goes from ~30% to ~75%), and each dead relay wastes 15 seconds of timeout. Zero algorithmic changes needed.
 2. **Add randomness to relay selection** — deterministic algorithms (greedy set-cover) pick the same popular relays every time. Those relays prune old events. Stochastic selection discovers relays that keep history. 1.5× better recall at 1 year across 6 profiles.
-3. **Learn from what relays actually return** — no client tracks "did this relay deliver events?" Track it, feed it back into selection. At 1yr, recall goes from 30% (stochastic) to 39% [26-45] after 3-5 sessions (10-run mean +/- 2.7 SE). At 7d, recall jumps to 84-92%. ([Thompson Sampling](#thompson-sampling)).
+3. **Learn from what relays actually return** — no client tracks "did this relay deliver events?" Track it, feed it back into selection. At 1yr, recall goes from 30% (stochastic) to 39% [26-45] after 3-5 sessions (+9pp mean, 10-run validated). At 7d, gains are smaller (+4-7pp) because the baseline is already 79-90%. ([Thompson Sampling](#thompson-sampling)).
 4. **Use EOSE-race for feeds** — query 20 relays in parallel, stop 2 seconds after the first one finishes. You'll have 86-99% of your events in under 3 seconds total. Show events as they stream in. ([Latency data](#4-latency-when-to-stop-waiting-for-relays))
 
 ## What each step buys you
@@ -21,7 +21,7 @@ Each technique adds incremental value. You don't need to implement everything at
 | 4 | **Learn from delivery** (Thompson Sampling) | 39% [26–45]† | same | Low — ~80 LOC + DB table, replace `random()` with `sampleBeta()` |
 | 4+ | **Learn relay speed** (latency discount) | same | +10-16pp completeness @2s | 1 line — `score *= 1/(1 + latencyMs/1000)` on top of Step 4 |
 
-*Steps 1a and 1b are alternative entry points — 1a replaces your routing layer, 1b augments it. Step 1b already includes Thompson Sampling (it's the same ~80 LOC). Steps 2-4 are incremental enhancements that apply to the 1a path. †Thompson 1yr recall = 39% (Welshman+Thompson 10-run grand mean +/- 2.7 SE; per-profile std 1-8pp). FD+Thompson = 37% +/- 2.8 SE. NDK+Thompson = 31% +/- 3.8 SE. At 7d: 84-92% (HJO benchmark). The 1yr gain over stochastic is +9pp mean, limited by relay retention. ††Hybrid 1yr recall is under re-benchmarking. [min–max] ranges show the spread across tested profiles — your recall depends on your follow graph size and relay diversity. All stateless values are 6-profile means. Feed TTFE = time to first event (all algorithms share the same fast relay). "+2s" = EOSE-race grace period; "instant completeness" = all events arrive with first EOSE (1-2 relay setups). 1yr recall is the more informative metric — 7d masks relay retention problems that dominate real-world performance. Latency data from 7 cross-profile benchmarks (194–2,784 follows).*
+*Steps 1a and 1b are alternative entry points — 1a replaces your routing layer, 1b augments it. Step 1b already includes Thompson Sampling (it's the same ~80 LOC). Steps 2-4 are incremental enhancements that apply to the 1a path. †Thompson 1yr recall = 39% (Welshman+Thompson 10-run grand mean +/- 2.7 SE; per-profile std 1-8pp). FD+Thompson = 37% +/- 2.8 SE. NDK+Thompson = 31% +/- 3.8 SE. At 7d: 84-92% after learning (+4-7pp over 79-90% baseline; HJO benchmark). The 1yr gain over stochastic is +9pp mean, limited by relay retention. ††Hybrid 1yr recall is under re-benchmarking. [min–max] ranges show the spread across tested profiles — your recall depends on your follow graph size and relay diversity. All stateless values are 6-profile means. Feed TTFE = time to first event (all algorithms share the same fast relay). "+2s" = EOSE-race grace period; "instant completeness" = all events arrive with first EOSE (1-2 relay setups). 1yr recall is the more informative metric — 7d masks relay retention problems that dominate real-world performance. Latency data from 7 cross-profile benchmarks (194–2,784 follows).*
 
 ## Already using a client library?
 
@@ -57,7 +57,7 @@ Full methodology: [OUTBOX-REPORT.md](OUTBOX-REPORT.md) | Reproduce results: [Ben
 
 ### Two ways to add outbox
 
-There are two architecturally distinct approaches to outbox routing. Both benefit significantly from Thompson Sampling (39% [26-45] at 1yr; 84-92% at 7d), but they differ in where changes land and what tradeoffs they impose.
+There are two architecturally distinct approaches to outbox routing. Both benefit from Thompson Sampling (+9pp at 1yr, reaching 39% [26-45]; +4-7pp at 7d, reaching 84-92%), but they differ in where changes land and what tradeoffs they impose.
 
 **Full outbox routing** — replace your relay selection layer. For each followed author, route queries to their NIP-65 write relays instead of broadcasting to a fixed relay set. This is what Welshman/Coracle, rust-nostr, NDK, and Gossip do.
 
@@ -66,7 +66,7 @@ There are two architecturally distinct approaches to outbox routing. Both benefi
 | | Full outbox | Hybrid outbox |
 |---|---|---|
 | **1yr event recall** | 39% [26–45] | — |
-| **7d event recall** | 84-92% | — |
+| **7d event recall** | 84-92% (79-90% before learning) | — |
 | **Main feed latency** | Depends on per-author relay quality | Unchanged (app relays) |
 | **What changes** | Routing layer (NostrProvider / pool router) | Individual hooks (profile, event, thread) |
 | **Connection count** | 20+ (capped budget shared across all follows) | 4 app relays + 3 per viewed profile |
@@ -81,7 +81,7 @@ There are two architecturally distinct approaches to outbox routing. Both benefi
 ```text
 Do you have a routing layer that selects relays per-author?
 ├─ Yes → Add Thompson Sampling to it (Step 4)
-│        39% [26-45] 1yr recall; 84-92% at 7d
+│        +9pp at 1yr (39% [26-45]); +4-7pp at 7d (84-92%)
 │
 └─ No (fixed app relays / broadcast)
    │
@@ -96,6 +96,20 @@ Do you have a routing layer that selects relays per-author?
          Event lookups: rank relay hints by Thompson score, NIP-65 fallback
          Thread loading: propagate relay hints from e-tags
 ```
+
+### Key learning: how much does Thompson actually help?
+
+Thompson Sampling is a ~80 LOC upgrade that tracks relay delivery and feeds it back into selection. The gain depends entirely on the time window — because the binding constraint at longer windows is relay retention (events pruned), not relay selection (events misrouted).
+
+| Window | Baseline (stochastic) | Thompson (after 5 sessions) | Mean gain | What limits it |
+|:---:|:---:|:---:|:---:|---|
+| **7d** | 79-90% | 84-92% | **+4pp** (WT) / **+7pp** (FD) | Already high — most relays have recent events |
+| **1yr** | 30% | 39% ± 2.7 SE | **+9pp** | Relay retention: relays prune events >6-12mo |
+| **3yr** | 19% | 26% | **+7pp** | Severe retention: most relays have nothing >2yr |
+
+*Per-profile 7d gains (HJO, 6 profiles, S1→S5): fiatjaf -1pp, Gato +2pp, hodlbod +4pp, jb55 +7pp, ODELL +7pp, Telluride +7pp. Per-profile 1yr gains (10-run validated): fiatjaf +0pp, Gato +3pp, hodlbod +15pp, jb55 +15pp, ODELL +15pp, Telluride +4pp. 3yr paired deltas: WT +7.2pp (SE 1.1), FD +8.6pp (SE 1.0), NDK +8.8pp (SE 1.7) — all statistically significant.*
+
+**The honest picture:** Thompson's biggest value is at 1yr where relay selection choices actually matter — the gap between "good relay" and "bad relay" is widest. At 7d the baseline is already strong. At 3yr most events are gone from all relays. The +9pp 1yr gain is real but modest; the per-profile spread (0 to +15pp) is wide. Profiles where the 20-relay budget already covers most combinations (small follows, or lucky relay overlap) see near-zero gain. Profiles with diverse relay graphs see +15pp.
 
 ### 1. Learning beats static optimization
 
