@@ -111,7 +111,13 @@ Thompson Sampling is a ~80 LOC upgrade that tracks relay delivery and feeds it b
 
 **The honest picture:** In absolute terms, +9pp at 1yr sounds modest. In relative terms, Thompson finds **30% more events** than stochastic at 1yr and **37% more at 3yr** — the gain grows with window length because the baseline drops faster than Thompson does. At 7d the baseline is already strong so relative gains are small (+5-8%).
 
-**Thompson's value appears to scale with relay graph complexity.** The per-profile spread at 1yr is wide (0 to +15pp / 0 to +55% relative). In our benchmarks, profiles with 400-1,800 follows — where the relay graph is large and diverse enough that random selection consistently misses good relays — see the largest gains (+55-60% relative for hodlbod, jb55, ODELL). The smallest profile (fiatjaf, 194 follows) sees near-zero gain, likely because 194 follows map to ~140 unique relays after filtering, and a 20-connection budget already samples a large fraction of that space each session — leaving Thompson little room to learn. Whether this pattern holds for other small profiles, and where exactly the crossover lies, is an open question we're testing with [additional profiles](#in-progress-jp-profile-expansion) (84–1,746 follows).
+**Thompson's value appears largest in a middle range of follow counts.** The per-profile spread at 1yr is wide (0 to +15pp / 0 to +60% relative), and the pattern across our 6 benchmarked profiles suggests two different ceilings that limit Thompson at opposite ends:
+
+- **Small follow graphs** (fiatjaf, 194 follows → ~140 unique relays): a 20-connection budget already samples a large fraction of the relay space each session, leaving Thompson little to learn (~0% gain, ±8.0 std — noisy and inconsistent).
+- **Mid-range follow graphs** (hodlbod 442, jb55 943, ODELL 1,779): the relay graph is diverse enough that random selection consistently misses good relays, but 20 connections is still enough to make meaningful coverage improvements when Thompson steers selection (+55-60% relative gain).
+- **Very large follow graphs** (Telluride, 2,784 follows → 500+ unique relays): even with perfect learning, 20 connections can only cover a fraction of the relay space. The connection cap itself becomes the binding constraint — Thompson reliably learns the best 20 relays (±0.9 std — very consistent) but the best 20 simply aren't enough (+11% gain).
+
+This is based on 6 EN profiles — whether this inverted-U pattern holds for other profiles and relay ecosystems is an open question we're testing with [additional profiles](#in-progress-jp-profile-expansion) (84–1,746 follows, JP relay graph).
 
 ### 1. Learning beats static optimization
 
