@@ -49,13 +49,13 @@ relays that retain history.
 
 Thompson's gain depends on time window — the binding constraint shifts from relay selection (short windows) to relay retention (long windows):
 
-| Window | Baseline → Thompson | Mean gain | Per-profile range |
-|:---:|:---:|:---:|:---:|
-| **7d** | 79-90% → 84-92% | +4pp (WT) / +7pp (FD) | -1pp to +11pp |
-| **1yr** | 30% → 39% ± 2.7 SE | +9pp | 0pp to +15pp |
-| **3yr** | 19% → 26% | +7pp | All significant (delta/SE > 4) |
+| Window | Baseline → Thompson | Absolute | Relative | Per-profile range |
+|:---:|:---:|:---:|:---:|:---:|
+| **7d** | 79-90% → 84-92% | +4-7pp | +5-8% | -1pp to +11pp |
+| **1yr** | 30% → 39% ± 2.7 SE | +9pp | **+30%** | 0pp to +15pp |
+| **3yr** | 19% → 26% | +7pp | **+37%** | All significant (delta/SE > 4) |
 
-At 7d, the baseline is already strong — most relays retain recent events. At 1yr, Thompson learns which relays actually keep history (+9pp), but can't recover events pruned by all relays. At 3yr, retention is the hard ceiling. The +9pp 1yr mean is robust (10-run validated, N=6 profiles) but the per-profile spread is wide: profiles with diverse relay graphs benefit most (+15pp for hodlbod, jb55, ODELL); small or lucky profiles see near-zero gain.
+The relative gain grows with window length: Thompson finds 30% more events at 1yr and 37% more at 3yr, because the baseline drops faster than Thompson does. At 7d, the baseline is already strong so relative gains are small. Per-profile spread is wide: profiles with diverse relay graphs benefit most (+15pp / +50% relative for hodlbod, jb55, ODELL); small or lucky profiles see near-zero gain.
 
 ### 1. Learn from what actually works
 

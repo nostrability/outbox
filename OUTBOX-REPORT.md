@@ -756,13 +756,13 @@ Key observations:
 
 **Key learning: how much does Thompson actually help?** Thompson's gain is real but depends on time window. The binding constraint shifts from relay selection to relay retention as the window grows:
 
-| Window | Stochastic baseline | Thompson (5 sessions) | Mean gain | What limits further gains |
-|:---:|:---:|:---:|:---:|---|
-| **7d** | 79-90% | 84-92% | +4pp (WT) / +7pp (FD) | Baseline already high — most relays retain recent events |
-| **1yr** | 30% | 39% ± 2.7 SE | +9pp | Relay retention: events pruned after 6-12 months |
-| **3yr** | 19% | 26% | +7pp | Severe retention: most relays empty beyond 2 years |
+| Window | Stochastic baseline | Thompson (5 sessions) | Absolute | Relative | What limits further gains |
+|:---:|:---:|:---:|:---:|:---:|---|
+| **7d** | 79-90% | 84-92% | +4-7pp | +5-8% | Baseline already high — most relays retain recent events |
+| **1yr** | 30% | 39% ± 2.7 SE | +9pp | **+30%** | Relay retention: events pruned after 6-12 months |
+| **3yr** | 19% | 26% | +7pp | **+37%** | Severe retention: most relays empty beyond 2 years |
 
-*7d from HJO benchmark (6 profiles × 5 sessions). 1yr from 10-run variance study (6 profiles × 10 independent 5-session sequences, `--no-phase2-cache`). 3yr from paired deltas (WT +7.2pp SE 1.1, FD +8.6pp SE 1.0, NDK +8.8pp SE 1.7 — all delta/SE > 4). Per-profile 1yr spread: 0pp (fiatjaf) to +15pp (hodlbod, jb55, ODELL). Profiles where the 20-relay budget already covers most relay combinations see near-zero gain.*
+*Relative gain = (Thompson - baseline) / baseline. The relative improvement grows with window length because the baseline drops faster than Thompson. 7d from HJO benchmark (6 profiles × 5 sessions). 1yr from 10-run variance study (6 profiles × 10 independent 5-session sequences, `--no-phase2-cache`). 3yr from paired deltas (WT +7.2pp SE 1.1, FD +8.6pp SE 1.0, NDK +8.8pp SE 1.7 — all delta/SE > 4). Per-profile 1yr spread: 0pp (fiatjaf) to +15pp / +50% relative (hodlbod, jb55, ODELL).*
 
 > **⚠️ Methodology note — phase2 cache bug:** The multi-session Thompson results in this section (and Sections 8.4–8.5) were collected using `run-benchmark-batch.sh`, which did **not** use `--no-phase2-cache`. The phase2 baseline cache had a lossy serialization bug: it stored the **union** of event IDs across all relays but lost per-relay mappings. When loaded in sessions 2+, the full union was assigned to every relay that had events, inflating verification recall. A deterministic algorithm (NDK baseline) jumped from ~16% (S1) to ~96% (S2+) despite selecting the same relays — proving the inflation.
 >

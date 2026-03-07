@@ -52,7 +52,7 @@ Having outbox ✅ is not enough — algorithm quality determines whether events 
 
 ### Key Findings from Benchmarks
 
-**Key learning: how much does Thompson Sampling actually help?** It depends on the time window. At 7d (most relays have events), the stochastic baseline is already 79-90% and Thompson adds +4-7pp. At 1yr (relay retention becomes the binding constraint), Thompson adds +9pp (30% → 39%, 10-run validated, 6-profile mean). At 3yr, +7pp — but the hard ceiling is retention, not selection. Per-profile gains range 0 to +15pp; profiles with diverse relay graphs benefit most.
+**Key learning: how much does Thompson Sampling actually help?** It depends on the time window. At 7d, the baseline is already 79-90% so Thompson adds +4-7pp (+5-8% relative). At 1yr, Thompson finds **30% more events** than stochastic (30% → 39%, +9pp, 10-run validated). At 3yr, **+37% more events** (19% → 26%, +7pp). The relative gain grows with window length because the baseline drops faster than Thompson. Per-profile 1yr gains range 0 to +15pp (+50% relative); profiles with diverse relay graphs benefit most.
 
 **1. Relay list pollution is worse than expected.** NIP-11 probes of 13,867 relay-user pairs across 36 profiles: only **37% point to functional content relays**. 34% are offline, 11% are paid/restricted, 17% have no NIP-11 (likely OK). The most common dead relays (relay.nostr.band, nostr.orangepill.dev, nostr.zbd.gg) appear in 32-34 of 36 profiles. 20-44% of follows don't have a kind 10002 at all. ([source](https://github.com/nostrability/outbox#relay-list-pollution-is-worse-than-expected))
 

@@ -101,15 +101,15 @@ Do you have a routing layer that selects relays per-author?
 
 Thompson Sampling is a ~80 LOC upgrade that tracks relay delivery and feeds it back into selection. The gain depends entirely on the time window — because the binding constraint at longer windows is relay retention (events pruned), not relay selection (events misrouted).
 
-| Window | Baseline (stochastic) | Thompson (after 5 sessions) | Mean gain | What limits it |
-|:---:|:---:|:---:|:---:|---|
-| **7d** | 79-90% | 84-92% | **+4pp** (WT) / **+7pp** (FD) | Already high — most relays have recent events |
-| **1yr** | 30% | 39% ± 2.7 SE | **+9pp** | Relay retention: relays prune events >6-12mo |
-| **3yr** | 19% | 26% | **+7pp** | Severe retention: most relays have nothing >2yr |
+| Window | Baseline (stochastic) | Thompson (after 5 sessions) | Absolute | Relative | What limits it |
+|:---:|:---:|:---:|:---:|:---:|---|
+| **7d** | 79-90% | 84-92% | +4-7pp | +5-8% | Already high — most relays have recent events |
+| **1yr** | 30% | 39% ± 2.7 SE | +9pp | **+30%** | Relay retention: relays prune events >6-12mo |
+| **3yr** | 19% | 26% | +7pp | **+37%** | Severe retention: most relays have nothing >2yr |
 
 *Per-profile 7d gains (HJO, 6 profiles, S1→S5): fiatjaf -1pp, Gato +2pp, hodlbod +4pp, jb55 +7pp, ODELL +7pp, Telluride +7pp. Per-profile 1yr gains (10-run validated): fiatjaf +0pp, Gato +3pp, hodlbod +15pp, jb55 +15pp, ODELL +15pp, Telluride +4pp. 3yr paired deltas: WT +7.2pp (SE 1.1), FD +8.6pp (SE 1.0), NDK +8.8pp (SE 1.7) — all statistically significant.*
 
-**The honest picture:** Thompson's biggest value is at 1yr where relay selection choices actually matter — the gap between "good relay" and "bad relay" is widest. At 7d the baseline is already strong. At 3yr most events are gone from all relays. The +9pp 1yr gain is real but modest; the per-profile spread (0 to +15pp) is wide. Profiles where the 20-relay budget already covers most combinations (small follows, or lucky relay overlap) see near-zero gain. Profiles with diverse relay graphs see +15pp.
+**The honest picture:** In absolute terms, +9pp at 1yr sounds modest. In relative terms, Thompson finds **30% more events** than stochastic at 1yr and **37% more at 3yr** — the gain grows with window length because the baseline drops faster than Thompson does. At 7d the baseline is already strong so relative gains are small (+5-8%). Per-profile spread is wide (0 to +15pp at 1yr): profiles where the 20-relay budget already covers most combinations see near-zero gain; profiles with diverse relay graphs see +15pp (+50% relative).
 
 ### 1. Learning beats static optimization
 
