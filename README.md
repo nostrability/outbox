@@ -502,16 +502,13 @@ const parentRef = getParentEventRef(event); // { id, relay?, author? }
 useEvent(parentRef.id, parentRef.relay ? [parentRef.relay] : undefined, parentRef.author);
 ```
 
-**1yr benchmark results (4-profile mean, cap@20, NIP-66, 5 sessions):**
+**1yr cold-start results (4-profile mean, cap@20, NIP-66, session 1):**
 
-*⚠️ Methodology note: These 1yr multi-session numbers were collected with a phase2 cache bug that inflated S2+ verification recall. Re-benchmarking in progress. See [methodology note](#methodology-note-phase2-cache-bug).*
+| | Ditto-Mew baseline | Hybrid+Thompson S1 |
+|---|--:|--:|
+| **Event recall** | 6.2% [5–7] | 30.4% [24–41] |
 
-| | Ditto-Mew baseline | Hybrid+Thompson | Delta |
-|---|--:|--:|--:|
-| **Event recall** | 6.2% [5–7] | ‡ | — |
-| **Author recall** | 62.2% | ‡ | — |
-
-*‡1yr hybrid recall under re-benchmarking. Converges by session 2. See [OUTBOX-REPORT.md § 8.5](OUTBOX-REPORT.md#85-hybrid-outbox-app-relay-broadcast--per-author-thompson) for per-profile data and [bench/src/algorithms/ditto-outbox.ts](bench/src/algorithms/ditto-outbox.ts) for the benchmark implementation.*
+*Hybrid beats full outbox on cold start (30.4% vs 23.2% Welshman+Thompson S1) because the 4 app relays provide a guaranteed floor. Multi-session hybrid re-benchmark pending. See [OUTBOX-REPORT.md § 8.5](OUTBOX-REPORT.md#85-hybrid-outbox-app-relay-broadcast--per-author-thompson) and [bench/src/algorithms/ditto-outbox.ts](bench/src/algorithms/ditto-outbox.ts).*
 
 ### NIP-66 pre-filter
 
@@ -623,19 +620,7 @@ analysis/
 
 ## Methodology note: phase2 cache bug
 
-The phase2 baseline cache (`bench/src/phase2/cache.ts`, fixed in schema v2) had a lossy serialization bug: it stored the **union** of event IDs across all relays but lost per-relay mappings. When loaded in sessions 2+, the full union was assigned to every relay that had events, inflating verification recall. A deterministic algorithm like NDK baseline jumped from ~16% (S1, genuine) to ~96% (S2+, inflated) despite selecting the same relays.
-
-**What was affected:** All multi-session 1yr/3yr Thompson claims from the original `run-benchmark-batch.sh` (Welshman+Thompson, FD+Thompson, Hybrid+Thompson). The batch script did not use `--no-phase2-cache`.
-
-**What was always trustworthy:**
-- **Session 1 data** — no cache on first session, always genuine
-- **7d HJO data** — 6 profiles × 5 sessions × 4 Thompson algorithms, genuine multi-session
-- **NDK+Thompson 1yr** — collected with `--no-phase2-cache`, genuine
-- **All stateless algorithm numbers** — unaffected (no learning, no cache dependency)
-
-**Resolution:** Cache code fixed (schema v2 stores per-relay event IDs). Batch script updated to use `--no-phase2-cache`. 1yr Thompson re-benchmarked across 6 profiles x 5 sessions with genuine methodology — results now reflected in all tables above. The original inflated claims (84-89% 1yr) were replaced with genuine numbers (39% [26-45] 1yr, 10-run mean).
-
-**10-run variance study (March 2026).** To quantify Thompson Sampling's stochastic variance, we ran 10 independent 5-session benchmarks for each of 3 algorithm variants (Welshman+Thompson, FD+Thompson, NDK+Thompson) across 6 profiles at 1yr. Results: Welshman+Thompson 39.0% +/- 2.7 SE (per-profile std 0.9-8.0pp), FD+Thompson 37.2% +/- 2.8 SE, NDK+Thompson 30.8% +/- 3.8 SE. All Thompson gains over their respective baselines are statistically significant and consistent across runs. The fiatjaf regression in NDK+Thompson is confirmed as systematic (14.4% +/- 1.3, well below NDK baseline 32.1% in every run). FD controlled comparison at 1yr shows +14pp mean gain. 3yr baselines: Welshman 19.2%, FD 16.6%, Greedy 13.6%, NDK 13.3%. 3yr Thompson paired deltas: WT +7.2pp, FD +8.6pp, NDK +8.8pp (all significant). The 3yr results show Thompson gains persist and even increase at longer time windows where relay retention diverges further.
+The phase2 baseline cache (`bench/src/phase2/cache.ts`) had a lossy serialization bug that inflated multi-session recall in sessions 2+. Fixed in schema v2 (stores per-relay event IDs instead of union). Batch script updated to use `--no-phase2-cache`. All Thompson numbers in this document are from genuine methodology — either single-session (S1), 7d HJO data (6 profiles × 5 sessions), or the 10-run variance study (6 profiles × 10 independent 5-session sequences with `--no-phase2-cache`, 636 total invocations).
 
 ## Links
 
