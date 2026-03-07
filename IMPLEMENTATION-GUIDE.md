@@ -11,7 +11,7 @@ What's your starting point?
 │  │
 │  ├─ Can you rewrite your relay routing layer?
 │  │  └─ Yes → Full outbox (Steps 1a → 4 in README)
-│  │           Best recall (42% [28-47] 1yr; 84-92% 7d), biggest engineering investment
+│  │           Best recall (39% [26-45] 1yr; 84-92% 7d), biggest engineering investment
 │  │
 │  └─ Need to preserve feed latency or can't change routing?
 │     └─ Hybrid outbox — add outbox queries to profile/event/thread hooks
@@ -25,8 +25,8 @@ What's your starting point?
 │
 ├─ Historical event recall (archival, search)?
 │  ├─ Can persist state across sessions?
-│  │  ├─ Using Welshman/Coracle?  → Welshman+Thompson Sampling (42% [28-47] 1yr; 84-92% 7d)
-│  │  ├─ Using rust-nostr?        → FD+Thompson (40% [27-44] 1yr; learns from delivery)
+│  │  ├─ Using Welshman/Coracle?  → Welshman+Thompson Sampling (39% [26-45] 1yr; 84-92% 7d)
+│  │  ├─ Using rust-nostr?        → FD+Thompson (37% [25-44] 1yr; learns from delivery)
 │  │  └─ Using app relays?        → Hybrid+Thompson (1yr under re-benchmarking, no routing changes)
 │  └─ Stateless?                  → Filter Decomposition (25% [19–32] 1yr) or
 │                                   Weighted Stochastic / Welshman (24% [12–38] 1yr)
@@ -47,7 +47,7 @@ relays that retain history.
 
 ### 1. Learn from what actually works
 
-**Impact: +12pp event recall at 1yr after 3-5 sessions (6-profile mean; +2 to +20pp range). At 7d: +40-57pp.**
+**Impact: +9pp event recall at 1yr (10-run validated) after 3-5 sessions (6-profile mean; +0 to +15pp range). At 7d: +40-57pp.**
 
 Every analyzed client picks relays statelessly — recompute from NIP-65 data
 each time, with no memory of which relays actually delivered events.
@@ -57,17 +57,17 @@ Thompson Sampling adds learning to any stochastic relay scoring. On session 1,
 the scorer has learned which relays actually deliver and recall jumps dramatically
 (1yr event recall, cap@20, NIP-66 filtered):
 
-| Profile (follows) | Stochastic (no learning) | Thompson (S5) | Gain |
+| Profile (follows) | Stochastic (no learning) | Thompson (S5, 10-run mean) | Gain |
 |---|---|---|---|
-| fiatjaf (194) | 39.2% | 41.5% | +2pp |
-| hodlbod (442) | 29.4% | 46.3% | +17pp |
-| jb55 (943) | 27.0% | 46.6% | +20pp |
-| ODELL (1,779) | 25.1% | 41.6% | +17pp |
-| Gato (399) | 23.4% | 28.2% | +5pp |
-| Telluride (2,784) | 38.4% | 47.1% | +9pp |
-| **6-profile mean** | **30.4%** | **41.9%** | **+12pp** |
+| fiatjaf (194) | 39.2% | 39.3 ± 8.0 | +0pp |
+| hodlbod (442) | 29.4% | 44.6 ± 2.8 | +15pp |
+| jb55 (943) | 27.0% | 42.2 ± 4.3 | +15pp |
+| ODELL (1,779) | 25.1% | 39.9 ± 3.6 | +15pp |
+| Gato (399) | 23.4% | 25.9 ± 1.9 | +3pp |
+| Telluride (2,784) | 38.4% | 42.0 ± 0.9 | +4pp |
+| **6-profile mean** | **30.4%** | **39.0 ± 2.7 SE** | **+9pp** |
 
-*1yr data, genuine multi-session (6 profiles × 5 sessions, NIP-66 liveness, `--no-phase2-cache`). At 7d, gains are larger: 84-92% after learning (HJO benchmark).*
+*10-run variance study (6 profiles × 10 independent 5-session sequences, NIP-66 liveness, `--no-phase2-cache`). At 7d, gains are larger: 84-92% after learning (HJO benchmark).*
 
 Thompson converges in 3-5 sessions. The gains are largest for mid-size profiles
 (400-2000 follows), where relay diversity means there are good relays to discover.
@@ -87,19 +87,20 @@ priority-based architecture. NDK's priority cascade (connected > selected > popu
 is preserved — Thompson replaces the popularity ranking in the third tier. After
 5 learning sessions (1yr, NIP-66 liveness, cap@20, `--no-phase2-cache`):
 
-| Profile (follows) | NDK baseline | NDK+Thompson S5 | Gain |
+| Profile (follows) | NDK baseline | NDK+Thompson S5 (10-run mean) | Gain |
 |---|---|---|---|
-| fiatjaf (194) | 32.1% | 13.4% | -19pp |
-| hodlbod (855) | 13.7% | 43.4% | +30pp |
-| jb55 (1,218) | 19.5% | 33.5% | +14pp |
-| ODELL (1,562) | 17.9% | 33.5% | +16pp |
-| Gato (399) | 13.6% | 18.2% | +5pp |
-| Telluride (2,784) | 22.7% | 37.1% | +14pp |
-| **6-profile mean** | **19.9%** | **29.9%** | **+10pp** |
+| fiatjaf (194) | 32.1% | 14.4 ± 1.3 | -18pp |
+| hodlbod (855) | 13.7% | 38.8 ± 3.0 | +25pp |
+| jb55 (1,218) | 19.5% | 34.6 ± 5.8 | +15pp |
+| ODELL (1,562) | 17.9% | 32.9 ± 1.6 | +15pp |
+| Gato (399) | 13.6% | 26.0 ± 11.1 | +12pp |
+| Telluride (2,784) | 22.7% | 38.1 ± 2.5 | +15pp |
+| **6-profile mean** | **19.9%** | **30.8 ± 3.8 SE** | **+11pp** |
 
-NDK+Thompson shows high variance: fiatjaf regresses (-19pp) because NDK's cascade
-concentrates on relay.damus.io, which happens to work well for that follow graph —
-Thompson's exploration disrupts this. For the other 5 profiles, gains range +5pp to +30pp.
+NDK+Thompson shows high variance: fiatjaf regresses (-18pp) consistently across 10 runs
+(14.4% ± 1.3 std) because NDK's cascade concentrates on relay.damus.io, which happens
+to work well for that follow graph — Thompson's exploration disrupts this. For the other
+5 profiles, gains range +12pp to +25pp.
 NDK's selected-first priority cascade short-circuits Thompson scoring — if
 already-connected relays satisfy the per-author target, the Thompson scorer is never
 consulted. Welshman's per-user relay budgeting gives Thompson full control over
@@ -114,9 +115,9 @@ for NDK-specific integration points.
 **For rust-nostr / Filter Decomposition users:** FD+Thompson is a variant that fits
 Filter Decomposition's per-author structure directly. It replaces lexicographic relay
 ordering with `sampleBeta(α, β)` scoring — no popularity weight. After 5 learning
-sessions (cap@20, NIP-66 filtered), FD+Thompson reaches **40% event recall** [27–44] at 1yr
-(6-profile mean, genuine) vs baseline FD's ~25% — converging within 3-5 sessions. Welshman+Thompson leads by
-~2pp (42% [28–47]). FD+Thompson is a drop-in upgrade for
+sessions (cap@20, NIP-66 filtered), FD+Thompson reaches **37% event recall** [25–44] (10-run mean ± 2.8 SE) at 1yr
+(6-profile mean) vs baseline FD's ~25% — converging within 3-5 sessions. Welshman+Thompson leads by
+~2pp (39% [26–45]). FD+Thompson is a drop-in upgrade for
 existing rust-nostr code with no structural changes needed.
 See [README.md § FD+Thompson](README.md#fdthompson-for-rust-nostr) for code.
 
@@ -125,7 +126,7 @@ Hybrid+Thompson keeps your app relays for the main feed and adds Thompson-scored
 outbox queries only for profile views, event lookups, and thread traversal.
 ~80 LOC and no routing layer changes. Converges faster than full outbox because
 the app relay floor provides a strong initial signal. *Hybrid+Thompson 1yr recall
-is still under re-benchmarking — full outbox Welshman+Thompson = 42% [28-47] at 1yr (genuine).*
+is still under re-benchmarking — full outbox Welshman+Thompson = 39% [26-45] at 1yr (10-run mean).*
 See [README.md § Hybrid outbox](README.md#hybrid-outbox-for-app-relay-clients) for code
 and [OUTBOX-REPORT.md § 8.5](OUTBOX-REPORT.md#85-hybrid-outbox-app-relay-broadcast--per-author-thompson) for full benchmark data.
 

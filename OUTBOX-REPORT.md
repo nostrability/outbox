@@ -705,7 +705,7 @@ To test whether patterns generalize beyond fiatjaf, event recall was measured ac
 
 *[range] = min–max across 6 profiles (194–1,779 follows). The spread reflects real cross-profile heterogeneity — profiles with different follow counts and relay diversity get different recall. For stochastic algorithms, single-seed results add run-to-run variance on top (see variance analysis below).*
 
-The ~8pp gap between the best academic algorithm (92.4%) and the best practitioner algorithm (87.9%) represents the theoretical ceiling that no simple, deployable algorithm has reached. However, Welshman+Thompson Sampling (Section 8.3) closes most of this gap through learning — achieving 92-97% after 2-3 sessions without the implementation complexity of the academic algorithms.
+The ~8pp gap between the best academic algorithm (92.4%) and the best practitioner algorithm (87.9%) represents the theoretical ceiling that no simple, deployable algorithm has reached. However, Welshman+Thompson Sampling (Section 8.3) closes most of this gap through learning at 7d — achieving 84-92% after 2-3 sessions (HJO data) without the implementation complexity of the academic algorithms. At 1yr, Thompson reaches 39% (10-run validated) — relay retention, not algorithmic quality, is the binding constraint at longer windows.
 
 Profile characteristics:
 
@@ -722,7 +722,7 @@ Cross-profile patterns:
 
 *At 7d:*
 - **Direct Mapping leads at 87.9% mean** but uses unlimited connections (50-200+). Among 20-connection algorithms, Greedy/NDK/Welshman cluster at 83-84% — effectively tied.
-- **~8pp gap to academic ceiling** (92% vs 88% mean). Closable through learning: Welshman+Thompson Sampling (Section 8.3) reaches 92-97% after 2-3 sessions.
+- **~8pp gap to academic ceiling** (92% vs 88% mean). Closable through learning: Welshman+Thompson Sampling (Section 8.3) reaches 84-92% at 7d after 2-3 sessions (HJO data); 39% at 1yr (10-run validated).
 - **Greedy Set-Cover ranks 2nd among 20-connection algorithms** but the margin is narrow — assignment coverage optimization provides modest benefit at 7d because most relays still have recent events.
 
 *At 1yr:*
@@ -760,7 +760,7 @@ Key observations:
 >
 > **Trustworthy Thompson data:** 7d HJO benchmark (6 profiles × 5 sessions, genuine), NDK+Thompson 1yr (collected with `--no-phase2-cache`), and all S1 values.
 >
-> **Fix:** Cache code fixed (schema v2 stores per-relay event IDs). Batch script updated to use `--no-phase2-cache`. 1yr Thompson re-benchmarked (6 profiles × 5 sessions, genuine): Welshman+Thompson = 42% [28-47], FD+Thompson = 40% [27-44]. See README for updated tables.
+> **Fix:** Cache code fixed (schema v2 stores per-relay event IDs). Batch script updated to use `--no-phase2-cache`. 1yr and 3yr Thompson re-benchmarked with variance analysis (6 profiles × 10 independent 5-session sequences, 636 total invocations). 10-run grand means: Welshman+Thompson = 39.0% ± 2.7 SE (1yr), FD+Thompson = 37.2% ± 2.8 SE (1yr). 3yr paired deltas: WT +7.2pp, FD +8.6pp, NDK +8.8pp (all delta/SE > 4, statistically significant). See README for updated tables.
 
 A second round of benchmarks expanded the test matrix: 4 profiles across 3 time windows, 5 learning sessions per configuration, with and without NIP-66 liveness filtering (120 total runs). Two new algorithms were added: Welshman+Thompson Sampling (learning from event delivery) and Greedy+ε-Explore (5% random exploration).
 
@@ -804,7 +804,7 @@ NIP-66 filtering benefits stochastic algorithms (MAB-UCB, Welshman) most because
 
 Thompson Sampling persists per-relay Beta(α,β) parameters across sessions. Session 1 uses uniform priors (equivalent to baseline Welshman). Subsequent sessions use learned priors.
 
-*⚠️ S2+ values in this table are inflated by the phase2 cache bug (see methodology note above). S1 values and the 7d row are genuine. The large S1→S2 jumps at 1yr/3yr (e.g., 24.5% → 96.1%) are artifacts — genuine Thompson gains at 1yr are much smaller (see NDK+Thompson benchmark for genuine 1yr data: +5-15pp).*
+*⚠️ S2+ values in this table are inflated by the phase2 cache bug (see methodology note above). S1 values and the 7d row are genuine. The large S1→S2 jumps at 1yr/3yr (e.g., 24.5% → 96.1%) are artifacts. Genuine 1yr data (10-run variance study): Welshman+T S5 = 39.0% ± 2.7 SE, FD+T = 37.2% ± 2.8 SE, NDK+T = 30.8% ± 3.8 SE. Genuine 3yr paired deltas: +7-9pp (all statistically significant).*
 
 | Profile (follows) | Window | Session 1 | Session 2 | Session 5 | Total gain |
 |---|---|---|---|---|---|
@@ -856,7 +856,7 @@ A small fraction of prolific authors produce the majority of events. This power-
 
 **Key findings from expanded benchmarks:**
 
-1. **Thompson Sampling is the first relay selection algorithm that closes the feedback loop** — and it works at 7d (genuine HJO data shows +40-57pp gains). The 1yr/3yr multi-session numbers in this section are inflated by a cache bug (see methodology note above) and need re-benchmarking. Genuine 1yr data from NDK+Thompson (collected with `--no-phase2-cache`) shows +5-15pp gains — meaningful but much smaller than the inflated claims.
+1. **Thompson Sampling is the first relay selection algorithm that closes the feedback loop** — and it works. At 7d: genuine HJO data shows +40-57pp gains. At 1yr: 10-run variance study confirms Welshman+Thompson = 39.0% ± 2.7 SE (+9pp over stochastic baseline), FD+Thompson = 37.2% ± 2.8 SE, NDK+Thompson = 30.8% ± 3.8 SE. At 3yr: paired deltas of +7-9pp are statistically significant (delta/SE > 4 for all three algorithm pairs). Per-profile std is typically 1-5pp, with outliers on fiatjaf (8-11pp) and Gato NDK+T (11pp). FD controlled comparison (same-run S1→S5) shows +14pp mean gain at 1yr.
 
 2. **NIP-66 liveness filtering is high-value, low-effort.** It requires no algorithmic changes — just remove dead relays before running any algorithm. The impact is largest for stochastic algorithms and larger follow counts.
 
@@ -865,6 +865,8 @@ A small fraction of prolific authors produce the majority of events. This power-
 4. **MAB-UCB remains the best single-session algorithm — but isn't shippable.** Without learning history, MAB-UCB's internal exploration-exploitation (500 simulated rounds) outperforms everything. It defines the benchmark ceiling. Thompson Sampling needs 2–3 sessions to match it but is actually deployable.
 
 5. **The 20-connection limit is the fundamental bottleneck at scale.** Telluride (2,784 follows) at 3yr shows all algorithms struggling: Greedy at 56%, Thompson at 63%, MAB-UCB at 67%. The relay diversity needed to cover 2,784 authors' 3-year history exceeds what 20 connections can provide.
+
+6. **3yr recall drops ~35-40% relative to 1yr for all algorithms.** Clean 3yr baselines (no-cache, 5 profiles): Welshman 19.2%, FD 16.6%, Greedy 13.6%, NDK 13.3%. Thompson at 3yr: WT 26.6%, FD+T 25.8%, NDK+T 23.4%. The binding constraint is relay retention — relays prune events older than 1-2 years — not algorithmic quality. Thompson's +7-9pp 3yr paired deltas confirm it still learns effectively at longer windows, but can't recover events that no longer exist on any relay.
 
 **Key real-world event verification findings:**
 
@@ -880,7 +882,7 @@ A small fraction of prolific authors produce the majority of events. This power-
 5. **Author recall is more stable than event recall.** You can *find* most authors even at long windows (74-81% author recall at 1 year), but you miss most of their posts. The disparity means relay retention policies are the binding constraint, not relay selection.
 
 *Academic context:*
-6. **The academic ceiling is ~92% at 7d** (Streaming Coverage, ILP, Spectral Clustering). The ~5-8pp gap vs the best practitioner algorithm (88%) is closable through learning (Thompson Sampling reaches 92-97% after 2-3 sessions) rather than through more complex static algorithms.
+7. **The academic ceiling is ~92% at 7d** (Streaming Coverage, ILP, Spectral Clustering). The ~5-8pp gap vs the best practitioner algorithm (88%) is closable through learning (Thompson Sampling reaches 84-92% at 7d after 2-3 sessions per HJO data) rather than through more complex static algorithms.
 
 ### 8.4 FD+Thompson: Filter Decomposition with Thompson Sampling
 
@@ -941,9 +943,9 @@ The algorithm is a direct upgrade path for rust-nostr: same per-author structure
 
 **Key findings:**
 
-1. **Both Thompson variants exceed their stateless baselines in session 1.** FD+Thompson averages 31.8% event recall from a single session vs Filter Decomposition's 23.1% at 1yr — a +38% relative improvement. *Note: The S2+ numbers in the table above are inflated by the cache bug. Genuine 1yr re-benchmark (6 profiles × 5 sessions): Welshman+Thompson = 42% [28-47], FD+Thompson = 40% [27-44]. See README for updated tables.*
+1. **Both Thompson variants exceed their stateless baselines in session 1.** FD+Thompson averages 31.8% event recall from a single session vs Filter Decomposition's 23.1% at 1yr — a +38% relative improvement. *10-run variance study confirms: Welshman+Thompson = 39.0% ± 2.7 SE, FD+Thompson = 37.2% ± 2.8 SE at 1yr. FD controlled comparison (same-run FD S1 → FD+T S5) shows +14.0pp mean gain across 5 profiles.*
 
-2. **Welshman+Thompson leads by 5-7pp at all profile sizes after convergence.** The `(1 + log(weight))` popularity factor provides a consistent advantage — the popularity signal helps identify relays that retain events across all follow-count scales, not just large graphs. The gap is narrowest on Gato (3.6pp) and widest on fiatjaf (6.9pp).
+2. **Welshman+Thompson leads by ~2pp after convergence (10-run validated).** The gap between WT (39.0%) and FD+T (37.2%) is smaller than previously reported from cached data (~5.5pp). The `(1 + log(weight))` popularity factor provides a modest advantage. At 3yr, the gap narrows further (WT 26.6% vs FD+T 25.8%, <1pp).
 
 3. **Median recall tells a different story.** FD+Thompson's 39.4% median on fiatjaf (vs 18.7% for Welshman+Thompson) shows more equitable per-author coverage — fewer authors with zero recall. At larger scales, Welshman+Thompson's median advantage (64% vs 55% on ODELL) reflects better overall delivery.
 
@@ -1003,7 +1005,7 @@ The algorithm models [Ditto-Mew](https://gitlab.com/soapbox-pub/ditto-mew)'s arc
 
 4. **The Ditto-Mew baseline (4 app relays, no outbox) averages 6.2% at 1yr (genuine).** This is comparable to Big Relays (5.1%) — 4 major relays capture roughly the same fraction of 1yr-old events as 2 major relays. The value of app relays is latency and reliability, not historical recall.
 
-5. **Hybrid outbox is a viable ship-first strategy.** For clients with hardcoded app relays, hybrid outbox + Thompson is ~80 LOC with no routing layer changes. *The previously claimed 89% 1yr recall is from cache-inflated data — genuine full outbox Welshman+Thompson = 42% [28-47] at 1yr. Hybrid-specific re-benchmark is pending.*
+5. **Hybrid outbox is a viable ship-first strategy.** For clients with hardcoded app relays, hybrid outbox + Thompson is ~80 LOC with no routing layer changes. *The previously claimed 89% 1yr recall is from cache-inflated data — genuine full outbox Welshman+Thompson = 39.0% ± 2.7 SE at 1yr (10-run validated). Hybrid-specific re-benchmark is pending.*
 
 See [bench/src/algorithms/ditto-outbox.ts](bench/src/algorithms/ditto-outbox.ts) for the benchmark implementation and [bench/src/algorithms/ditto-mew.ts](bench/src/algorithms/ditto-mew.ts) for the baseline.
 

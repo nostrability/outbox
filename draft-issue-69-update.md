@@ -22,16 +22,16 @@ https://github.com/nostrability/outbox — 25 algorithms benchmarked across 7 re
 
 ### Implementation Status
 
-Having outbox ✅ is not enough — algorithm quality determines whether events are actually found. The **1yr recall** column shows the percentage of events an algorithm finds at a 1-year time window across benchmarked profiles ([source](https://github.com/nostrability/outbox)). 7-day recall masks retention problems — most algorithms look fine at 7d (77-94%) but diverge sharply at 1yr (8-30%). Thompson Sampling: 42% [28-47] at 1yr after learning (6-profile mean); 84-92% at 7d.
+Having outbox ✅ is not enough — algorithm quality determines whether events are actually found. The **1yr recall** column shows the percentage of events an algorithm finds at a 1-year time window across benchmarked profiles ([source](https://github.com/nostrability/outbox)). 7-day recall masks retention problems — most algorithms look fine at 7d (77-94%) but diverge sharply at 1yr (8-30%). Thompson Sampling: 39% [26-45] at 1yr after learning (10-run validated); 84-92% at 7d.
 
 | App / Library | Outbox | Inbox | Algorithm | 1yr Recall | Comment |
 |---|:---:|:---:|---|:---:|---|
 | amethyst | ✅ | ✅ | direct mapping (unlimited conns) | 30% [17–40] | [full outbox PR](https://github.com/vitorpamplona/amethyst/pull/1388). >300 follows is the scaling cliff |
-| coracle | ✅ | ✅ | welshman stochastic | 24% [12–38] | best stateless deployed algo for archival. ~80 LOC Thompson upgrade: 42% [28-47] 1yr, 84-92% 7d. [Details](https://github.com/nostrability/outbox/blob/main/analysis/clients/welshman-coracle.md) |
+| coracle | ✅ | ✅ | welshman stochastic | 24% [12–38] | best stateless deployed algo for archival. ~80 LOC Thompson upgrade: 39% [26-45] 1yr, 84-92% 7d. [Details](https://github.com/nostrability/outbox/blob/main/analysis/clients/welshman-coracle.md) |
 | nostrudel | ✅ | ✅ | greedy set-cover (applesauce) | 16% [12–20] | full outbox via [applesauce](https://github.com/hzrd149/applesauce). [analysis](https://github.com/nostrability/outbox/blob/main/analysis/clients/ndk-applesauce-nostrudel.md) |
 | nostur | ✅ | ✅ | coverage sort + skipTopRelays | 16% [9–22] | skipTopRelays costs 5-12% coverage. random relays limited to follows or relay hints. [analysis](https://github.com/nostrability/outbox/blob/main/analysis/clients/nostur-yakihonne-notedeck.md) |
 | gossip | ✅ | ✅ | greedy set-cover | 16% [12–20] | per-pubkey scoring with temporal decay. [analysis](https://github.com/nostrability/outbox/blob/main/analysis/clients/gossip.md) |
-| NDK | ✅ | ✅ | priority-based | 16% [12–19] (30% [13–43] with Thompson) | connected > selected > popular. Thompson upgrade benchmarked: +10pp mean (6 profiles), high variance. [analysis](https://github.com/nostrability/outbox/blob/main/analysis/clients/ndk-applesauce-nostrudel.md) |
+| NDK | ✅ | ✅ | priority-based | 16% [12–19] (31% [14–39] with Thompson, 10-run mean) | connected > selected > popular. Thompson upgrade benchmarked: +11pp mean (6 profiles, 10-run validated), high variance. [analysis](https://github.com/nostrability/outbox/blob/main/analysis/clients/ndk-applesauce-nostrudel.md) |
 | rust-nostr | ✅ | ✅ | filter decomposition | 25% [19–32] | per-author top-N write relays. inbox merged in v0.35. [analysis](https://github.com/nostrability/outbox/blob/main/analysis/clients/rust-nostr-voyage-nosotros-wisp-shopstr.md) |
 | voyage | ✅ | ✅ | multi-phase greedy | — | lexicographic boolean tuple scoring. autopilot max 25 relays |
 | wisp | ✅ | ✅ | greedy coverage | 16% [12–20] | max 75 scored relays. [relay scoreboard](https://github.com/barrydeen/wisp/blob/main/app/src/main/kotlin/com/wisp/app/relay/RelayScoreBoard.kt) |
@@ -46,7 +46,7 @@ Having outbox ✅ is not enough — algorithm quality determines whether events 
 | futr | ✅ | ? | ? | — | https://github.com/futrnostr/futr/pull/41 |
 | [nostrSDK](https://github.com/nostr-sdk) | ? | ? | ? | — | planned @tyiu |
 
-**Not yet implemented by any client:** [Thompson Sampling](https://github.com/nostrability/outbox#thompson-sampling) — ~80 LOC upgrade that learns from relay delivery. At 1yr: 42% [28-47] after 3-5 sessions (vs 30% stochastic baseline, +12pp mean, 6-profile genuine data). At 7d: 84-92% after 2-3 sessions. 1yr gains limited by relay retention. Works on top of Welshman, filter decomposition, or hybrid approaches.
+**Not yet implemented by any client:** [Thompson Sampling](https://github.com/nostrability/outbox#thompson-sampling) — ~80 LOC upgrade that learns from relay delivery. At 1yr: 39% [26-45] after 3-5 sessions (vs 30% stochastic baseline, +9pp mean, 10-run mean +/- 2.7 SE). At 7d: 84-92% after 2-3 sessions. 1yr gains limited by relay retention. Works on top of Welshman, filter decomposition, or hybrid approaches.
 
 ---
 
@@ -56,7 +56,7 @@ Having outbox ✅ is not enough — algorithm quality determines whether events 
 
 **2. NIP-66 liveness filtering gives a 45% wall-clock speedup.** Dead relays waste ~15 seconds of timeout each. Filtering them out raises relay success rate from ~30% to ~75%. This is a latency/efficiency win — it removes relays that would never respond. No client currently does this. ([NIP-66 comparison report](https://github.com/nostrability/outbox/blob/main/bench/NIP66-COMPARISON-REPORT.md)) ([NIP-66 discussion](https://github.com/nostrability/nostrability/issues/69#issuecomment-2689166816))
 
-**3. Learning beats static optimization.** Thompson Sampling — tracking which relays actually deliver events — is the single biggest available upgrade. At 1yr: 42% [28-47] recall after 3-5 sessions vs 30% stochastic baseline (+12pp mean, 6-profile genuine data). At 7d: 84-92% after 2-3 sessions. 1yr gains are limited by relay retention — relays prune old events. No client implements it yet. ([Thompson Sampling details](https://github.com/nostrability/outbox#thompson-sampling))
+**3. Learning beats static optimization.** Thompson Sampling — tracking which relays actually deliver events — is the single biggest available upgrade. At 1yr: 39% [26-45] recall after 3-5 sessions vs 30% stochastic baseline (+9pp mean, 10-run validated). At 7d: 84-92% after 2-3 sessions. 1yr gains are limited by relay retention — relays prune old events. No client implements it yet. ([Thompson Sampling details](https://github.com/nostrability/outbox#thompson-sampling))
 
 **4. 20 relay connections is sufficient.** All algorithms reach within 1-2% of unlimited ceiling by 20 connections. Diminishing returns above that.
 
@@ -80,7 +80,7 @@ Having outbox ✅ is not enough — algorithm quality determines whether events 
 
 > Has anyone measured and compared the success/failure rate across implementations?
 
-**Yes.** Head-to-head benchmarks across all 10 client algorithms plus 15 experimental/academic/baseline algorithms. Results: greedy set-cover wins on-paper relay assignment (23/26 profiles) but degrades to 16% event recall at 1yr. Stochastic variants reach 24%. Thompson Sampling: 42% [28-47] at 1yr, 84-92% at 7d (6-profile genuine data). ([full results](https://github.com/nostrability/outbox/blob/main/OUTBOX-REPORT.md))
+**Yes.** Head-to-head benchmarks across all 10 client algorithms plus 15 experimental/academic/baseline algorithms. Results: greedy set-cover wins on-paper relay assignment (23/26 profiles) but degrades to 16% event recall at 1yr. Stochastic variants reach 24%. Thompson Sampling: 39% [26-45] at 1yr, 84-92% at 7d (6-profile genuine data). ([full results](https://github.com/nostrability/outbox/blob/main/OUTBOX-REPORT.md))
 
 ---
 
