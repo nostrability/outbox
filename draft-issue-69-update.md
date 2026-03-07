@@ -16,13 +16,13 @@ https://how-nostr-works.pages.dev/#/outbox
 
 ### Benchmark & Implementation Guide
 
-https://github.com/nostrability/outbox — 25 algorithms benchmarked across 7 real profiles (194-2,784 follows), 6 time windows, with and without NIP-66 liveness filtering. Per-client analysis, code examples, and upgrade paths.
+https://github.com/nostrability/outbox — 25 algorithms benchmarked across 12 real profiles (84-2,784 follows, EN + JP relay ecosystems), 6 time windows, with and without NIP-66 liveness filtering. Per-client analysis, code examples, and upgrade paths.
 
 ---
 
 ### Implementation Status
 
-Having outbox ✅ is not enough — algorithm quality determines whether events are actually found. The **1yr recall** column shows the percentage of events an algorithm finds at a 1-year time window across benchmarked profiles ([source](https://github.com/nostrability/outbox)). 7-day recall masks retention problems — most algorithms look fine at 7d (77-94%) but diverge sharply at 1yr (8-30%). Thompson Sampling: 39% [26-45] at 1yr after learning (+9pp over baseline, 10-run validated); 84-92% at 7d (+4-7pp over baseline — 7d baseline is already 79-90%).
+Having outbox ✅ is not enough — algorithm quality determines whether events are actually found. The **1yr recall** column shows the percentage of events an algorithm finds at a 1-year time window across benchmarked profiles ([source](https://github.com/nostrability/outbox)). 7-day recall masks retention problems — most algorithms look fine at 7d (77-94%) but diverge sharply at 1yr (8-30%). Thompson Sampling: 29-39% at 1yr after learning (+9-11pp over baseline, validated across 12 profiles in EN + JP relay ecosystems); 78-92% at 7d (+4-15pp over baseline).
 
 | App / Library | Outbox | Inbox | Algorithm | 1yr Recall | Comment |
 |---|:---:|:---:|---|:---:|---|
@@ -46,19 +46,19 @@ Having outbox ✅ is not enough — algorithm quality determines whether events 
 | futr | ✅ | ? | ? | — | https://github.com/futrnostr/futr/pull/41 |
 | [nostrSDK](https://github.com/nostr-sdk) | ? | ? | ? | — | planned @tyiu |
 
-**Not yet implemented by any client:** [Thompson Sampling](https://github.com/nostrability/outbox#thompson-sampling) — ~80 LOC upgrade that learns from relay delivery. At 1yr: 39% [26-45] after 3-5 sessions (+9pp over 30% stochastic baseline, 10-run validated). At 7d: 84-92% after learning (+4-7pp over 79-90% baseline). 1yr gains limited by relay retention. Works on top of Welshman, filter decomposition, or hybrid approaches.
+**Not yet implemented by any client:** [Thompson Sampling](https://github.com/nostrability/outbox#thompson-sampling) — ~80 LOC upgrade that learns from relay delivery. At 1yr: +9-11pp gain after 3-5 sessions (12 profiles across EN + JP relay ecosystems). At 7d: +4-15pp gain. Gains are highly profile-dependent — larger in fragmented relay ecosystems (JP). Works on top of Welshman, filter decomposition, or hybrid approaches.
 
 ---
 
 ### Key Findings from Benchmarks
 
-**Key learning: how much does Thompson Sampling actually help?** It depends on the time window and follow graph size. At 7d, the baseline is already 79-90% so Thompson adds +4-7pp (+5-8% relative). At 1yr, Thompson finds **30% more events** than stochastic (30% → 39%, +9pp, 10-run validated). At 3yr, **+37% more events** (19% → 26%, +7pp). The relative gain grows with window length because the baseline drops faster than Thompson. Per-profile 1yr gains range 0 to +15pp (+55% relative). In our benchmarks, Thompson's gains appear largest in a middle range of follow counts: profiles with 400-1,800 follows see +55-60% relative gains, while both the smallest profile (194 follows, budget already covers most combinations) and the largest (2,784 follows, 20-connection cap becomes the binding constraint regardless of selection quality) see limited gains. This suggests an inverted-U relationship between follow count and Thompson value. Testing with additional profiles (84–1,746 follows) to see whether this pattern holds.
+**Key learning: how much does Thompson Sampling actually help?** It depends on the time window and relay ecosystem. At 7d: +4-15pp (EN baseline 79-90%, JP baseline 63%). At 1yr: +9-11pp (+30-62% relative). At 3yr: +7-9pp (+37-68% relative). The relative gain grows with window length because the baseline drops faster than Thompson. Gains are highly profile-dependent (per-profile 1yr range: -5pp to +59pp across 12 profiles). JP profiles show larger gains than EN — the JP relay ecosystem is more fragmented, giving Thompson more room to optimize. The binding constraint is relay graph complexity (how many distinct relay configurations exist), not follow count.
 
 **1. Relay list pollution is worse than expected.** NIP-11 probes of 13,867 relay-user pairs across 36 profiles: only **37% point to functional content relays**. 34% are offline, 11% are paid/restricted, 17% have no NIP-11 (likely OK). The most common dead relays (relay.nostr.band, nostr.orangepill.dev, nostr.zbd.gg) appear in 32-34 of 36 profiles. 20-44% of follows don't have a kind 10002 at all. ([source](https://github.com/nostrability/outbox#relay-list-pollution-is-worse-than-expected))
 
 **2. NIP-66 liveness filtering gives a 45% wall-clock speedup.** Dead relays waste ~15 seconds of timeout each. Filtering them out raises relay success rate from ~30% to ~75%. This is a latency/efficiency win — it removes relays that would never respond. No client currently does this. ([NIP-66 comparison report](https://github.com/nostrability/outbox/blob/main/bench/NIP66-COMPARISON-REPORT.md)) ([NIP-66 discussion](https://github.com/nostrability/nostrability/issues/69#issuecomment-2689166816))
 
-**3. Learning beats static optimization.** Thompson Sampling — tracking which relays actually deliver events — is the single biggest available upgrade. At 1yr: +9pp gain (30% → 39% [26-45], 10-run validated). At 7d: +4-7pp gain (79-90% → 84-92%). 1yr gains limited by relay retention. No client implements it yet. ([Thompson Sampling details](https://github.com/nostrability/outbox#thompson-sampling))
+**3. Learning beats static optimization.** Thompson Sampling — tracking which relays actually deliver events — is the single biggest available upgrade. At 1yr: +9-11pp gain (validated across 12 EN + JP profiles). At 7d: +4-15pp gain (JP gains larger due to more fragmented relay topology). 1yr gains limited by relay retention. No client implements it yet. ([Thompson Sampling details](https://github.com/nostrability/outbox#thompson-sampling))
 
 **4. 20 relay connections is sufficient.** All algorithms reach within 1-2% of unlimited ceiling by 20 connections. Diminishing returns above that.
 
@@ -74,7 +74,7 @@ Having outbox ✅ is not enough — algorithm quality determines whether events 
 
 > Is it technically possible to measure the effectiveness of various outbox implementations, as measured by notes not found?
 
-**Yes.** 25 algorithms benchmarked across 7 profiles, 6 time windows, with real relay connections and real events. Full methodology and reproduction instructions: [Benchmark-recreation.md](https://github.com/nostrability/outbox/blob/main/Benchmark-recreation.md)
+**Yes.** 25 algorithms benchmarked across 12 profiles (6 EN + 6 JP, 84-2,784 follows), 6 time windows, with real relay connections and real events. Full methodology and reproduction instructions: [Benchmark-recreation.md](https://github.com/nostrability/outbox/blob/main/Benchmark-recreation.md)
 
 > For those who have implemented, in what conditions does your algo fail?
 

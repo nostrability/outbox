@@ -103,21 +103,15 @@ Thompson Sampling is a ~80 LOC upgrade that tracks relay delivery and feeds it b
 
 | Window | Baseline (stochastic) | Thompson (after 5 sessions) | Absolute | Relative | What limits it |
 |:---:|:---:|:---:|:---:|:---:|---|
-| **7d** | 79-90% | 84-92% | +4-7pp | +5-8% | Already high — most relays have recent events |
-| **1yr** | 30% | 39% ± 2.7 SE | +9pp | **+30%** | Relay retention: relays prune events >6-12mo |
-| **3yr** | 19% | 26% | +7pp | **+37%** | Severe retention: most relays have nothing >2yr |
+| **7d** | 63-90% | 78-92% | +4-15pp | +5-19% | Baseline already high for EN; lower for JP relays |
+| **1yr** | 18-30% | 29-39% | +9-11pp | **+30-62%** | Relay retention: relays prune events >6-12mo |
+| **3yr** | 13-19% | 21-26% | +7-9pp | **+37-68%** | Severe retention: most relays have nothing >2yr |
 
-*Per-profile 7d gains (HJO, 6 profiles, S1→S5): fiatjaf -1pp, Gato +2pp, hodlbod +4pp, jb55 +7pp, ODELL +7pp, Telluride +7pp. Per-profile 1yr gains (10-run validated): fiatjaf +0pp, Gato +3pp, hodlbod +15pp, jb55 +15pp, ODELL +15pp, Telluride +4pp. 3yr paired deltas: WT +7.2pp (SE 1.1), FD +8.6pp (SE 1.0), NDK +8.8pp (SE 1.7) — all statistically significant.*
+*EN data: 6 profiles, 10-run variance study (7d from HJO). JP data: 6 profiles, 5 sessions, `--no-phase2-cache`. JP profiles show larger absolute gains (+15pp 7d, +11pp 1yr) but wider variance (per-profile range: -5pp to +59pp at 1yr) due to concentrated JP relay topology. EN per-profile 1yr gains (10-run validated): fiatjaf +0pp, Gato +3pp, hodlbod +15pp, jb55 +15pp, ODELL +15pp, Telluride +4pp. JP per-profile 7d gains: tanakei +34pp, yutaro +9pp, darashi +3pp, rokuyo +12pp, kojira +20pp, shion +12pp.*
 
 **The honest picture:** In absolute terms, +9pp at 1yr sounds modest. In relative terms, Thompson finds **30% more events** than stochastic at 1yr and **37% more at 3yr** — the gain grows with window length because the baseline drops faster than Thompson does. At 7d the baseline is already strong so relative gains are small (+5-8%).
 
-**Thompson's value appears largest in a middle range of follow counts.** The per-profile spread at 1yr is wide (0 to +15pp / 0 to +60% relative), and the pattern across our 6 benchmarked profiles suggests two different ceilings that limit Thompson at opposite ends:
-
-- **Small follow graphs** (fiatjaf, 194 follows → ~140 unique relays): a 20-connection budget already samples a large fraction of the relay space each session, leaving Thompson little to learn (~0% gain, ±8.0 std — noisy and inconsistent).
-- **Mid-range follow graphs** (hodlbod 442, jb55 943, ODELL 1,779): the relay graph is diverse enough that random selection consistently misses good relays, but 20 connections is still enough to make meaningful coverage improvements when Thompson steers selection (+55-60% relative gain).
-- **Very large follow graphs** (Telluride, 2,784 follows → 500+ unique relays): even with perfect learning, 20 connections can only cover a fraction of the relay space. The connection cap itself becomes the binding constraint — Thompson reliably learns the best 20 relays (±0.9 std — very consistent) but the best 20 simply aren't enough (+11% gain).
-
-This is based on 6 EN profiles — whether this inverted-U pattern holds for other profiles and relay ecosystems is an open question we're testing with [additional profiles](#in-progress-jp-profile-expansion) (84–1,746 follows, JP relay graph).
+**Thompson gains are highly profile-dependent.** The per-profile spread is wide: at 1yr, EN profiles range from +0pp (fiatjaf) to +15pp (hodlbod/jb55/ODELL), while JP profiles range from -5pp (darashi) to +59pp (tanakei). The original EN-only data suggested an inverted-U pattern (small graphs = budget saturation, large graphs = connection cap). JP data (6 profiles, 84-1,746 follows) breaks this: tanakei (84 follows) shows the *largest* gains across all 12 profiles (+34pp at 7d, +59pp at 1yr). The JP relay ecosystem is more fragmented than EN — fewer dominant relays, more niche relays — so even small follow graphs have enough relay diversity for Thompson to exploit. The binding constraint appears to be **relay graph complexity** (how many distinct relay configurations exist among follows), not follow count per se. This is profile-specific and community-specific, not predictable from follow count alone.
 
 ### 1. Learning beats static optimization
 
@@ -137,7 +131,21 @@ The relay that's "best on paper" isn't always the one that delivers events. Gree
 | Telluride (2,784) | 38.4% | 42.0 +/- 0.9 | **+4pp** |
 | **6-profile mean** | **30.4%** | **39.0 +/- 2.7 SE** | **+9pp** |
 
-*1yr data from 10 independent runs (6 profiles x 5 sessions each, NIP-66 liveness, `--no-phase2-cache`). Thompson column shows mean +/- standard deviation across 10 runs; 6-profile mean shows +/- standard error. Per-profile variance ranges from 0.9pp (Telluride) to 8.0pp (fiatjaf), confirming Thompson gains are robust for most profiles but noisy for small follow graphs. At 7d, gains are larger: 84-92% after learning (HJO benchmark). The 1yr gap is limited by relay retention — relays prune old events, so learning which relay to ask can't recover events that no longer exist.*
+*EN 1yr data from 10 independent runs (6 profiles x 5 sessions each, NIP-66 liveness, `--no-phase2-cache`). Thompson column shows mean +/- standard deviation across 10 runs; 6-profile mean shows +/- standard error. Per-profile variance ranges from 0.9pp (Telluride) to 8.0pp (fiatjaf). At 7d, gains are larger: 84-92% after learning (HJO benchmark). The 1yr gap is limited by relay retention — relays prune old events, so learning which relay to ask can't recover events that no longer exist.*
+
+**JP community profiles** (6 profiles, 5 sessions, `--no-phase2-cache`, no NIP-66):
+
+| Profile (follows) | Greedy S1 | Welshman S1 | Thompson S5 | 7d Gain | 1yr Gain | 3yr Gain |
+|---|---|---|---|---|---|---|
+| tanakei (84) | 46.8% / 12.4% / 7.4% | 57.2% / 22.9% / 14.3% | 90.8% / 81.9% / 53.7% | **+34pp** | **+59pp** | **+39pp** |
+| yutaro (240) | 71.9% / 13.8% / 8.0% | 74.9% / 18.2% / 7.9% | 83.6% / 22.4% / 11.5% | +9pp | +4pp | +4pp |
+| darashi (353) | 50.5% / 14.3% / 7.5% | 59.8% / 17.7% / 7.6% | 62.3% / 12.8% / 11.9% | +3pp | -5pp | +4pp |
+| rokuyo (898) | 45.8% / 9.8% / 10.4% | 60.7% / 13.7% / 13.8% | 72.3% / 13.5% / 13.8% | +12pp | 0pp | 0pp |
+| kojira (1,017) | 59.8% / 12.3% / 12.9% | 57.6% / 15.6% / 17.1% | 78.0% / 22.1% / 15.6% | **+20pp** | +7pp | -2pp |
+| shion (1,746) | 68.6% / 16.1% / 14.1% | 68.6% / 18.1% / 16.1% | 81.0% / 19.7% / 22.1% | +12pp | +2pp | +6pp |
+| **6-profile mean** | 57.2% / 13.1% / 10.0% | 63.1% / 17.7% / 12.8% | **78.0% / 28.7% / 21.4%** | **+15pp** | **+11pp** | **+9pp** |
+
+*Each cell shows 7d / 1yr / 3yr. Gain = Thompson S5 minus Welshman S1. JP profiles show larger Thompson gains than EN at 7d (+15pp vs +4pp) likely because the JP relay ecosystem is more fragmented — baseline stochastic selection is weaker, giving Thompson more room to improve. The darashi 1yr regression (-5pp) and rokuyo 1yr flat result (0pp) indicate Thompson doesn't help every profile — relay churn between sessions can negate learning. tanakei's extraordinary gains (+34/+59/+39pp) reflect a concentrated relay topology where Thompson quickly identifies the few high-value relays.*
 
 **NDK-specific Thompson Sampling results** (NDK's priority-based algorithm + Thompson, 5 learning sessions, 1yr, NIP-66 liveness, cap@20, `--no-phase2-cache`, 10 independent runs):
 

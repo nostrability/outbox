@@ -758,13 +758,13 @@ Key observations:
 
 | Window | Stochastic baseline | Thompson (5 sessions) | Absolute | Relative | What limits further gains |
 |:---:|:---:|:---:|:---:|:---:|---|
-| **7d** | 79-90% | 84-92% | +4-7pp | +5-8% | Baseline already high — most relays retain recent events |
-| **1yr** | 30% | 39% ± 2.7 SE | +9pp | **+30%** | Relay retention: events pruned after 6-12 months |
-| **3yr** | 19% | 26% | +7pp | **+37%** | Severe retention: most relays empty beyond 2 years |
+| **7d** | 63-90% | 78-92% | +4-15pp | +5-19% | EN baseline already high; JP lower due to fragmented relays |
+| **1yr** | 18-30% | 29-39% | +9-11pp | **+30-62%** | Relay retention: events pruned after 6-12 months |
+| **3yr** | 13-19% | 21-26% | +7-9pp | **+37-68%** | Severe retention: most relays empty beyond 2 years |
 
-*Relative gain = (Thompson - baseline) / baseline. The relative improvement grows with window length because the baseline drops faster than Thompson. 7d from HJO benchmark (6 profiles × 5 sessions). 1yr from 10-run variance study (6 profiles × 10 independent 5-session sequences, `--no-phase2-cache`). 3yr from paired deltas (WT +7.2pp SE 1.1, FD +8.6pp SE 1.0, NDK +8.8pp SE 1.7 — all delta/SE > 4).*
+*EN data: 6 profiles, 10-run variance study (7d from HJO). JP data: 6 profiles, 5 sessions, `--no-phase2-cache`. JP profiles show larger absolute gains (+15pp 7d, +11pp 1yr) but wider per-profile variance (-5pp to +59pp at 1yr) due to more fragmented relay topology.*
 
-*Thompson's gains appear largest in a middle range of follow counts, suggesting an inverted-U shaped relationship. Small graphs (~200 follows, fiatjaf): 20-connection budget already covers most relay combinations (~0% gain, high variance ±8.0). Mid-range graphs (400-1,800 follows: hodlbod, jb55, ODELL): relay graph is diverse enough that random misses good relays, but 20 connections still provides meaningful coverage improvements (+55-60% relative). Very large graphs (~2,800 follows, Telluride): 20 connections can't cover enough of the 500+ unique relays regardless of selection quality — the connection cap is the binding constraint (+11% gain, but very consistent ±0.9). Whether this inverted-U holds more broadly is being tested with 6 additional JP profiles (84–1,746 follows).*
+*Thompson gains are highly profile-dependent — driven by relay graph complexity, not follow count. The original EN-only data suggested an inverted-U (small graphs = budget saturation, large graphs = connection cap). JP data breaks this: tanakei (84 follows) shows the largest gains across all 12 profiles (+34pp 7d, +59pp 1yr) because the JP relay ecosystem is fragmented enough that even small follow graphs have meaningful relay diversity for Thompson to exploit.*
 
 *Methodology note: The phase2 baseline cache had a serialization bug (fixed in schema v2) that inflated multi-session results. All Thompson numbers below are from genuine `--no-phase2-cache` methodology or single-session (S1) data. See README for the 10-run variance study.*
 

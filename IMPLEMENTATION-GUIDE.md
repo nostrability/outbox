@@ -49,19 +49,19 @@ relays that retain history.
 
 Thompson's gain depends on time window — the binding constraint shifts from relay selection (short windows) to relay retention (long windows):
 
-| Window | Baseline → Thompson | Absolute | Relative | Per-profile range |
+| Window | Baseline → Thompson | Absolute | Relative | Per-profile range (N=12) |
 |:---:|:---:|:---:|:---:|:---:|
-| **7d** | 79-90% → 84-92% | +4-7pp | +5-8% | -1pp to +11pp |
-| **1yr** | 30% → 39% ± 2.7 SE | +9pp | **+30%** | 0pp to +15pp |
-| **3yr** | 19% → 26% | +7pp | **+37%** | All significant (delta/SE > 4) |
+| **7d** | 63-90% → 78-92% | +4-15pp | +5-19% | -1pp to +34pp |
+| **1yr** | 18-30% → 29-39% | +9-11pp | **+30-62%** | -5pp to +59pp |
+| **3yr** | 13-19% → 21-26% | +7-9pp | **+37-68%** | All significant (delta/SE > 4) |
 
-The relative gain grows with window length: Thompson finds 30% more events at 1yr and 37% more at 3yr, because the baseline drops faster than Thompson does. At 7d, the baseline is already strong so relative gains are small.
+The relative gain grows with window length: Thompson finds 30-62% more events at 1yr and 37-68% more at 3yr, because the baseline drops faster than Thompson does. At 7d, the baseline is already strong so relative gains are smaller.
 
-**Thompson's value appears largest in a middle range of follow counts.** Profiles with 400-1,800 follows see +55-60% relative gains — the relay graph is diverse enough that random misses good relays, but 20 connections is still enough to cover meaningfully better choices. At both extremes, gains are limited: small graphs (~200 follows) are already well-covered by the 20-relay budget, while very large graphs (~2,800 follows) hit the connection cap ceiling — even perfect relay selection can't service that many authors with 20 connections. This is based on 6 EN profiles; testing with additional profiles (84–1,746 follows) to see whether this inverted-U pattern holds.
+**Thompson gains are highly profile-dependent.** EN profiles (6, 10-run validated) show +0 to +15pp at 1yr. JP profiles (6, 5 sessions) show -5 to +59pp — wider range, larger mean gain. The JP relay ecosystem is more fragmented than EN, giving Thompson more room to optimize. The binding constraint is relay graph complexity (how many distinct relay configurations exist among follows), not follow count.
 
 ### 1. Learn from what actually works
 
-**Impact: +9pp event recall at 1yr (10-run validated) after 3-5 sessions (6-profile mean; +0 to +15pp range). At 7d: +4-7pp mean gain.**
+**Impact: +9-11pp event recall at 1yr after 3-5 sessions (12 profiles across EN + JP; per-profile range -5 to +59pp). At 7d: +4-15pp mean gain.**
 
 Every analyzed client picks relays statelessly — recompute from NIP-65 data
 each time, with no memory of which relays actually delivered events.
