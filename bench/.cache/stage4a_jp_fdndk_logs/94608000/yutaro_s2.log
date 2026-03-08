@@ -1,0 +1,172 @@
+[0m[32mTask[0m [0m[36mbench[0m deno run --allow-net --allow-read --allow-write main.ts "75f457569d7027f819de92e8bb13795c0febe9750dc3fb1b5c42aeb502d0841d" "--algorithms" "rust-nostr,fd-thompson,ndk,ndk-thompson" "--verify" "--verify-window" "94608000" "--verify-concurrency" "10" "--no-phase2-cache" "--fast" "--output" "both"
+Target: 75f457569d7027f8...
+Seed: 0 | Filter: strict | Runs: 3
+Using cached data (fetched 2026-03-08T08:55:38.275Z)
+
+=== Fetch Quality ===
+Indexers: wss://purplepag.es (0 events, 1094ms), wss://relay.damus.io (143 events, 411ms), wss://nos.lol (192 events, 807ms)
+Follows: 240 | With relay list: 188 (78.3%) | Missing: 52 (21.7%) | Filtered-to-empty: 3
+Filter profile: strict | Filtered URLs: 77 (3 localhost, 11 insecure ws, 1 IP-only, 61 known-bad, 1 malformed)
+Unique valid write relays: 339 | Seed: 0
+[relay-scores] Loaded 20 relay priors (session 1, from 2026-03-08T09:12:40.868Z)
+
+Thompson Sampling [fd-thompson]: loaded 20 relay priors (session 1)
+[relay-scores] Loaded 20 relay priors (session 1, from 2026-03-08T09:12:40.891Z)
+
+Thompson Sampling [ndk-thompson]: loaded 20 relay priors (session 1)
+
+=== Regime A: Fixed 20 Connections ===
+  Algorithm                      |  Relays |   Assign% |  Orphans |  Alg.Orph |  Avg/pk |   Gini |    HHI
+  -------------------------------+---------+-----------+----------+-----------+---------+--------+-------
+  Filter Decomposition (cap@20)  |      20 |     74.6% |       61 |         9 |     2.2 |   0.49 |  0.129
+  FD+Thompson (cap@20)           |      20 |     65.4% (0.0sd) |       83 |        31 |     1.8 |   0.40 |  0.086
+  Priority-Based (NDK)           |      20 |     77.9% |       53 |         1 |     2.0 |   0.81 |  0.329
+  NDK+Thompson (Priority)        |      20 |     77.2% (0.0sd) | 54.666666666666664 | 2.6666666666666665 |     1.9 |   0.61 |  0.144
+
+=== Phase 2: Event Verification ===
+Window: 94608000s | Kinds: 1 | Concurrency: 10
+[baseline] Querying 339 relays for 188 authors (window: 94608000s)
+[pool] CLOSED from wss://bostr.erechorse.com: auth-required: authentication is required to perform this action.
+[pool] CLOSED from wss://creatr.nostr.wine: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://inbox.nostr.wine: blocked: this relay does not store any of the kinds in this request
+[baseline] Progress: 50/339 relays queried
+[pool] CLOSED from wss://filter.nostr.wine/npub1tayk4al06es6wmwlvpy7kqgup54rdk54w0l7l789mq88xzfv0nzsl3q845: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub1hycynfhz23ardfmf9kgwfw4gpyqj2fsh24r2zuehg4x7lx4kn5cqsqv4y3: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub1csamkk8zu67zl9z4wkp90a462v53q775aqn5q6xzjdkxnkvcpd7srtz4x9: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://aggr.nostr.land: auth-required: auth required for aggregator
+[baseline] Progress: 100/339 relays queried
+[pool] CLOSED from wss://filter.nostr.wine/npub12y8qp9hyuc3wnu580tm70tuhntp0mag8q2uu6aczzevrgng6dqkq5zt26q: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub1jw4e8qh6vmyq0n2tkupv7wlfu5h59luk98dcfedf03anh5ek5jkq936u57: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://relay.getalby.com/v1: blocked: Request rejected
+[pool] CLOSED from wss://filter.nostr.wine/npub12ftld459xqw7s7fqnxstzu7r74l5yagxztwcwmaqj4d24jgpj2csee3mx0: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub1k0jrarx8um0lyw3nmysn50539ky4k8p7gfgzgrsvn8d7lccx3d0s38dczd: auth-required: please authenticate before sending REQs
+[baseline] Progress: 150/339 relays queried
+[pool] CLOSED from wss://sendit.nosflare.com: restricted: this relay does not accept REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub1l66wvfm7dxhd6wmvpukpjpyhvwtlxzu0qqajqxjfpr4rlfa8hl5qlkfr3q: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://nostr.dbtc.link: auth-required: NIP-42 auth required
+[pool] CLOSED from wss://greensoul.space: auth-required: only authenticated users can read from this relay
+[pool] CLOSED from wss://filter.nostr.wine/npub1xv6axulxcx6mce5mfvfzpsy89r4gee3zuknulm45cqqpmyw7680q5pxea6: auth-required: please authenticate before sending REQs
+[baseline] Progress: 200/339 relays queried
+[pool] CLOSED from wss://auth.nostr1.com: auth-required: you must auth
+[pool] CLOSED from wss://pantry.zap.cooking: auth-required: please authenticate
+[pool] CLOSED from wss://filter.nostr.wine/npub1t5wc8h37uhkau9tsw82sjxndq04d3n8p634utpdfvs4tm5xmt2sqgk6dke: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub10awzknjg5r5lajnr53438ndcyjylgqsrnrtq5grs495v42qc6awsj45ys7: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub1jz005en8k2rz0ug8wexw8s5gjhzxll73sydhg9wu4vplfrzykktsheh5z8: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub1jt3643ngake9xx0d68v8et00pvvf24la6ya3y0vz5xwk0lfpryys5vrezs: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://relay.nosflare.com: auth-required: authentication required to subscribe
+[baseline] Progress: 250/339 relays queried
+[pool] CLOSED from wss://hole.v0l.io: error: queries not allowed
+[pool] CLOSED from wss://filter.nostr.wine/npub1t0nyg64g5vwprva52wlcmt7fkdr07v5dr7s35raq9g0xgc0k4xcsedjgqv: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub1s5yq6wadwrxde4lhfs56gn64hwzuhnfa6r9mj476r5s4hkunzgzqrs6q7z: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub1upmh82f2vy9z3k3qwj8amx9lkkhkjjcv45y9yfyqzfj4jj5czz9qhsg8fq: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub1dld9hn3gsgtkh7atl26s8gd49qfjjkpdw8ztap9mk4n7vhq60y0satfd8s: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub1lelkh3hhxw9hdwlcpk6q9t0xt9f7yze0y0nxazvzqjmre3p98x3sthkvyz: auth-required: please authenticate before sending REQs
+[baseline] Progress: 300/339 relays queried
+[pool] CLOSED from wss://relay.shawnyeager.com/chat: auth-required: all requests must be authenticated
+[pool] CLOSED from wss://relay.shawnyeager.com/private: auth-required: all requests must be authenticated
+[baseline] Progress: 339/339 relays queried
+[phase2] Subscription timeouts (no EOSE): 9
+[phase2] CLOSED messages received: 32
+  wss://bostr.erechorse.com: auth-required: authentication is required to perform this action.
+  wss://creatr.nostr.wine: auth-required: please authenticate before sending REQs
+  wss://inbox.nostr.wine: blocked: this relay does not store any of the kinds in this request
+  wss://filter.nostr.wine/npub1tayk4al06es6wmwlvpy7kqgup54rdk54w0l7l789mq88xzfv0nzsl3q845: auth-required: please authenticate before sending REQs
+  wss://filter.nostr.wine/npub1hycynfhz23ardfmf9kgwfw4gpyqj2fsh24r2zuehg4x7lx4kn5cqsqv4y3: auth-required: please authenticate before sending REQs
+  wss://filter.nostr.wine/npub1csamkk8zu67zl9z4wkp90a462v53q775aqn5q6xzjdkxnkvcpd7srtz4x9: auth-required: please authenticate before sending REQs
+  wss://aggr.nostr.land: auth-required: auth required for aggregator
+  wss://filter.nostr.wine/npub12y8qp9hyuc3wnu580tm70tuhntp0mag8q2uu6aczzevrgng6dqkq5zt26q: auth-required: please authenticate before sending REQs
+  wss://filter.nostr.wine/npub1jw4e8qh6vmyq0n2tkupv7wlfu5h59luk98dcfedf03anh5ek5jkq936u57: auth-required: please authenticate before sending REQs
+  wss://relay.getalby.com/v1: blocked: Request rejected
+
+=== Phase 2: Event Verification (1095d window) ===
+Baseline: 339 relays queried (39.5% success), 1.2min
+  Timing: connect 694ms median (1.4s p95) | query 1.2s median (6.3s p95) | 9 timeouts (9 relays)
+  Authors: 188 with relay data
+    Testable (reliable): 128 | Testable (partial): 10 | Zero events: 41 | Unreliable: 9
+  Baseline events: 78,410 (mean 568.2/author, median 77)
+  Events per (relay,pubkey) capped at: 10000
+
+  Headline metrics (128 testable-reliable authors, 74,044 baseline events):
+
+  Algorithm                        |   Evt Recall |   Auth Recall |  Relay OK% |     TTFE |      p50 |      p80 | Timeouts
+  ---------------------------------+--------------+---------------+------------+----------+----------+----------+---------
+  Filter Decomposition (cap@20)    |        12.5% |         80.5% |      85.0% |    932ms |     2.3s |     3.3s |        0
+  FD+Thompson (seed=0, single run) |        10.3% |         69.5% |      75.0% |    932ms |     2.5s |     3.0s |        1
+  Priority-Based (NDK)             |         5.8% |         76.6% |      75.0% |    478ms |     2.3s |     2.8s |        0
+  NDK+Thompson (Priority) (seed=0, single run) |         7.3% |         80.5% |      75.0% |    570ms |     2.2s |     3.3s |        0
+
+  Per-author recall distribution:
+  Algorithm                        |   Median |  % at 0% |      p25 |      p75
+  ---------------------------------+----------+----------+----------+---------
+  Filter Decomposition (cap@20)    |    17.2% |    19.5% |     0.7% |    95.7%
+  FD+Thompson (seed=0, single run) |    18.8% |    30.5% |     0.0% |   100.0%
+  Priority-Based (NDK)             |     6.9% |    23.4% |     0.1% |    47.5%
+  NDK+Thompson (Priority) (seed=0, single run) |    11.8% |    19.5% |     0.9% |    80.0%
+
+  Latency simulation (parallel relay query):
+  Algorithm                        |     TTFE |      p50 |      p80 |      Max |   TO |   TO Tax |   Relays |   Events
+  ---------------------------------+----------+----------+----------+----------+------+----------+----------+---------
+  Filter Decomposition (cap@20)    |    932ms |     2.3s |     3.3s |     4.1s |    0 |      0ms | 16/17/20 |   17,398
+  FD+Thompson (seed=0, single run) |    932ms |     2.5s |     3.0s |    21.1s |    1 |    15.0s | 14/16/20 |   16,456
+  Priority-Based (NDK)             |    478ms |     2.3s |     2.8s |     3.6s |    0 |      0ms | 15/17/20 |   12,486
+  NDK+Thompson (Priority) (seed=0, single run) |    570ms |     2.2s |     3.3s |     3.6s |    0 |      0ms | 15/16/20 |   13,396
+  (Relays: with-events/connected/total | TO Tax: ceil(timeouts/concurrency) × EOSE timeout)
+
+  Progressive completeness (% of recall achieved by time):
+  Algorithm                        |      @1s |      @2s |      @5s |     @10s |     @15s
+  ---------------------------------+----------+----------+----------+----------+---------
+  Filter Decomposition (cap@20)    |     0.0% |    54.3% |   100.0% |   100.0% |   100.0%
+  FD+Thompson (seed=0, single run) |     0.0% |    62.2% |   100.0% |   100.0% |   100.0%
+  Priority-Based (NDK)             |     1.7% |    72.0% |   100.0% |   100.0% |   100.0%
+  NDK+Thompson (Priority) (seed=0, single run) |     7.5% |    59.6% |   100.0% |   100.0% |   100.0%
+
+  EOSE-race simulation (stop after first EOSE + grace period):
+  Algorithm                        |     +0ms |   +200ms |   +500ms |      +1s |      +2s
+  ---------------------------------+----------+----------+----------+----------+---------
+  Filter Decomposition (cap@20)    |     2.6% |     2.6% |     9.6% |    55.6% |    62.7%
+  FD+Thompson (seed=0, single run) |    12.6% |    12.6% |    62.2% |    78.6% |   100.0%
+  Priority-Based (NDK)             |     1.6% |     1.6% |     1.7% |     1.7% |    86.4%
+  NDK+Thompson (Priority) (seed=0, single run) |     7.4% |     7.5% |     7.5% |    34.4% |    69.2%
+  (First EOSE: Filter Decomposition (cap@20)=1.2s, FD+Thompson (seed=0, single run)=1.6s, Priority-Based (NDK)=557ms, NDK+Thompson (Priority) (seed=0, single run)=742ms)
+
+  Profile-view latency (per-author outbox query, top 3 write relays):
+    Authors simulated: 138 | Hit rate: 96.4%
+    TTFE: 1.2s median, 1.3s mean, 1.9s p95
+    Relays/profile: 2.9 queried, 2.2 with events, 0.04 timeouts
+
+  Feed vs profile-view TTFE comparison:
+  Algorithm                        |  Feed TTFE |  Profile TTFE |    Delta
+  ---------------------------------+------------+---------------+---------
+  Filter Decomposition (cap@20)    |      932ms |          1.2s |   +236ms
+  FD+Thompson (seed=0, single run) |      932ms |          1.2s |   +236ms
+  Priority-Based (NDK)             |      478ms |          1.2s |   +690ms
+  NDK+Thompson (Priority) (seed=0, single run) |      570ms |          1.2s |   +598ms
+
+  Including partial-baseline authors (138 testable authors, 78,410 baseline events):
+
+  Algorithm                        |   Evt Recall |   Auth Recall
+  ---------------------------------+--------------+--------------
+  Filter Decomposition (cap@20)    |        12.7% |         79.0%
+  FD+Thompson (seed=0, single run) |         9.8% |         66.7%
+  Priority-Based (NDK)             |         6.2% |         76.1%
+  NDK+Thompson (Priority) (seed=0, single run) |         8.0% |         80.4%
+[relay-scores] Updated scores for fd-thompson: 29 relays, session 2
+[relay-scores] Saved to .cache/relay_scores_75f457569d7027f8_94608000_fd-thompson.json
+
+Thompson Sampling [fd-thompson] learning state:
+  Session: 2
+  Relays with observations: 29
+  Mean prior α: 5.7, β: 11.8
+  Relays with strong preference (α>5): 11
+  Relays learned to avoid (β>5): 22
+[relay-scores] Updated scores for ndk-thompson: 28 relays, session 2
+[relay-scores] Saved to .cache/relay_scores_75f457569d7027f8_94608000_ndk-thompson.json
+
+Thompson Sampling [ndk-thompson] learning state:
+  Session: 2
+  Relays with observations: 28
+  Mean prior α: 5.1, β: 15.5
+  Relays with strong preference (α>5): 7
+  Relays learned to avoid (β>5): 16
+
+JSON results written to: results/75f457569d7027f8_1772961990794.json
