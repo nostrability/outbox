@@ -1,0 +1,105 @@
+[0m[32mTask[0m [0m[36mbench[0m deno run --allow-net --allow-read --allow-write main.ts "78b3c1ed0a53b072fcfb8cc2e2e09cad31c9bfec869d1c8745c343d55033eea9" "--algorithms" "welshman-thompson" "--verify" "--verify-window" "31536000" "--verify-concurrency" "10" "--max-connections" "15" "--nip66-filter" "liveness" "--no-phase2-cache" "--fast" "--output" "both"
+Target: 78b3c1ed0a53b072...
+Seed: 0 | Filter: strict | Runs: 3
+Using cached data (fetched 2026-03-08T12:41:44.075Z)
+
+=== Fetch Quality ===
+Indexers: wss://purplepag.es (0 events, 1006ms), wss://relay.damus.io (37 events, 372ms), wss://nos.lol (54 events, 610ms)
+Follows: 84 | With relay list: 54 (64.3%) | Missing: 30 (35.7%)
+Filter profile: strict | Filtered URLs: 10 (10 known-bad)
+Unique valid write relays: 108 | Seed: 0
+[nip66] Using cached monitor data (1163 relays)
+
+=== NIP-66 Liveness Filter (liveness) ===
+Monitor data: 1163 relays
+Candidate relays: 108
+  Known alive: 49
+  Unknown (removed): 59
+  .onion preserved: 1
+  Parse-failed preserved: 0
+  Authors filtered to empty: 1
+Relays after filter: 49
+[relay-scores] Loaded 33 relay priors (session 14, from 2026-03-08T13:07:53.473Z)
+
+Thompson Sampling [welshman-thompson]: loaded 33 relay priors (session 14)
+
+=== Regime A: Fixed 15 Connections ===
+  Algorithm                      |  Relays |   Assign% |  Orphans |  Alg.Orph |  Avg/pk |   Gini |    HHI
+  -------------------------------+---------+-----------+----------+-----------+---------+--------+-------
+  Welshman+Thompson (cap@15)     |      15 |     61.9% (0.0sd) |       32 |         2 |     2.6 |   0.50 |  0.125
+
+=== Phase 2: Event Verification ===
+Window: 31536000s | Kinds: 1 | Concurrency: 10
+[baseline] Querying 49 relays for 53 authors (window: 31536000s)
+[pool] CLOSED from wss://relay.getalby.com/v1: blocked: Request rejected
+[pool] CLOSED from wss://auth.nostr1.com: auth-required: you must auth
+[baseline] Progress: 49/49 relays queried
+[phase2] Subscription timeouts (no EOSE): 3
+[phase2] CLOSED messages received: 2
+  wss://relay.getalby.com/v1: blocked: Request rejected
+  wss://auth.nostr1.com: auth-required: you must auth
+
+=== Phase 2: Event Verification (365d window) ===
+Baseline: 49 relays queried (87.8% success), 20s
+  Timing: connect 674ms median (1.0s p95) | query 959ms median (1.8s p95) | 3 timeouts (3 relays)
+  Authors: 53 with relay data
+    Testable (reliable): 30 | Testable (partial): 0 | Zero events: 21 | Unreliable: 2
+  Baseline events: 4,538 (mean 151.3/author, median 45)
+  Events per (relay,pubkey) capped at: 10000
+
+  Headline metrics (30 testable-reliable authors, 4,538 baseline events):
+
+  Algorithm                        |   Evt Recall |   Auth Recall |  Relay OK% |     TTFE |      p50 |      p80 | Timeouts
+  ---------------------------------+--------------+---------------+------------+----------+----------+----------+---------
+  Welshman+Thompson (seed=0, single run) |        68.7% |         90.0% |      80.0% |    971ms |     1.9s |     2.4s |        1
+
+  Per-author recall distribution:
+  Algorithm                        |   Median |  % at 0% |      p25 |      p75
+  ---------------------------------+----------+----------+----------+---------
+  Welshman+Thompson (seed=0, single run) |   100.0% |    10.0% |    55.1% |   100.0%
+
+  Latency simulation (parallel relay query):
+  Algorithm                        |     TTFE |      p50 |      p80 |      Max |   TO |   TO Tax |   Relays |   Events
+  ---------------------------------+----------+----------+----------+----------+------+----------+----------+---------
+  Welshman+Thompson (seed=0, single run) |    971ms |     1.9s |     2.4s |    17.6s |    1 |    15.0s | 11/14/15 |    5,030
+  (Relays: with-events/connected/total | TO Tax: ceil(timeouts/concurrency) × EOSE timeout)
+
+  Progressive completeness (% of recall achieved by time):
+  Algorithm                        |      @1s |      @2s |      @5s |     @10s |     @15s
+  ---------------------------------+----------+----------+----------+----------+---------
+  Welshman+Thompson (seed=0, single run) |     0.0% |    66.7% |   100.0% |   100.0% |   100.0%
+
+  EOSE-race simulation (stop after first EOSE + grace period):
+  Algorithm                        |     +0ms |   +200ms |   +500ms |      +1s |      +2s
+  ---------------------------------+----------+----------+----------+----------+---------
+  Welshman+Thompson (seed=0, single run) |    16.0% |    48.4% |    48.4% |    76.6% |   100.0%
+  (First EOSE: Welshman+Thompson (seed=0, single run)=1.2s)
+
+  Profile-view latency (per-author outbox query, top 3 write relays):
+    Authors simulated: 30 | Hit rate: 100.0%
+    TTFE: 1.5s median, 1.4s mean, 1.8s p95
+    Relays/profile: 2.8 queried, 2.5 with events, 0.03 timeouts
+
+  Feed vs profile-view TTFE comparison:
+  Algorithm                        |  Feed TTFE |  Profile TTFE |    Delta
+  ---------------------------------+------------+---------------+---------
+  Welshman+Thompson (seed=0, single run) |      971ms |          1.5s |   +507ms
+
+=== NIP-66 RTT vs Measured Latency (45 relays, data age: 60min) ===
+                             N   Spearman r      MAE    Bias    Top5   Top10   Top20
+------------------------  ----  -----------  -------  ------  ------  ------  ------
+rttOpen vs connect          45        -0.01    653ms    0.6x    0.0%   10.0%   35.0%
+rttRead vs query            41         0.11     1.0s    4.0x    0.0%   20.0%   45.0%
+(Bias = measured/nip66, >1 = NIP-66 underestimates. TopK = overlap of K fastest relays.)
+Monitor: http-api..., 9bbbb845e5b6..., 9b85d54cc4bc..., 0b01aa38c2cc..., 63019a1fc7c4..., 9ba046db56b8...
+[relay-scores] Updated scores for welshman-thompson: 33 relays, session 15
+[relay-scores] Saved to .cache/relay_scores_78b3c1ed0a53b072_31536000_liveness_welshman-thompson.json
+
+Thompson Sampling [welshman-thompson] learning state:
+  Session: 15
+  Relays with observations: 33
+  Mean prior α: 10.0, β: 16.3
+  Relays with strong preference (α>5): 10
+  Relays learned to avoid (β>5): 10
+
+JSON results written to: results/78b3c1ed0a53b072_1772975640255.json
