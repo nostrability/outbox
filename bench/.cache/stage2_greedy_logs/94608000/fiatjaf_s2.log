@@ -1,0 +1,116 @@
+[0m[32mTask[0m [0m[36mbench[0m deno run --allow-net --allow-read --allow-write main.ts "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d" "--algorithms" "greedy,greedy-thompson" "--verify" "--verify-window" "94608000" "--verify-concurrency" "10" "--nip66-filter" "liveness" "--no-phase2-cache" "--fast" "--output" "both"
+Target: 3bf0c63fcb934634...
+Seed: 0 | Filter: strict | Runs: 3
+Using cached data (fetched 2026-03-08T05:00:31.478Z)
+
+=== Fetch Quality ===
+Indexers: wss://purplepag.es (197 events, 970ms), wss://relay.damus.io (123 events, 291ms), wss://nos.lol (154 events, 795ms)
+Follows: 196 | With relay list: 151 (77.0%) | Missing: 45 (23.0%) | Filtered-to-empty: 3
+Filter profile: strict | Filtered URLs: 34 (2 localhost, 3 insecure ws, 29 known-bad)
+Unique valid write relays: 235 | Seed: 0
+[nip66] Using cached monitor data (1068 relays)
+
+=== NIP-66 Liveness Filter (liveness) ===
+Monitor data: 1068 relays
+Candidate relays: 235
+  Known alive: 138
+  Unknown (removed): 97
+  .onion preserved: 1
+  Parse-failed preserved: 0
+  Authors filtered to empty: 1
+Relays after filter: 138
+
+=== Regime A: Fixed 20 Connections ===
+  Algorithm                      |  Relays |   Assign% |  Orphans |  Alg.Orph |  Avg/pk |   Gini |    HHI
+  -------------------------------+---------+-----------+----------+-----------+---------+--------+-------
+  Greedy Set-Cover               |      20 |     75.5% |       48 |         3 |     1.9 |   0.77 |  0.272
+  Greedy+Thompson                |      20 |     75.3% (0.0sd) | 48.333333333333336 | 3.3333333333333335 |     1.9 |   0.77 |  0.260
+
+=== Phase 2: Event Verification ===
+Window: 94608000s | Kinds: 1 | Concurrency: 10
+[baseline] Querying 138 relays for 150 authors (window: 94608000s)
+[pool] CLOSED from wss://creatr.nostr.wine: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://relay.nosflare.com: auth-required: authentication required to subscribe
+[pool] CLOSED from wss://greensoul.space: auth-required: only authenticated users can read from this relay
+[pool] CLOSED from wss://sendit.nosflare.com: restricted: this relay does not accept REQs
+[baseline] Progress: 50/138 relays queried
+[pool] CLOSED from wss://aggr.nostr.land: auth-required: auth required for aggregator
+[pool] CLOSED from wss://inbox.nostr.wine: blocked: this relay does not store any of the kinds in this request
+[pool] CLOSED from wss://relay.getalby.com/v1: blocked: Request rejected
+[pool] CLOSED from wss://hole.v0l.io: error: queries not allowed
+[baseline] Progress: 100/138 relays queried
+[pool] CLOSED from wss://relay.danieldaquino.me/private: auth-required: this query requires you to be authenticated
+[baseline] Progress: 138/138 relays queried
+[phase2] Subscription timeouts (no EOSE): 6
+[phase2] CLOSED messages received: 9
+  wss://creatr.nostr.wine: auth-required: please authenticate before sending REQs
+  wss://relay.nosflare.com: auth-required: authentication required to subscribe
+  wss://greensoul.space: auth-required: only authenticated users can read from this relay
+  wss://sendit.nosflare.com: restricted: this relay does not accept REQs
+  wss://aggr.nostr.land: auth-required: auth required for aggregator
+  wss://inbox.nostr.wine: blocked: this relay does not store any of the kinds in this request
+  wss://relay.getalby.com/v1: blocked: Request rejected
+  wss://hole.v0l.io: error: queries not allowed
+  wss://relay.danieldaquino.me/private: auth-required: this query requires you to be authenticated
+
+=== Phase 2: Event Verification (1095d window) ===
+Baseline: 138 relays queried (87.7% success), 36s
+  Timing: connect 800ms median (1.7s p95) | query 1.6s median (7.1s p95) | 6 timeouts (6 relays)
+  Authors: 150 with relay data
+    Testable (reliable): 121 | Testable (partial): 0 | Zero events: 29 | Unreliable: 0
+  Baseline events: 70,332 (mean 581.3/author, median 101)
+  Events per (relay,pubkey) capped at: 10000
+
+  Headline metrics (121 testable-reliable authors, 70,332 baseline events):
+
+  Algorithm                        |   Evt Recall |   Auth Recall |  Relay OK% |     TTFE |      p50 |      p80 | Timeouts
+  ---------------------------------+--------------+---------------+------------+----------+----------+----------+---------
+  Greedy Set-Cover                 |        19.3% |         74.4% |     100.0% |    660ms |     2.8s |     3.2s |        0
+  Greedy+Thompson (seed=0, single run) |        15.1% |         75.2% |      95.0% |    660ms |     2.3s |     2.9s |        0
+
+  Per-author recall distribution:
+  Algorithm                        |   Median |  % at 0% |      p25 |      p75
+  ---------------------------------+----------+----------+----------+---------
+  Greedy Set-Cover                 |     7.8% |    25.6% |     0.0% |    91.4%
+  Greedy+Thompson (seed=0, single run) |     7.0% |    24.8% |     0.0% |    85.7%
+
+  Latency simulation (parallel relay query):
+  Algorithm                        |     TTFE |      p50 |      p80 |      Max |   TO |   TO Tax |   Relays |   Events
+  ---------------------------------+----------+----------+----------+----------+------+----------+----------+---------
+  Greedy Set-Cover                 |    660ms |     2.8s |     3.2s |    10.5s |    0 |      0ms | 19/20/20 |   24,215
+  Greedy+Thompson (seed=0, single run) |    660ms |     2.3s |     2.9s |     4.5s |    0 |      0ms | 18/20/20 |   20,395
+  (Relays: with-events/connected/total | TO Tax: ceil(timeouts/concurrency) × EOSE timeout)
+
+  Progressive completeness (% of recall achieved by time):
+  Algorithm                        |      @1s |      @2s |      @5s |     @10s |     @15s
+  ---------------------------------+----------+----------+----------+----------+---------
+  Greedy Set-Cover                 |     0.7% |    22.9% |    78.4% |    99.0% |   100.0%
+  Greedy+Thompson (seed=0, single run) |     0.8% |    32.1% |   100.0% |   100.0% |   100.0%
+
+  EOSE-race simulation (stop after first EOSE + grace period):
+  Algorithm                        |     +0ms |   +200ms |   +500ms |      +1s |      +2s
+  ---------------------------------+----------+----------+----------+----------+---------
+  Greedy Set-Cover                 |     0.7% |     0.7% |     0.7% |    22.9% |    29.1%
+  Greedy+Thompson (seed=0, single run) |     0.8% |     0.8% |     5.5% |    27.4% |    38.3%
+  (First EOSE: Greedy Set-Cover=845ms, Greedy+Thompson (seed=0, single run)=845ms)
+
+  Profile-view latency (per-author outbox query, top 3 write relays):
+    Authors simulated: 121 | Hit rate: 100.0%
+    TTFE: 909ms median, 1.2s mean, 1.8s p95
+    Relays/profile: 2.8 queried, 2.7 with events, 0.02 timeouts
+
+  Feed vs profile-view TTFE comparison:
+  Algorithm                        |  Feed TTFE |  Profile TTFE |    Delta
+  ---------------------------------+------------+---------------+---------
+  Greedy Set-Cover                 |      660ms |         909ms |   +249ms
+  Greedy+Thompson (seed=0, single run) |      660ms |         909ms |   +249ms
+
+=== NIP-66 RTT vs Measured Latency (133 relays, data age: 45min) ===
+                             N   Spearman r      MAE    Bias    Top5   Top10   Top20
+------------------------  ----  -----------  -------  ------  ------  ------  ------
+rttOpen vs connect         133         0.07    923ms    0.7x    0.0%   10.0%   15.0%
+rttRead vs query           115        -0.05     1.7s   12.3x   20.0%   10.0%   10.0%
+(Bias = measured/nip66, >1 = NIP-66 underestimates. TopK = overlap of K fastest relays.)
+Monitor: 9bbbb845e5b6..., 0b01aa38c2cc..., 9b85d54cc4bc..., 63019a1fc7c4..., 9ba0ce3dcc28..., 9ba1d7892cd0..., http-api..., b2c949c0fb79...
+
+JSON results written to: results/3bf0c63fcb934634_1772947815487.json
