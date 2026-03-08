@@ -66,7 +66,7 @@ Having outbox ✅ is not enough — algorithm quality determines whether events 
 
 **6. >300 follows is a scaling cliff** for full outbox ([Amethyst finding](https://njump.me/nevent1qqsxypzqlu7d70ur2lum8t2wp9pyg4cvsetnzfzc3pv35vpyhyvyxpqnr0jl2)). Vitor suggests breaking down contact lists and distinguishing "contacts" (WoT) from "follows" (feed).
 
-**7. Hybrid outbox is a viable low-effort path.** ~80 LOC, no routing layer rewrite. Keep app relays for the main feed, add outbox queries only for profile views, event lookups, and thread traversal. Good for apps that can't change their feed path. 1yr recall under re-benchmarking. ([details](https://github.com/nostrability/outbox#two-ways-to-add-outbox))
+**7. Hybrid outbox is a viable low-effort path.** ~80 LOC, no routing layer rewrite. Keep app relays for the main feed, add outbox queries only for profile views, event lookups, and thread traversal. Good for apps that can't change their feed path. 1yr: Mew 10% → Outbox 23% (+12pp, 6 EN profiles × 5 sessions). ([details](https://github.com/nostrability/outbox#two-ways-to-add-outbox))
 
 ---
 

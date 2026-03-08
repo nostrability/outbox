@@ -36,6 +36,8 @@ import { dittoMew } from "./ditto-mew.ts";
 import { dittoOutbox } from "./ditto-outbox.ts";
 import { voyageMultiphase } from "./voyage-multiphase.ts";
 import { ndkThompson, ndkThompsonUnified } from "./ndk-thompson.ts";
+import { ndkThompsonNeutral, ndkThompsonNeutralUnified } from "./ndk-thompson-neutral.ts";
+import { greedyThompson } from "./greedy-thompson.ts";
 
 export interface AlgorithmEntry {
   id: string;
@@ -262,6 +264,30 @@ export const ALGORITHM_REGISTRY: AlgorithmEntry[] = [
     id: "ndk-thompson-unified",
     name: "NDK+Thompson (Unified)",
     fn: ndkThompsonUnified,
+    nativeCap: true,
+    stochastic: true,
+    defaults: { maxRelaysPerUser: 2 },
+  },
+  {
+    id: "greedy-thompson",
+    name: "Greedy+Thompson",
+    fn: greedyThompson,
+    nativeCap: true,
+    stochastic: true,
+    defaults: { maxConnections: 20, maxRelaysPerUser: 2 },
+  },
+  {
+    id: "ndk-thompson-neutral",
+    name: "NDK+Thompson Neutral (Priority)",
+    fn: ndkThompsonNeutral,
+    nativeCap: true,
+    stochastic: true,
+    defaults: { maxRelaysPerUser: 2 },
+  },
+  {
+    id: "ndk-thompson-neutral-unified",
+    name: "NDK+Thompson Neutral (Unified)",
+    fn: ndkThompsonNeutralUnified,
     nativeCap: true,
     stochastic: true,
     defaults: { maxRelaysPerUser: 2 },

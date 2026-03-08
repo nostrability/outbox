@@ -916,13 +916,118 @@ The algorithm models [Ditto-Mew](https://gitlab.com/soapbox-pub/ditto-mew)'s arc
 
 **Key findings:**
 
-1. **Hybrid outbox beats full outbox on cold start.** Hybrid (30.4% mean) outperforms Welshman+Thompson (23.2% mean) at session 1 because the 4 app relays provide a guaranteed floor. The gap between hybrid and full outbox after learning is unknown — multi-session hybrid re-benchmark is pending.
+1. **Hybrid outbox beats full outbox on cold start.** Hybrid (30.4% mean) outperforms Welshman+Thompson (23.2% mean) at session 1 because the 4 app relays provide a guaranteed floor.
 
 2. **The Ditto-Mew baseline (4 app relays, no outbox) averages 6.2% at 1yr.** This is comparable to Big Relays (5.1%) — 4 major relays capture roughly the same fraction of 1yr-old events as 2 major relays. The value of app relays is latency and reliability, not historical recall.
 
-3. **Hybrid outbox is a viable ship-first strategy.** For clients with hardcoded app relays, hybrid outbox + Thompson is ~80 LOC with no routing layer changes. Full outbox Welshman+Thompson = 39.0% ± 2.7 SE at 1yr (10-run validated). Hybrid-specific multi-session re-benchmark is pending.
+3. **Multi-session hybrid results (6 EN profiles × 5 sessions, no NIP-66 filter):**
+
+| Window | Ditto-Mew (app relays only) | Ditto+Outbox Thompson (S5 mean) | Gain |
+|:---:|:---:|:---:|:---:|
+| **1yr** | 10.4% [6–13] | 22.8% [14–30] | **+12.4pp (+119%)** |
+| **3yr** | 7.0% [4–11] | 15.4% [7–23] | **+8.4pp (+120%)** |
+
+Hybrid outbox roughly doubles event recall vs app-relay-only across both time windows. ODELL shows the largest 1yr gain (+19pp) due to many follows publishing on niche relays. Full outbox Welshman+Thompson still leads (39% at 1yr) because it has no app-relay floor diluting the relay budget.
 
 See [bench/src/algorithms/ditto-outbox.ts](bench/src/algorithms/ditto-outbox.ts) for the benchmark implementation and [bench/src/algorithms/ditto-mew.ts](bench/src/algorithms/ditto-mew.ts) for the baseline.
+
+### 8.5b Greedy+Thompson
+
+**Question:** Does Thompson Sampling help global-optimization algorithms (greedy set-cover) as much as per-author algorithms (Welshman, FD)?
+
+**Result: No — gains are modest (+2pp mean at 1yr, 5 EN profiles).** Greedy set-cover's deterministic coverage-maximization leaves little room for Thompson to improve. The greedy loop picks relays by uncovered-pubkey count; multiplying by a Beta sample occasionally reranks candidates but rarely changes which relay gets selected because coverage count dominates.
+
+**1yr EN (5 profiles × 5 sessions, NIP-66 liveness, cap@20):**
+
+| Profile (follows) | Greedy | Greedy+Thompson | Gain |
+|---|:---:|:---:|:---:|
+| fiatjaf (194) | 27.8% | 27.1% | -0.7pp |
+| hodlbod (442) | 16.6% | 18.2% | +1.5pp |
+| jb55 (943) | 20.1% | 21.8% | +1.7pp |
+| ODELL (1,779) | 18.8% | 21.9% | +3.1pp |
+| Gato (399) | 14.0% | 16.9% | +2.8pp |
+| **5-profile mean** | **19.5%** | **21.2%** | **+1.7pp** |
+
+At 3yr, Greedy+Thompson shows near-zero or negative gains (fiatjaf -4.4pp, mean +0.8pp across 5 profiles). The greedy algorithm's strength — deterministic optimal coverage — is also its weakness for Thompson: there isn't enough stochasticity for learning to exploit.
+
+**Recommendation:** For greedy set-cover users (Gossip, Applesauce), Thompson Sampling is not the right upgrade path. Consider switching to a stochastic algorithm (Welshman) first, then adding Thompson, or adding NDK+Thompson integration which preserves deterministic priorities while allowing Thompson to influence the exploration tier.
+
+### 8.5c NDK+Thompson 3yr
+
+**3yr NDK+Thompson (6 EN profiles × 5 sessions, NIP-66 liveness, cap@20):**
+
+| Profile (follows) | NDK baseline | NDK+Thompson | Gain |
+|---|:---:|:---:|:---:|
+| fiatjaf (194) | 17.9% | 9.0% ± 0.6 | -8.9pp |
+| hodlbod (442) | 9.8% | 14.3% ± 1.5 | +4.5pp |
+| jb55 (943) | 14.2% | 23.3% ± 1.6 | +9.1pp |
+| ODELL (1,779) | 93.1% | 96.7% ± 1.2 | +3.6pp |
+| Gato (399) | 10.6% | 16.4% ± 4.1 | +5.8pp |
+| Telluride (2,784) | 15.9% | 17.9% | +2.0pp (N=1) |
+
+ODELL's unusually high 3yr baseline (93%) is due to relay.damus.io retaining a large fraction of events — NDK's priority cascade concentrates on this relay. fiatjaf shows regression (-8.9pp) at 3yr, consistent with the 1yr pattern where Thompson exploration disrupts NDK's fortuitous concentration on relay.damus.io.
+
+### 8.5d FD/NDK+Thompson JP Expansion
+
+**Question:** Do FD+Thompson and NDK+Thompson help JP profiles as much as EN?
+
+**FD+Thompson JP (6 JP profiles × 5 sessions, no NIP-66, cap@20):**
+
+| Profile (follows) | FD baseline | FD+Thompson | FD+T Gain | NDK baseline | NDK+Thompson | NDK+T Gain |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| tanakei (84) | 53.1% | 39.1% | **-14.0pp** | 13.2% | 47.7% | **+34.5pp** |
+| yutaro (240) | 20.5% | 16.7% | -3.9pp | 11.1% | 17.9% | +6.8pp |
+| shion (1,746) | 26.0% | 25.6% | -0.4pp | 19.9% | 22.5% | +2.6pp |
+| rokuyo (898) | 24.9% | 25.2% | +0.3pp | 14.1% | 16.6% | +2.6pp |
+| darashi (353) | 16.7% | 11.7% | -5.0pp | 8.1% | 10.2% | +2.2pp |
+| kojira (1,017) | 26.7% | 21.2% | -5.5pp | 15.2% | 21.1% | +5.9pp |
+| **6-profile mean** | **28.0%** | **23.3%** | **-4.8pp** | **13.6%** | **22.7%** | **+9.1pp** |
+
+**Critical finding: FD+Thompson hurts JP profiles (-4.8pp mean) while NDK+Thompson helps them (+9.1pp mean).** The FD per-author structure selects top-N relays per followed pubkey — in the JP relay ecosystem, where relay configurations are highly fragmented, Thompson's stochastic ranking of per-author relay sets is less effective than NDK's global priority approach. tanakei is the most dramatic: FD+T loses 14pp while NDK+T gains 34.5pp.
+
+At 3yr, the same pattern holds: FD+T mean = -3.5pp, NDK+T mean = +6.4pp across JP profiles.
+
+**Recommendation for JP/non-EN ecosystems:** Use NDK+Thompson or Welshman+Thompson, not FD+Thompson. The per-author relay selection in FD is poorly suited to fragmented relay graphs where delivery history per-relay-per-author is too sparse for Thompson to learn from.
+
+### 8.5e JP NIP-66 Comparison
+
+**JP profiles with NIP-66 liveness filter (6 JP profiles × 5 sessions, cap@20):**
+
+| Profile (follows) | Greedy | Welshman | Welshman+Thompson | WT Gain |
+|---|:---:|:---:|:---:|:---:|
+| tanakei (84) | 21.0% | 62.1% | 68.6% | +6.5pp |
+| yutaro (240) | 12.9% | 21.6% | 22.7% | +1.2pp |
+| shion (1,746) | 27.4% | 35.3% | 37.4% | +2.1pp |
+| rokuyo (898) | 24.8% | 33.4% | 36.0% | +2.7pp |
+| darashi (353) | 14.3% | 24.3% | 27.7% | +3.4pp |
+| kojira (1,017) | 22.2% | 29.6% | 36.6% | +7.0pp |
+| **6-profile mean** | **20.4%** | **34.4%** | **38.2%** | **+3.8pp** |
+
+JP Welshman+Thompson gains (+3.8pp mean at 1yr) are more modest than EN (+9pp). At 3yr, gains are mixed: tanakei +14.5pp and yutaro +10.5pp, but shion/rokuyo/darashi show slight regressions. NIP-66 coverage for JP relays is lower (~47% vs ~60% for EN), which reduces the candidate relay pool and may limit Thompson's optimization space.
+
+### 8.5f Adaptive Connection Limits
+
+**Question:** At what relay budget does recall plateau for different follow graph sizes?
+
+**Welshman+Thompson at cap@10, cap@15, cap@30 (tanakei=84, Gato=399, Telluride=2,784 follows; 5 sessions each, 1yr, NIP-66 liveness):**
+
+| Profile (follows) | cap@10 | cap@15 | cap@20* | cap@30 | Δ(10→30) |
+|---|:---:|:---:|:---:|:---:|:---:|
+| tanakei (84) | 67.6% | 69.5% | ~69%* | 75.2% | +7.6pp |
+| Gato (399) | 21.0% | 25.4% | ~26%* | 32.1% | +11.1pp |
+| Telluride (2,784) | 24.0% | 36.8% | ~42%* | 45.8% | +21.8pp |
+
+*cap@20 values approximate from prior benchmarks (different sessions).
+
+**Key findings:**
+
+1. **Small graphs plateau early.** tanakei (84 follows) gets 90% of its cap@30 recall at just cap@10. The relay graph is simple enough that 10 relays cover most combinations.
+
+2. **Large graphs keep benefiting from more connections.** Telluride (2,784 follows) gains +21.8pp from cap@10→30 — each additional relay unlocks previously unreachable authors.
+
+3. **Medium graphs show diminishing returns.** Gato (399 follows) gains +11pp from cap@10→30, with most improvement between cap@10 and cap@15.
+
+**Recommendation for adaptive budgets:** Default to cap@20. Profiles with <200 follows could reduce to cap@10-15 without recall loss. Profiles with >1000 follows benefit from cap@25-30 if the client can maintain the connections.
 
 ### 8.6 Latency-Aware Thompson Sampling
 

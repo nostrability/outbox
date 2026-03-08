@@ -15,11 +15,12 @@ What's your starting point?
 │  │
 │  └─ Need to preserve feed latency or can't change routing?
 │     └─ Hybrid outbox — add outbox queries to profile/event/thread hooks
-│        ~80 LOC, no routing layer changes; 1yr recall under re-benchmarking
+│        ~80 LOC, no routing layer changes; 1yr: Mew 10% → Outbox 23% (+12pp)
 │        See README § Hybrid outbox for code
 │
 ├─ Basic outbox (real-time feeds)?
 │  ├─ Need connection minimization? → Greedy Set-Cover (16% [12–20] 1yr, 84% [77–94] 7d)
+│  │     With Thompson: Greedy+Thompson (+2pp at 1yr, modest; learning helps NDK/WT more)
 │  ├─ Need zero-config library?     → Priority-Based / NDK (16% [12–19] 1yr, 83% [77–92] 7d)
 │  └─ Simplicity over optimization? → Direct Mapping (30% [17–40] 1yr, unlimited connections)
 │
@@ -27,7 +28,7 @@ What's your starting point?
 │  ├─ Can persist state across sessions?
 │  │  ├─ Using Welshman/Coracle?  → Welshman+Thompson Sampling (+9pp at 1yr → 39% [26-45]; +4-15pp at 7d)
 │  │  ├─ Using rust-nostr?        → FD+Thompson (37% [25-44] 1yr; learns from delivery)
-│  │  └─ Using app relays?        → Hybrid+Thompson (1yr under re-benchmarking, no routing changes)
+│  │  └─ Using app relays?        → Hybrid+Thompson (1yr: +12pp over app-only, no routing changes)
 │  └─ Stateless?                  → Filter Decomposition (25% [19–32] 1yr) or
 │                                   Weighted Stochastic / Welshman (24% [12–38] 1yr)
 │
@@ -57,7 +58,9 @@ Thompson's gain depends on time window — the binding constraint shifts from re
 
 The relative gain grows with window length: Thompson finds 30-62% more events at 1yr and 37-68% more at 3yr, because the baseline drops faster than Thompson does. At 7d, the baseline is already strong so relative gains are smaller.
 
-**Thompson gains are highly profile-dependent.** EN profiles (6, 10-run validated) show +0 to +15pp at 1yr. JP profiles (6, 5 sessions) show -5 to +59pp — wider range, larger mean gain. The JP relay ecosystem is more fragmented than EN, giving Thompson more room to optimize. The binding constraint is relay graph complexity (how many distinct relay configurations exist among follows), not follow count.
+**Thompson gains are highly profile- and algorithm-dependent.** EN profiles (6, 10-run validated) show +0 to +15pp at 1yr for Welshman+Thompson. JP profiles (6, 5 sessions) show -5 to +59pp — wider range. The JP relay ecosystem is more fragmented than EN, giving Thompson more room to optimize for some algorithms. The binding constraint is relay graph complexity (how many distinct relay configurations exist among follows), not follow count.
+
+**Thompson does not help all base algorithms equally.** Greedy+Thompson shows only +2pp mean gain at 1yr (5 EN profiles) — the greedy algorithm's deterministic coverage-maximization leaves little room for Thompson to improve. FD+Thompson helps EN profiles (+8.7pp) but *hurts* JP profiles (-4.8pp mean) where the per-author structure interacts poorly with fragmented relay graphs. NDK+Thompson is the most consistently positive across both EN (+11pp 1yr) and JP (+9pp 1yr).
 
 ### 1. Learn from what actually works
 
@@ -138,9 +141,15 @@ See [README.md § FD+Thompson](README.md#fdthompson-for-rust-nostr) for code.
 **For app-relay clients (Ditto-Mew, or any client with hardcoded relay URLs):**
 Hybrid+Thompson keeps your app relays for the main feed and adds Thompson-scored
 outbox queries only for profile views, event lookups, and thread traversal.
-~80 LOC and no routing layer changes. Converges faster than full outbox because
-the app relay floor provides a strong initial signal. *Hybrid+Thompson 1yr recall
-is still under re-benchmarking — full outbox Welshman+Thompson = 39% [26-45] at 1yr (10-run mean).*
+~80 LOC and no routing layer changes. Multi-session benchmarks (6 EN profiles × 5 sessions, 1yr+3yr):
+
+| Window | Ditto-Mew (app relays only) | Ditto+Outbox Thompson | Gain |
+|:---:|:---:|:---:|:---:|
+| **1yr** | 10.4% [6–13] | 22.8% [14–30] | **+12.4pp (+119%)** |
+| **3yr** | 7.0% [4–11] | 15.4% [7–23] | **+8.4pp (+120%)** |
+
+Hybrid outbox doubles event recall relative to app-relay-only. ODELL shows the
+largest gain (+19pp at 1yr) due to many follows publishing on niche relays.
 See [README.md § Hybrid outbox](README.md#hybrid-outbox-for-app-relay-clients) for code
 and [OUTBOX-REPORT.md § 8.5](OUTBOX-REPORT.md#85-hybrid-outbox-app-relay-broadcast--per-author-thompson) for full benchmark data.
 
