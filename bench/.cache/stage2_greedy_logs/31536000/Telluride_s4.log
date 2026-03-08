@@ -1,5 +1,165 @@
-[0m[32mTask[0m [0m[36mbench[0m deno run --allow-net --allow-read --allow-write main.ts "2c65940725bbf10b452197fba41c6cb14afd41e28e0be22aab49bf246b0c84e3" "--algorithms" "greedy,greedy-thompson" "--verify" "--verify-window" "31536000" "--verify-concurrency" "10" "--nip66-filter" "liveness" "--no-phase2-cache" "--fast" "--output" "both"
+[0m[32mTask[0m [0m[36mbench[0m deno run --allow-net --allow-read --allow-write main.ts "2c65940725bbf10b452197fba41c6cb14afd41e28e0be22aab49bf246b0c84e3" "--algorithms" "greedy,greedy-thompson" "--verify" "--verify-window" "31536000" "--verify-concurrency" "10" "--no-phase2-cache" "--fast" "--output" "both" "--nip66-filter" "liveness"
 Target: 2c65940725bbf10b...
 Seed: 0 | Filter: strict | Runs: 3
-Using cached data (fetched 2026-03-08T04:12:56.371Z)
-0 follows found. Nothing to analyze.
+Using cached data (fetched 2026-03-08T20:30:46.099Z)
+
+=== Fetch Quality ===
+Indexers: wss://purplepag.es (2748 events, 997ms), wss://relay.damus.io (0 events, 529ms, errors: WebSocket error: NetworkError: failed to connect to WebSocket: Invalid status code 400 Bad Request), wss://nos.lol (2179 events, 681ms)
+Follows: 2747 | With relay list: 2139 (77.9%) | Missing: 608 (22.1%) | Filtered-to-empty: 44
+Filter profile: strict | Filtered URLs: 1088 (40 localhost, 156 insecure ws, 72 IP-only, 814 known-bad, 6 malformed)
+Unique valid write relays: 1618 | Seed: 0
+[nip66] Using cached monitor data (2294 relays)
+
+=== NIP-66 Liveness Filter (liveness) ===
+Monitor data: 2294 relays
+Candidate relays: 1618
+  Known alive: 927
+  Unknown (removed): 691
+  .onion preserved: 59
+  Parse-failed preserved: 0
+  Authors filtered to empty: 6
+Relays after filter: 927
+
+=== Regime A: Fixed 20 Connections ===
+  Algorithm                      |  Relays |   Assign% |  Orphans |  Alg.Orph |  Avg/pk |   Gini |    HHI
+  -------------------------------+---------+-----------+----------+-----------+---------+--------+-------
+  Greedy Set-Cover               |      20 |     76.7% |      641 |        33 |     1.9 |   0.79 |  0.277
+  Greedy+Thompson                |      20 |     76.6% (0.0sd) | 642.3333333333334 | 34.333333333333336 |     1.9 |   0.77 |  0.234
+
+=== Phase 2: Event Verification ===
+Window: 31536000s | Kinds: 1 | Concurrency: 10
+[baseline] Querying 927 relays for 2133 authors (window: 31536000s)
+[pool] CLOSED from wss://relay.getalby.com/v1: blocked: Request rejected
+[pool] CLOSED from wss://relay.getalby.com/v1: blocked: Request rejected
+[baseline] Progress: 50/927 relays queried
+[pool] CLOSED from wss://relay.nsec.app: blocked: we only keep kind 24133 or 24135
+[baseline] Progress: 100/927 relays queried
+[pool] CLOSED from wss://aggr.nostr.land: auth-required: auth required for aggregator
+[baseline] Progress: 150/927 relays queried
+[pool] CLOSED from wss://relay.nosflare.com: auth-required: authentication required to subscribe
+[pool] CLOSED from wss://podtards.com/chat: auth-required: all requests must be authenticated
+[pool] CLOSED from wss://podtards.com/private: auth-required: all requests must be authenticated
+[pool] CLOSED from wss://meta.bitcoinwalk.org: auth-required: authentication is required for access
+[baseline] Progress: 200/927 relays queried
+[pool] CLOSED from wss://pantry.zap.cooking: auth-required: please authenticate
+[pool] CLOSED from wss://groups.0xchat.com: blocked: invalid query, must have 'h', 'e' or 'a' tag
+[pool] CLOSED from wss://creatr.nostr.wine: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://greensoul.space: auth-required: only authenticated users can read from this relay
+[baseline] Progress: 250/927 relays queried
+[pool] CLOSED from wss://elites.nostrati.org: auth-required: you must auth
+[baseline] Progress: 300/927 relays queried
+[pool] CLOSED from wss://inbox.nostr.wine: blocked: this relay does not store any of the kinds in this request
+[pool] CLOSED from wss://nostr.dbtc.link: auth-required: NIP-42 auth required
+[pool] CLOSED from wss://auth.nostr1.com: auth-required: you must auth
+[baseline] Progress: 350/927 relays queried
+[pool] CLOSED from wss://impromptu.relays.land: auth-required: all requests must be authenticated
+[pool] CLOSED from wss://wot.azzamo.net: rate-limited: there is a bug in the client, no one should be making so many requests
+[baseline] Progress: 400/927 relays queried
+[pool] CLOSED from wss://relay.groups.nip29.com: blocked: invalid query, must have 'h', 'e' or 'a' tag
+[baseline] Progress: 450/927 relays queried
+[pool] CLOSED from wss://relay.usefusion.ai: restricted: only kind 4 (DM) queries are allowed
+[pool] CLOSED from wss://groups.fiatjaf.com: blocked: invalid query, must have 'h', 'e' or 'a' tag
+[baseline] Progress: 500/927 relays queried
+[baseline] Progress: 550/927 relays queried
+[pool] CLOSED from wss://aplaceinthesun.nostr1.com: auth-required: you must auth
+[baseline] Progress: 600/927 relays queried
+[pool] CLOSED from wss://relay.utxo.one/chat: blocked: you must be in the web of trust to chat with the relay owner
+[pool] CLOSED from wss://relay.utxo.one/private: auth-required: this query requires you to be authenticated
+[pool] CLOSED from wss://nortis.nostr1.com: auth-required: you must auth
+[baseline] Progress: 650/927 relays queried
+[pool] CLOSED from wss://meta.spaces.coracle.social: auth-required: authentication is required for access
+[pool] CLOSED from wss://soapbox.chat: auth-required: authentication is required for access
+[pool] CLOSED from wss://david.nostr1.com: auth-required: you must auth
+[baseline] Progress: 700/927 relays queried
+[pool] CLOSED from wss://relay29.notoshi.win: blocked: invalid query, must have 'h', 'e' or 'a' tag
+[pool] CLOSED from wss://jingle.nostrver.se: auth-required: take a selfie and send it to the CIA
+[baseline] Progress: 750/927 relays queried
+[pool] CLOSED from wss://bostr.erechorse.com: auth-required: authentication is required to perform this action.
+[baseline] Progress: 800/927 relays queried
+[baseline] Progress: 850/927 relays queried
+[pool] CLOSED from wss://nostr.rikmeijer.nl: max number of subscriptions per client (100) reached
+[pool] CLOSED from wss://internal.coracle.social: auth-required: authentication is required for access
+[pool] CLOSED from wss://relay.shawnyeager.com/chat: auth-required: all requests must be authenticated
+[baseline] Progress: 900/927 relays queried
+[baseline] Progress: 927/927 relays queried
+[phase2] Subscription timeouts (no EOSE): 44
+[phase2] CLOSED messages received: 34
+  wss://relay.getalby.com/v1: blocked: Request rejected
+  wss://relay.getalby.com/v1: blocked: Request rejected
+  wss://relay.nsec.app: blocked: we only keep kind 24133 or 24135
+  wss://aggr.nostr.land: auth-required: auth required for aggregator
+  wss://relay.nosflare.com: auth-required: authentication required to subscribe
+  wss://podtards.com/chat: auth-required: all requests must be authenticated
+  wss://podtards.com/private: auth-required: all requests must be authenticated
+  wss://meta.bitcoinwalk.org: auth-required: authentication is required for access
+  wss://pantry.zap.cooking: auth-required: please authenticate
+  wss://groups.0xchat.com: blocked: invalid query, must have 'h', 'e' or 'a' tag
+
+=== Phase 2: Event Verification (365d window) ===
+Baseline: 927 relays queried (42.8% success), 3.7min
+  Timing: connect 690ms median (1.2s p95) | query 1.2s median (15.7s p95) | 44 timeouts (45 relays)
+  Authors: 2,133 with relay data
+    Testable (reliable): 1243 | Testable (partial): 43 | Zero events: 751 | Unreliable: 96
+  Baseline events: 178,902 (mean 139.1/author, median 26)
+  Events per (relay,pubkey) capped at: 10000
+
+  Headline metrics (1243 testable-reliable authors, 176,049 baseline events):
+
+  Algorithm                        |   Evt Recall |   Auth Recall |  Relay OK% |     TTFE |      p50 |      p80 | Timeouts
+  ---------------------------------+--------------+---------------+------------+----------+----------+----------+---------
+  Greedy Set-Cover                 |        21.3% |         79.7% |      85.0% |    805ms |     7.6s |    10.4s |        0
+  Greedy+Thompson (seed=0, single run) |        24.1% |         79.9% |      85.0% |    805ms |     7.6s |    10.4s |        0
+
+  Per-author recall distribution:
+  Algorithm                        |   Median |  % at 0% |      p25 |      p75
+  ---------------------------------+----------+----------+----------+---------
+  Greedy Set-Cover                 |    33.3% |    20.3% |     2.3% |   100.0%
+  Greedy+Thompson (seed=0, single run) |    35.7% |    20.1% |     2.3% |   100.0%
+
+  Latency simulation (parallel relay query):
+  Algorithm                        |     TTFE |      p50 |      p80 |      Max |   TO |   TO Tax |   Relays |   Events
+  ---------------------------------+----------+----------+----------+----------+------+----------+----------+---------
+  Greedy Set-Cover                 |    805ms |     7.6s |    10.4s |    39.8s |    0 |      0ms | 16/17/20 |  118,860
+  Greedy+Thompson (seed=0, single run) |    805ms |     7.6s |    10.4s |    39.8s |    0 |      0ms | 16/17/20 |  118,497
+  (Relays: with-events/connected/total | TO Tax: ceil(timeouts/concurrency) × EOSE timeout)
+
+  Progressive completeness (% of recall achieved by time):
+  Algorithm                        |      @1s |      @2s |      @5s |     @10s |     @15s
+  ---------------------------------+----------+----------+----------+----------+---------
+  Greedy Set-Cover                 |     0.0% |     0.0% |    15.9% |    75.6% |    90.0%
+  Greedy+Thompson (seed=0, single run) |     0.0% |     0.0% |    20.3% |    83.1% |    97.2%
+
+  EOSE-race simulation (stop after first EOSE + grace period):
+  Algorithm                        |     +0ms |   +200ms |   +500ms |      +1s |      +2s
+  ---------------------------------+----------+----------+----------+----------+---------
+  Greedy Set-Cover                 |    15.9% |    15.9% |    15.9% |    15.9% |    16.2%
+  Greedy+Thompson (seed=0, single run) |    20.3% |    20.3% |    20.3% |    20.3% |    20.3%
+  (First EOSE: Greedy Set-Cover=3.5s, Greedy+Thompson (seed=0, single run)=3.5s)
+
+  Profile-view latency (per-author outbox query, top 3 write relays):
+    Authors simulated: 1286 | Hit rate: 98.9%
+    TTFE: 1.2s median, 1.3s mean, 1.8s p95
+    Relays/profile: 2.9 queried, 2.4 with events, 0.04 timeouts
+
+  Feed vs profile-view TTFE comparison:
+  Algorithm                        |  Feed TTFE |  Profile TTFE |    Delta
+  ---------------------------------+------------+---------------+---------
+  Greedy Set-Cover                 |      805ms |          1.2s |   +373ms
+  Greedy+Thompson (seed=0, single run) |      805ms |          1.2s |   +373ms
+
+  Including partial-baseline authors (1286 testable authors, 178,902 baseline events):
+
+  Algorithm                        |   Evt Recall |   Auth Recall
+  ---------------------------------+--------------+--------------
+  Greedy Set-Cover                 |        22.0% |         79.8%
+  Greedy+Thompson (seed=0, single run) |        24.4% |         79.9%
+
+=== NIP-66 RTT vs Measured Latency (467 relays, data age: 40min) ===
+                             N   Spearman r      MAE    Bias    Top5   Top10   Top20
+------------------------  ----  -----------  -------  ------  ------  ------  ------
+rttOpen vs connect         467         0.37    431ms    0.8x    0.0%   10.0%   10.0%
+rttRead vs query           394         0.29     1.6s    7.5x    0.0%    0.0%    5.0%
+(Bias = measured/nip66, >1 = NIP-66 underestimates. TopK = overlap of K fastest relays.)
+Monitor: 9ba6484003e8..., 9b85d54cc4bc..., 9bbbb845e5b6..., 0b01aa38c2cc..., 63019a1fc7c4..., 58faef87b342..., http-api..., b2c949c0fb79..., 9bb7cd94d7b6..., 9ba1d7892cd0..., 9ba0ce3dcc28..., 9ba046db56b8...
+
+JSON results written to: results/2c65940725bbf10b_1773004430456.json
