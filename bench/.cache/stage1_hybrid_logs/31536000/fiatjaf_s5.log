@@ -1,0 +1,109 @@
+[0m[32mTask[0m [0m[36mbench[0m deno run --allow-net --allow-read --allow-write main.ts "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d" "--algorithms" "ditto-mew,ditto-outbox" "--verify" "--verify-window" "31536000" "--verify-concurrency" "10" "--no-phase2-cache" "--fast" "--output" "both"
+Target: 3bf0c63fcb934634...
+Seed: 0 | Filter: strict | Runs: 3
+Using cached data (fetched 2026-03-08T01:16:43.131Z)
+
+=== Fetch Quality ===
+Indexers: wss://purplepag.es (197 events, 1053ms), wss://relay.damus.io (0 events, 495ms, errors: WebSocket error: NetworkError: failed to connect to WebSocket: Invalid status code 400 Bad Request), wss://nos.lol (154 events, 724ms)
+Follows: 196 | With relay list: 150 (76.5%) | Missing: 46 (23.5%) | Filtered-to-empty: 3
+Filter profile: strict | Filtered URLs: 34 (2 localhost, 3 insecure ws, 29 known-bad)
+Unique valid write relays: 235 | Seed: 0
+
+=== Regime A: Fixed 20 Connections ===
+  Algorithm                      |  Relays |   Assign% |  Orphans |  Alg.Orph |  Avg/pk |   Gini |    HHI
+  -------------------------------+---------+-----------+----------+-----------+---------+--------+-------
+  Ditto-Mew (4 app relays)       |       4 |    100.0% |        0 |       -46 |     4.0 |   0.00 |  0.250
+  Ditto+Outbox Thompson (cap@20) |      20 |    100.0% (0.0sd) |        0 |       -46 |     4.9 |   0.66 |  0.168
+
+=== Phase 2: Event Verification ===
+Window: 31536000s | Kinds: 1 | Concurrency: 10
+[baseline] Querying 235 relays for 150 authors (window: 31536000s)
+[pool] CLOSED from wss://creatr.nostr.wine: auth-required: please authenticate before sending REQs
+[baseline] Progress: 50/235 relays queried
+[pool] CLOSED from wss://sendit.nosflare.com: restricted: this relay does not accept REQs
+[baseline] Progress: 100/235 relays queried
+[pool] CLOSED from wss://filter.nostr.wine/npub19mun7qwdyjf7qs3456u8kyxncjn5u2n7klpu4utgy68k4aenzj6synjnft: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://aggr.nostr.land: auth-required: auth required for aggregator
+[pool] CLOSED from wss://inbox.nostr.wine: blocked: this relay does not store any of the kinds in this request
+[pool] CLOSED from wss://relay.getalby.com/v1: blocked: Request rejected
+[baseline] Progress: 150/235 relays queried
+[pool] CLOSED from wss://hole.v0l.io: error: queries not allowed
+[pool] CLOSED from wss://filter.nostr.wine/npub1s5yq6wadwrxde4lhfs56gn64hwzuhnfa6r9mj476r5s4hkunzgzqrs6q7z: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://relay.danieldaquino.me/chat: blocked: you must be in the web of trust to chat with the relay owner
+[pool] CLOSED from wss://relay.danieldaquino.me/private: auth-required: this query requires you to be authenticated
+[baseline] Progress: 200/235 relays queried
+[pool] CLOSED from wss://filter.nostr.wine/npub14yzxejghthz6ghae8gkgjru63vvvwpl6d454wud2hycqpqwnugdqcutuw5: auth-required: please authenticate before sending REQs
+[baseline] Progress: 235/235 relays queried
+[phase2] Subscription timeouts (no EOSE): 7
+[phase2] CLOSED messages received: 11
+  wss://creatr.nostr.wine: auth-required: please authenticate before sending REQs
+  wss://sendit.nosflare.com: restricted: this relay does not accept REQs
+  wss://filter.nostr.wine/npub19mun7qwdyjf7qs3456u8kyxncjn5u2n7klpu4utgy68k4aenzj6synjnft: auth-required: please authenticate before sending REQs
+  wss://aggr.nostr.land: auth-required: auth required for aggregator
+  wss://inbox.nostr.wine: blocked: this relay does not store any of the kinds in this request
+  wss://relay.getalby.com/v1: blocked: Request rejected
+  wss://hole.v0l.io: error: queries not allowed
+  wss://filter.nostr.wine/npub1s5yq6wadwrxde4lhfs56gn64hwzuhnfa6r9mj476r5s4hkunzgzqrs6q7z: auth-required: please authenticate before sending REQs
+  wss://relay.danieldaquino.me/chat: blocked: you must be in the web of trust to chat with the relay owner
+  wss://relay.danieldaquino.me/private: auth-required: this query requires you to be authenticated
+
+=== Phase 2: Event Verification (365d window) ===
+Baseline: 235 relays queried (48.9% success), 53s
+  Timing: connect 733ms median (1.5s p95) | query 1.3s median (12.9s p95) | 7 timeouts (8 relays)
+  Authors: 150 with relay data
+    Testable (reliable): 107 | Testable (partial): 5 | Zero events: 32 | Unreliable: 6
+  Baseline events: 36,855 (mean 329.1/author, median 63)
+  Events per (relay,pubkey) capped at: 10000
+
+  Headline metrics (107 testable-reliable authors, 36,495 baseline events):
+
+  Algorithm                        |   Evt Recall |   Auth Recall |  Relay OK% |     TTFE |      p50 |      p80 | Timeouts
+  ---------------------------------+--------------+---------------+------------+----------+----------+----------+---------
+  Ditto-Mew (4 app relays)         |         6.9% |         65.4% |     100.0% |    659ms |     2.8s |     2.9s |        0
+  Ditto+Outbox Thompson (seed=0, single run) |        11.7% |         80.4% |      70.0% |    659ms |     2.5s |     4.2s |        0
+
+  Per-author recall distribution:
+  Algorithm                        |   Median |  % at 0% |      p25 |      p75
+  ---------------------------------+----------+----------+----------+---------
+  Ditto-Mew (4 app relays)         |     4.1% |    34.6% |     0.0% |    43.4%
+  Ditto+Outbox Thompson (seed=0, single run) |    16.7% |    19.6% |     1.0% |   100.0%
+
+  Latency simulation (parallel relay query):
+  Algorithm                        |     TTFE |      p50 |      p80 |      Max |   TO |   TO Tax |   Relays |   Events
+  ---------------------------------+----------+----------+----------+----------+------+----------+----------+---------
+  Ditto-Mew (4 app relays)         |    659ms |     2.8s |     2.9s |     6.2s |    0 |      0ms |    4/4/4 |    3,860
+  Ditto+Outbox Thompson (seed=0, single run) |    659ms |     2.5s |     4.2s |     6.2s |    0 |      0ms | 14/14/20 |    9,367
+  (Relays: with-events/connected/total | TO Tax: ceil(timeouts/concurrency) × EOSE timeout)
+
+  Progressive completeness (% of recall achieved by time):
+  Algorithm                        |      @1s |      @2s |      @5s |     @10s |     @15s
+  ---------------------------------+----------+----------+----------+----------+---------
+  Ditto-Mew (4 app relays)         |     0.0% |    19.6% |    75.8% |   100.0% |   100.0%
+  Ditto+Outbox Thompson (seed=0, single run) |     0.0% |    49.9% |    92.3% |   100.0% |   100.0%
+
+  EOSE-race simulation (stop after first EOSE + grace period):
+  Algorithm                        |     +0ms |   +200ms |   +500ms |      +1s |      +2s
+  ---------------------------------+----------+----------+----------+----------+---------
+  Ditto-Mew (4 app relays)         |    19.6% |    19.6% |    19.6% |    19.6% |    75.8%
+  Ditto+Outbox Thompson (seed=0, single run) |     0.5% |     0.5% |    16.9% |    49.9% |    81.4%
+  (First EOSE: Ditto-Mew (4 app relays)=1.5s, Ditto+Outbox Thompson (seed=0, single run)=1.0s)
+
+  Profile-view latency (per-author outbox query, top 3 write relays):
+    Authors simulated: 112 | Hit rate: 97.3%
+    TTFE: 724ms median, 1.1s mean, 2.0s p95
+    Relays/profile: 2.8 queried, 2.3 with events, 0.03 timeouts
+
+  Feed vs profile-view TTFE comparison:
+  Algorithm                        |  Feed TTFE |  Profile TTFE |    Delta
+  ---------------------------------+------------+---------------+---------
+  Ditto-Mew (4 app relays)         |      659ms |         724ms |    +65ms
+  Ditto+Outbox Thompson (seed=0, single run) |      659ms |         724ms |    +65ms
+
+  Including partial-baseline authors (112 testable authors, 36,855 baseline events):
+
+  Algorithm                        |   Evt Recall |   Auth Recall
+  ---------------------------------+--------------+--------------
+  Ditto-Mew (4 app relays)         |         6.9% |         65.2%
+  Ditto+Outbox Thompson (seed=0, single run) |        11.7% |         79.5%
+
+JSON results written to: results/3bf0c63fcb934634_1772933693339.json

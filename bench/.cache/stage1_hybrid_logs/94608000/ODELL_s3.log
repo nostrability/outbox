@@ -1,0 +1,195 @@
+[0m[32mTask[0m [0m[36mbench[0m deno run --allow-net --allow-read --allow-write main.ts "04c915daefee38317fa734444acee390a8269fe5810b2241e5e6dd343dfbecc9" "--algorithms" "ditto-mew,ditto-outbox" "--verify" "--verify-window" "94608000" "--verify-concurrency" "10" "--no-phase2-cache" "--fast" "--output" "both"
+Target: 04c915daefee3831...
+Seed: 0 | Filter: strict | Runs: 3
+[fetch] Connecting to 3 indexer relays...
+[fetch] wss://purplepag.es: connected (1006ms)
+[fetch] wss://relay.damus.io: connected (420ms)
+[fetch] wss://nos.lol: connected (660ms)
+[fetch] Fetching kind 3 (contact list) for 04c915da...
+[fetch] 1788 follows to fetch relay lists for
+[fetch] Fetched relay lists: 200/1788
+[fetch] Fetched relay lists: 400/1788
+[fetch] Fetched relay lists: 600/1788
+[fetch] Fetched relay lists: 800/1788
+[fetch] Fetched relay lists: 1000/1788
+[fetch] Fetched relay lists: 1200/1788
+[fetch] Fetched relay lists: 1400/1788
+[fetch] Fetched relay lists: 1600/1788
+[fetch] Received 1408 relay list events
+
+=== Fetch Quality ===
+Indexers: wss://purplepag.es (1789 events, 1006ms), wss://relay.damus.io (911 events, 420ms), wss://nos.lol (1404 events, 660ms)
+Follows: 1788 | With relay list: 1375 (76.9%) | Missing: 413 (23.1%) | Filtered-to-empty: 33
+Filter profile: strict | Filtered URLs: 644 (21 localhost, 91 insecure ws, 23 IP-only, 502 known-bad, 7 malformed)
+Unique valid write relays: 1207 | Seed: 0
+
+=== Regime A: Fixed 20 Connections ===
+  Algorithm                      |  Relays |   Assign% |  Orphans |  Alg.Orph |  Avg/pk |   Gini |    HHI
+  -------------------------------+---------+-----------+----------+-----------+---------+--------+-------
+  Ditto-Mew (4 app relays)       |       4 |    100.0% |        0 |      -413 |     4.0 |   0.00 |  0.250
+  Ditto+Outbox Thompson (cap@20) |      20 |    100.0% (0.0sd) |        0 |      -413 |     5.0 |   0.66 |  0.165
+
+=== Phase 2: Event Verification ===
+Window: 94608000s | Kinds: 1 | Concurrency: 10
+[baseline] Querying 1207 relays for 1375 authors (window: 94608000s)
+[baseline] Progress: 50/1207 relays queried
+[pool] CLOSED from wss://nortis.nostr1.com: auth-required: you must auth
+[baseline] Progress: 100/1207 relays queried
+[pool] CLOSED from wss://podtards.com/chat: auth-required: all requests must be authenticated
+[pool] CLOSED from wss://sendit.nosflare.com: restricted: this relay does not accept REQs
+[pool] CLOSED from wss://podtards.com/private: auth-required: all requests must be authenticated
+[pool] CLOSED from wss://david.nostr1.com: auth-required: you must auth
+[baseline] Progress: 150/1207 relays queried
+[pool] CLOSED from wss://filter.nostr.wine/npub1cgcwm56v5hyrrzl5ty4vq4kdud63n5u4czgycdl2r3jshzk55ufqe52ndy: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://greensoul.space: auth-required: only authenticated users can read from this relay
+[pool] CLOSED from wss://filter.nostr.wine/npub1rtlqca8r6auyaw5n5h3l5422dm4sry5dzfee4696fqe8s6qgudks7djtfs: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://auth.nostr1.com: auth-required: you must auth
+[pool] CLOSED from wss://filter.nostr.wine/npub18zj5ygv8pkdk07hyddjtks9tduk67k9k4s8ezs7wrkzu85mu6rxq4zz5tz: auth-required: please authenticate before sending REQs
+[baseline] Progress: 200/1207 relays queried
+[pool] CLOSED from wss://filter.nostr.wine/npub1t0nyg64g5vwprva52wlcmt7fkdr07v5dr7s35raq9g0xgc0k4xcsedjgqv: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://hole.v0l.io: error: queries not allowed
+[baseline] Progress: 250/1207 relays queried
+[pool] CLOSED from wss://relay.nsec.app: blocked: we only keep kind 24133 or 24135
+[pool] CLOSED from wss://filter.nostr.wine/npub1du6sgl90wse0cz44fg50a4kg9ea4sgctlxps90ccx58lw8ssgv9qhjyf3c: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub19jk45jz45gczwfm22y9z69xhaex3nwg47dz84zw096xl6z62amkqj99rv7: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://relay.nosflare.com: auth-required: authentication required to subscribe
+[pool] CLOSED from wss://filter.nostr.wine/npub1y7hwv7q87ufj09fd5cytjnfx4m2dfd4nrvnnwuh6844chq2m3zks4fgcu2: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://impromptu.relays.land: auth-required: all requests must be authenticated
+[baseline] Progress: 300/1207 relays queried
+[pool] CLOSED from wss://filter.nostr.wine/npub1j4cdpp4khf8uc343rtmj6qsyflvnzgntrp6gwg4wden5p6efqhsqvqxzuf: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://nostr.dbtc.link: auth-required: NIP-42 auth required
+[pool] CLOSED from wss://groups.satsdisco.com: blocked: invalid query, must have 'h', 'e' or 'a' tag
+[baseline] Progress: 350/1207 relays queried
+[pool] CLOSED from wss://nostr.rikmeijer.nl: max number of subscriptions per client (100) reached
+[pool] CLOSED from wss://filter.nostr.wine/npub1du8vg3lqmfddfwdr52h08etty3speg45dttmyvup6x2pqq5jxf6qdhu524: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub1xv6axulxcx6mce5mfvfzpsy89r4gee3zuknulm45cqqpmyw7680q5pxea6: auth-required: please authenticate before sending REQs
+[baseline] Progress: 400/1207 relays queried
+[pool] CLOSED from wss://filter.nostr.wine/npub1m6gvtkek5sq3l82cfh7p3hs62ujxs6r8npre8m6jvvcm28utg05sde2e6g: auth-required: please authenticate before sending REQs
+[baseline] Progress: 450/1207 relays queried
+[pool] CLOSED from wss://inbox.nostr.wine: blocked: this relay does not store any of the kinds in this request
+[pool] CLOSED from wss://creatr.nostr.wine: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://groups.0xchat.com: blocked: invalid query, must have 'h', 'e' or 'a' tag
+[baseline] Progress: 500/1207 relays queried
+[pool] CLOSED from wss://filter.nostr.wine/npub153xmex42x4chdf757hp3q6zxagykkek7pdgwuwd074964dkyha9s82ryu8: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub1dld9hn3gsgtkh7atl26s8gd49qfjjkpdw8ztap9mk4n7vhq60y0satfd8s: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/wss:/npub1jaakjr8p7lf9fmacunkes5jqkqyygf8yz5dtzxx20d3p98fx0u7s2q5kxu: auth-required: please authenticate before sending REQs
+[baseline] Progress: 550/1207 relays queried
+[pool] CLOSED from wss://pantry.zap.cooking: auth-required: please authenticate
+[pool] CLOSED from wss://elites.nostrati.org: auth-required: you must auth
+[pool] CLOSED from wss://filter.nostr.wine/npub147wy3decmxy3vs9u4nse80ha7nkcydt7zdge8lc9gk8ddglh4t6qudjwdr: auth-required: please authenticate before sending REQs
+[baseline] Progress: 600/1207 relays queried
+[pool] CLOSED from wss://filter.nostr.wine/npub1ngumlqmus6xkrmvvee4yc7swh9h4uk7vpq4ddt7a2jtvkc22y0asrse3pv: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub1csamkk8zu67zl9z4wkp90a462v53q775aqn5q6xzjdkxnkvcpd7srtz4x9: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub1t5wc8h37uhkau9tsw82sjxndq04d3n8p634utpdfvs4tm5xmt2sqgk6dke: auth-required: please authenticate before sending REQs
+[baseline] Progress: 650/1207 relays queried
+[baseline] Progress: 700/1207 relays queried
+[pool] CLOSED from wss://filter.nostr.wine/npub1aeh2zw4elewy5682lxc6xnlqzjnxksq303gwu2npfaxd49vmde6qcq4nwx: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub13fz04jej7nktvtvg24dj926a5ctcmaw6ekp9028eux3pz3csxdrqgd77yu: auth-required: please authenticate before sending REQs
+[baseline] Progress: 750/1207 relays queried
+[pool] CLOSED from wss://filter.nostr.wine/npub1z4m7gkva6yxgvdyclc7zp0vz4ta0s2d9jh8g83w03tp5vdf3kzdsxana6p: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub1mfndvgwstwm604jvrt07p6nyy898mdsdzzyumx9sdn8u6r4za4uqck6f8v: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub1r73gmgu7rjstdwuskshn9ztj9rrdrprl5y435yrmtc9qtq4ausfqr0v7zy: auth-required: please authenticate before sending REQs
+[baseline] Progress: 800/1207 relays queried
+[pool] CLOSED from wss://filter.nostr.wine/npub1jt3643ngake9xx0d68v8et00pvvf24la6ya3y0vz5xwk0lfpryys5vrezs: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub17xu3rtcu0ftqw03mswa8a2ngz3nsgrs0h0wjv4z942qwvhp8fs3qzcadls: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub1qjgcmlpkeyl8mdkvp4s0xls4ytcux6my606tgfx9xttut907h0zs76lgjw: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub14qz92uedt0a8jte8jqg63jr3s5cc99cej36jh883z6tprlu354uqqe2q26: auth-required: please authenticate before sending REQs
+[baseline] Progress: 850/1207 relays queried
+[baseline] Progress: 900/1207 relays queried
+[pool] CLOSED from wss://filter.nostr.wine/npub1hycynfhz23ardfmf9kgwfw4gpyqj2fsh24r2zuehg4x7lx4kn5cqsqv4y3: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://community.nostrdvm.com: auth-required: authentication is required for access
+[baseline] Progress: 950/1207 relays queried
+[pool] CLOSED from wss://filter.nostr.wine/npub1xsf5h8suhveztq4u5spq5wwvzftqxmglt6vwllxg8z6zrlpqn4yqrulu9v: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub1e0vjqz8pl62fquktagpw2s3gzsxy852dz3gezz93673jmygzvedstzh4gh: auth-required: please authenticate before sending REQs
+[baseline] Progress: 1000/1207 relays queried
+[pool] CLOSED from wss://filter.nostr.wine/npub17h7h2jzhq3hn06h93jvz67sfjxaq3jvk7kenjrazht28aun33hks42sd76: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub1lelkh3hhxw9hdwlcpk6q9t0xt9f7yze0y0nxazvzqjmre3p98x3sthkvyz: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub18ams6ewn5aj2n3wt2qawzglx9mr4nzksxhvrdc4gzrecw7n5tvjqctp424: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub10awzknjg5r5lajnr53438ndcyjylgqsrnrtq5grs495v42qc6awsj45ys7: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub1sjjz60h6fqqcuxrsyl3thhgpx2z6ylv047tslqar26ga0chp5vgq7404nu: auth-required: please authenticate before sending REQs
+[baseline] Progress: 1050/1207 relays queried
+[baseline] Progress: 1100/1207 relays queried
+[pool] CLOSED from wss://filter.nostr.wine/npub1zqsu3ys4fragn2a5e3lgv69r4rwwhts2fserll402uzr3qeddxfsffcqrs: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub15dg963ct3r2mzgpdmnk4xtvyd82en9eq2t0v92fqvyve8jj6pesqleq7gf=true: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub1az9xj85cmxv8e9j9y80lvqp97crsqdu2fpu3srwthd99qfu9qsgstam8y8: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://relay.shawnyeager.com/private: auth-required: all requests must be authenticated
+[pool] CLOSED from wss://relay.shawnyeager.com/chat: auth-required: all requests must be authenticated
+[pool] CLOSED from wss://filter.nostr.wine/npub1s3vq29fy9ly3k6lvtxytdap7gmc9ct092cfwpmzpemxmfgs9nuvq4uexqx: auth-required: please authenticate before sending REQs
+[baseline] Progress: 1150/1207 relays queried
+[pool] CLOSED from wss://filter.nostr.wine/npub1p4kg8zxukpym3h20erfa3samj00rm2gt4q5wfuyu3tg0x3jg3gesvncxf8: auth-required: please authenticate before sending REQs
+[pool] CLOSED from wss://filter.nostr.wine/npub1nyfa2l8yv54trtv7pusq2gr7jsaarpaafwgk05wktsxwelxjhuhsf5kyq8: auth-required: please authenticate before sending REQs
+[baseline] Progress: 1200/1207 relays queried
+[baseline] Progress: 1207/1207 relays queried
+[phase2] Subscription timeouts (no EOSE): 39
+[phase2] CLOSED messages received: 63
+  wss://nortis.nostr1.com: auth-required: you must auth
+  wss://podtards.com/chat: auth-required: all requests must be authenticated
+  wss://sendit.nosflare.com: restricted: this relay does not accept REQs
+  wss://podtards.com/private: auth-required: all requests must be authenticated
+  wss://david.nostr1.com: auth-required: you must auth
+  wss://filter.nostr.wine/npub1cgcwm56v5hyrrzl5ty4vq4kdud63n5u4czgycdl2r3jshzk55ufqe52ndy: auth-required: please authenticate before sending REQs
+  wss://greensoul.space: auth-required: only authenticated users can read from this relay
+  wss://filter.nostr.wine/npub1rtlqca8r6auyaw5n5h3l5422dm4sry5dzfee4696fqe8s6qgudks7djtfs: auth-required: please authenticate before sending REQs
+  wss://auth.nostr1.com: auth-required: you must auth
+  wss://filter.nostr.wine/npub18zj5ygv8pkdk07hyddjtks9tduk67k9k4s8ezs7wrkzu85mu6rxq4zz5tz: auth-required: please authenticate before sending REQs
+
+=== Phase 2: Event Verification (1095d window) ===
+Baseline: 1,207 relays queried (29.7% success), 4.5min
+  Timing: connect 690ms median (1.4s p95) | query 1.1s median (15.7s p95) | 39 timeouts (39 relays)
+  Authors: 1,375 with relay data
+    Testable (reliable): 769 | Testable (partial): 95 | Zero events: 377 | Unreliable: 134
+  Baseline events: 177,204 (mean 205.1/author, median 27)
+  Events per (relay,pubkey) capped at: 10000
+
+  Headline metrics (769 testable-reliable authors, 163,847 baseline events):
+
+  Algorithm                        |   Evt Recall |   Auth Recall |  Relay OK% |     TTFE |      p50 |      p80 | Timeouts
+  ---------------------------------+--------------+---------------+------------+----------+----------+----------+---------
+  Ditto-Mew (4 app relays)         |         8.8% |         73.9% |     100.0% |    561ms |     8.4s |    12.0s |        0
+  Ditto+Outbox Thompson (seed=0, single run) |        17.2% |         82.7% |      60.0% |    561ms |     7.0s |    14.2s |        1
+
+  Per-author recall distribution:
+  Algorithm                        |   Median |  % at 0% |      p25 |      p75
+  ---------------------------------+----------+----------+----------+---------
+  Ditto-Mew (4 app relays)         |    23.0% |    26.1% |     0.0% |    92.9%
+  Ditto+Outbox Thompson (seed=0, single run) |    68.4% |    17.3% |     3.2% |   100.0%
+
+  Latency simulation (parallel relay query):
+  Algorithm                        |     TTFE |      p50 |      p80 |      Max |   TO |   TO Tax |   Relays |   Events
+  ---------------------------------+----------+----------+----------+----------+------+----------+----------+---------
+  Ditto-Mew (4 app relays)         |    561ms |     8.4s |    12.0s |    16.1s |    0 |      0ms |    4/4/4 |   26,610
+  Ditto+Outbox Thompson (seed=0, single run) |    561ms |     7.0s |    14.2s |    33.1s |    1 |    15.0s | 12/13/20 |   64,262
+  (Relays: with-events/connected/total | TO Tax: ceil(timeouts/concurrency) × EOSE timeout)
+
+  Progressive completeness (% of recall achieved by time):
+  Algorithm                        |      @1s |      @2s |      @5s |     @10s |     @15s
+  ---------------------------------+----------+----------+----------+----------+---------
+  Ditto-Mew (4 app relays)         |     0.0% |     3.3% |    71.7% |    71.7% |    82.1%
+  Ditto+Outbox Thompson (seed=0, single run) |     0.0% |     1.7% |    42.9% |    45.9% |    74.9%
+
+  EOSE-race simulation (stop after first EOSE + grace period):
+  Algorithm                        |     +0ms |   +200ms |   +500ms |      +1s |      +2s
+  ---------------------------------+----------+----------+----------+----------+---------
+  Ditto-Mew (4 app relays)         |     3.3% |     3.3% |     3.3% |     3.3% |     3.3%
+  Ditto+Outbox Thompson (seed=0, single run) |     1.7% |     1.7% |     1.7% |     1.7% |     1.7%
+  (First EOSE: Ditto-Mew (4 app relays)=1.2s, Ditto+Outbox Thompson (seed=0, single run)=1.2s)
+
+  Profile-view latency (per-author outbox query, top 3 write relays):
+    Authors simulated: 864 | Hit rate: 97.3%
+    TTFE: 1.0s median, 1.1s mean, 2.0s p95
+    Relays/profile: 2.9 queried, 2.1 with events, 0.06 timeouts
+
+  Feed vs profile-view TTFE comparison:
+  Algorithm                        |  Feed TTFE |  Profile TTFE |    Delta
+  ---------------------------------+------------+---------------+---------
+  Ditto-Mew (4 app relays)         |      561ms |          1.0s |   +469ms
+  Ditto+Outbox Thompson (seed=0, single run) |      561ms |          1.0s |   +469ms
+
+  Including partial-baseline authors (864 testable authors, 177,204 baseline events):
+
+  Algorithm                        |   Evt Recall |   Auth Recall
+  ---------------------------------+--------------+--------------
+  Ditto-Mew (4 app relays)         |         8.6% |         73.5%
+  Ditto+Outbox Thompson (seed=0, single run) |        16.8% |         81.7%
+
+JSON results written to: results/04c915daefee3831_1772937936603.json
