@@ -22,6 +22,7 @@ echo "Total runs: ~315"
 echo
 
 # ── Smoke test: greedy-thompson sanity check ──
+mkdir -p .cache
 echo "--- Smoke test: greedy-thompson cold start ---"
 SMOKE_PK="6a0c596c1484eae2e8131a030f269944921e52619c1dd143a029c64ea6cd9731"  # Gato
 SMOKE_LOG=".cache/greedy_thompson_smoke.log"
@@ -40,10 +41,10 @@ echo
 echo "========================================"
 echo "  Stage 1: Hybrid+Thompson EN"
 echo "========================================"
-bash run-stage1-hybrid.sh
+if ! bash run-stage1-hybrid.sh; then echo "Stage 1 failed"; exit 1; fi
 
 echo "Backing up after Stage 1..."
-bash backup-results.sh
+bash backup-results.sh || true
 echo "--- Cooling ${STAGE_COOLDOWN}s before Stage 2 ---"
 sleep $STAGE_COOLDOWN
 
@@ -51,10 +52,10 @@ sleep $STAGE_COOLDOWN
 echo "========================================"
 echo "  Stage 2: Greedy+Thompson EN"
 echo "========================================"
-bash run-stage2-greedy.sh
+if ! bash run-stage2-greedy.sh; then echo "Stage 2 failed"; exit 1; fi
 
 echo "Backing up after Stage 2..."
-bash backup-results.sh
+bash backup-results.sh || true
 echo "--- Cooling ${STAGE_COOLDOWN}s before Stage 3 ---"
 sleep $STAGE_COOLDOWN
 
@@ -62,10 +63,10 @@ sleep $STAGE_COOLDOWN
 echo "========================================"
 echo "  Stage 3: NDK+Thompson 3yr EN"
 echo "========================================"
-bash run-stage3-ndk3yr.sh
+if ! bash run-stage3-ndk3yr.sh; then echo "Stage 3 failed"; exit 1; fi
 
 echo "Backing up after Stage 3..."
-bash backup-results.sh
+bash backup-results.sh || true
 echo "--- Cooling ${STAGE_COOLDOWN}s before Stage 4a ---"
 sleep $STAGE_COOLDOWN
 
@@ -73,10 +74,10 @@ sleep $STAGE_COOLDOWN
 echo "========================================"
 echo "  Stage 4a: FD/NDK+Thompson JP"
 echo "========================================"
-bash run-stage4a-jp-fdndk.sh
+if ! bash run-stage4a-jp-fdndk.sh; then echo "Stage 4a failed"; exit 1; fi
 
 echo "Backing up after Stage 4a..."
-bash backup-results.sh
+bash backup-results.sh || true
 echo "--- Cooling ${STAGE_COOLDOWN}s before Stage 4b ---"
 sleep $STAGE_COOLDOWN
 
@@ -84,10 +85,10 @@ sleep $STAGE_COOLDOWN
 echo "========================================"
 echo "  Stage 4b: JP NIP-66 Comparison"
 echo "========================================"
-bash run-stage4b-jp-nip66.sh
+if ! bash run-stage4b-jp-nip66.sh; then echo "Stage 4b failed"; exit 1; fi
 
 echo "Backing up after Stage 4b..."
-bash backup-results.sh
+bash backup-results.sh || true
 echo "--- Cooling ${STAGE_COOLDOWN}s before Stage 5 ---"
 sleep $STAGE_COOLDOWN
 
@@ -95,10 +96,10 @@ sleep $STAGE_COOLDOWN
 echo "========================================"
 echo "  Stage 5: Adaptive Connection Limits"
 echo "========================================"
-bash run-stage5-connlimit.sh
+if ! bash run-stage5-connlimit.sh; then echo "Stage 5 failed"; exit 1; fi
 
 echo "Final backup..."
-bash backup-results.sh
+bash backup-results.sh || true
 
 echo
 echo "========================================"
@@ -113,4 +114,4 @@ echo "  wc -l .cache/stage3_progress.log  # expect 30"
 echo "  wc -l .cache/stage4a_progress.log # expect 60"
 echo "  wc -l .cache/stage4b_progress.log # expect 60"
 echo "  wc -l .cache/stage5_progress.log  # expect 45"
-echo "  ls .cache/stage*_logs/*.tmp 2>/dev/null  # should be empty (no failures)"
+echo "  find .cache/stage*_logs -name '*.tmp' 2>/dev/null  # should be empty (no failures)"
