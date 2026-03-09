@@ -86,10 +86,11 @@ the scorer has learned which relays actually deliver and recall jumps dramatical
 
 *10-run variance study (6 profiles × 10 independent 5-session sequences, NIP-66 liveness, `--no-phase2-cache`). At 7d, gains are smaller (+4-15pp) because the baseline is already 63-90% (EN via HJO, JP via expansion benchmark).*
 
-Thompson converges in 3-5 sessions. The gains are largest for mid-size profiles
-(400-2000 follows), where relay diversity means there are good relays to discover.
-Small profiles (<200 follows) may see minimal gains — the 20-relay budget already
-covers most combinations.
+Thompson converges in 3-5 sessions. Gains correlate with relay graph complexity
+(how many distinct relay configurations exist among follows), not raw follow count.
+Profiles with diverse, fragmented relay ecosystems (e.g., JP community) show the
+largest gains — tanakei (84 follows, JP) gained +59pp at 1yr. Profiles where most
+follows cluster on a few dominant relays see smaller gains regardless of size.
 
 **Why Welshman's `random()` already works well:** `random()` = sampling from
 Beta(1,1), the "I know nothing" prior. Thompson Sampling replaces this with
@@ -104,7 +105,7 @@ priority-based architecture. NDK's priority cascade (connected > selected > popu
 is preserved — Thompson replaces the popularity ranking in the third tier. After
 5 learning sessions (1yr, NIP-66 liveness, cap@20, `--no-phase2-cache`):
 
-| Profile (follows) | NDK baseline | NDK+Thompson S5 (10-run mean) | Gain |
+| Profile (follows†) | NDK baseline | NDK+Thompson S5 (10-run mean) | Gain |
 |---|---|---|---|
 | fiatjaf (194) | 32.1% | 14.4 ± 1.3 | -18pp |
 | hodlbod (855) | 13.7% | 38.8 ± 3.0 | +25pp |
@@ -113,6 +114,8 @@ is preserved — Thompson replaces the popularity ranking in the third tier. Aft
 | Gato (399) | 13.6% | 26.0 ± 11.1 | +12pp |
 | Telluride (2,784) | 22.7% | 38.1 ± 2.5 | +15pp |
 | **6-profile mean** | **19.9%** | **30.8 ± 3.8 SE** | **+11pp** |
+
+*†Follow counts are from the benchmark snapshot used for each run. Contact lists change over time — hodlbod, jb55, and ODELL show different counts across benchmark batches because their follow lists grew between runs. Relative gains are not affected.*
 
 NDK+Thompson shows high variance: fiatjaf regresses (-18pp) consistently across 10 runs
 (14.4% ± 1.3 std) because NDK's cascade concentrates on relay.damus.io, which happens

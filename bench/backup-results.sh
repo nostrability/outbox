@@ -15,7 +15,7 @@ WORKTREE_DIR="/tmp/outbox-data-worktree"
 mkdir -p "$BACKUP_DIR"
 
 DIRS_TO_BACKUP=""
-for d in 3yr-base-results thompson-variance-1yr thompson-variance-3yr 1yr-results 1yr-results-ndk hjo-results .cache/stage1_hybrid_logs .cache/stage2_greedy_logs .cache/stage3_ndk3yr_logs .cache/stage4a_jp_fdndk_logs .cache/stage4b_jp_nip66_logs .cache/stage5_connlimit_logs; do
+for d in 3yr-base-results thompson-variance-1yr thompson-variance-3yr 1yr-results 1yr-results-ndk hjo-results neutral-thompson-results .cache/stage1_hybrid_logs .cache/stage2_greedy_logs .cache/stage3_ndk3yr_logs .cache/stage4a_jp_fdndk_logs .cache/stage4b_jp_nip66_logs .cache/stage5_connlimit_logs; do
   [ -d "$BENCH_DIR/$d" ] && DIRS_TO_BACKUP="$DIRS_TO_BACKUP $d"
 done
 
@@ -31,7 +31,7 @@ else
 fi
 
 # Count completed log files
-COMPLETED=$(find "$BENCH_DIR"/3yr-base-results "$BENCH_DIR"/thompson-variance-1yr "$BENCH_DIR"/thompson-variance-3yr "$BENCH_DIR"/1yr-results "$BENCH_DIR"/1yr-results-ndk "$BENCH_DIR"/hjo-results "$BENCH_DIR"/.cache/stage*_logs -name "*.log" 2>/dev/null | xargs grep -l "Phase 2\|Headline metrics" 2>/dev/null | wc -l | tr -d ' ')
+COMPLETED=$(find "$BENCH_DIR"/3yr-base-results "$BENCH_DIR"/thompson-variance-1yr "$BENCH_DIR"/thompson-variance-3yr "$BENCH_DIR"/1yr-results "$BENCH_DIR"/1yr-results-ndk "$BENCH_DIR"/hjo-results "$BENCH_DIR"/neutral-thompson-results "$BENCH_DIR"/.cache/stage*_logs -name "*.log" 2>/dev/null | xargs grep -l "Phase 2\|Headline metrics" 2>/dev/null | wc -l | tr -d ' ')
 echo "Completed logs: $COMPLETED"
 
 if [ "$COMPLETED" -eq 0 ]; then
@@ -41,18 +41,22 @@ fi
 
 # ── 2. Commit to data branch via worktree (never touches current checkout) ──
 
-# Create orphan data branch if it doesn't exist
+# Create data branch if it doesn't exist locally
 if ! git -C "$REPO_DIR" show-ref --verify --quiet "refs/heads/$DATA_BRANCH" 2>/dev/null; then
-  echo "Creating orphan branch $DATA_BRANCH..."
-  # Create it via a temporary worktree
-  git -C "$REPO_DIR" worktree add --orphan -b "$DATA_BRANCH" "$WORKTREE_DIR" 2>/dev/null || {
-    # Branch might exist on remote
+  if git -C "$REPO_DIR" show-ref --verify --quiet "refs/remotes/origin/$DATA_BRANCH" 2>/dev/null; then
+    echo "Creating local branch $DATA_BRANCH from origin/$DATA_BRANCH..."
     git -C "$REPO_DIR" worktree add -b "$DATA_BRANCH" "$WORKTREE_DIR" "origin/$DATA_BRANCH" 2>/dev/null || {
+      echo "Failed to create worktree from remote. Tar backup succeeded, git backup skipped."
+      exit 0
+    }
+  else
+    echo "Creating orphan branch $DATA_BRANCH..."
+    git -C "$REPO_DIR" worktree add --orphan -b "$DATA_BRANCH" "$WORKTREE_DIR" 2>/dev/null || {
       echo "Failed to create worktree. Tar backup succeeded, git backup skipped."
       exit 0
     }
-  }
-  (cd "$WORKTREE_DIR" && git rm -rf . --quiet 2>/dev/null; echo "# Benchmark Results Data" > README.md; git add README.md; git commit -m "Initialize data branch" --quiet)
+    (cd "$WORKTREE_DIR" && git rm -rf . --quiet 2>/dev/null; echo "# Benchmark Results Data" > README.md; git add README.md; git commit -m "Initialize data branch" --quiet)
+  fi
 fi
 
 # Ensure worktree exists
@@ -68,7 +72,7 @@ if [ ! -d "$WORKTREE_DIR/.git" ] && [ ! -f "$WORKTREE_DIR/.git" ]; then
 fi
 
 # Copy log files to worktree
-for d in 3yr-base-results thompson-variance-1yr thompson-variance-3yr 1yr-results 1yr-results-ndk hjo-results .cache/stage1_hybrid_logs .cache/stage2_greedy_logs .cache/stage3_ndk3yr_logs .cache/stage4a_jp_fdndk_logs .cache/stage4b_jp_nip66_logs .cache/stage5_connlimit_logs; do
+for d in 3yr-base-results thompson-variance-1yr thompson-variance-3yr 1yr-results 1yr-results-ndk hjo-results neutral-thompson-results .cache/stage1_hybrid_logs .cache/stage2_greedy_logs .cache/stage3_ndk3yr_logs .cache/stage4a_jp_fdndk_logs .cache/stage4b_jp_nip66_logs .cache/stage5_connlimit_logs; do
   if [ -d "$BENCH_DIR/$d" ]; then
     # Recreate directory structure under bench/
     find "$BENCH_DIR/$d" -name "*.log" | while read -r f; do
@@ -80,7 +84,7 @@ for d in 3yr-base-results thompson-variance-1yr thompson-variance-3yr 1yr-result
 done
 
 # Also copy the benchmark scripts for reproducibility
-for s in run-3yr-base.sh run-thompson-variance-1yr.sh run-thompson-variance-3yr.sh run-1yr.sh run-1yr-ndk.sh run-hjo.sh run-stage1-hybrid.sh run-stage2-greedy.sh run-stage3-ndk3yr.sh run-stage4a-jp-fdndk.sh run-stage4b-jp-nip66.sh run-stage5-connlimit.sh run-gap-benchmarks.sh; do
+for s in run-3yr-base.sh run-thompson-variance-1yr.sh run-thompson-variance-3yr.sh run-1yr.sh run-1yr-ndk.sh run-hjo.sh run-neutral-thompson.sh run-stage1-hybrid.sh run-stage2-greedy.sh run-stage3-ndk3yr.sh run-stage4a-jp-fdndk.sh run-stage4b-jp-nip66.sh run-stage5-connlimit.sh run-gap-benchmarks.sh; do
   [ -f "$BENCH_DIR/$s" ] && cp "$BENCH_DIR/$s" "$WORKTREE_DIR/bench/$s"
 done
 

@@ -47,7 +47,7 @@ Your relay picker optimizes for "who publishes where" on paper, but the relay th
 
 ## What we tested
 
-25 relay selection algorithms (10 from real clients, 6 experimental-actionable, 7 academic, 2 baselines — plus 2 latency-aware variants), tested against 12 real Nostr profiles (84-2,784 follows), across 6 time windows (7 days to 3 years), with and without NIP-66 liveness filtering. Every algorithm connected to real relays and queried for real events. Latency benchmarks across all 7 profiles measure TTFE, EOSE-race convergence, and profile-view timing.
+27 relay selection algorithms (10 from real clients, 6 experimental-actionable, 7 academic, 2 baselines, 2 latency-aware variants), tested against 12 real Nostr profiles (84-2,784 follows), across 6 time windows (7 days to 3 years), with and without NIP-66 liveness filtering. Every algorithm connected to real relays and queried for real events. Latency benchmarks across all 7 profiles measure TTFE, EOSE-race convergence, and profile-view timing.
 
 Full methodology: [OUTBOX-REPORT.md](OUTBOX-REPORT.md) | Reproduce results: [Benchmark-recreation.md](Benchmark-recreation.md) | Produced for [nostrability#69](https://github.com/nostrability/nostrability/issues/69)
 
@@ -57,7 +57,7 @@ Full methodology: [OUTBOX-REPORT.md](OUTBOX-REPORT.md) | Reproduce results: [Ben
 
 ### Two ways to add outbox
 
-There are two architecturally distinct approaches to outbox routing. Both benefit from Thompson Sampling (+9pp at 1yr, reaching 39% [26-45]; +4-15pp at 7d, reaching 78-92%), but they differ in where changes land and what tradeoffs they impose.
+There are two architecturally distinct approaches to outbox routing. Both benefit from Thompson Sampling, but they differ in where changes land and what tradeoffs they impose. Full outbox reaches 39% [26-45] at 1yr (+9pp) and 78-92% at 7d (+4-15pp). Hybrid outbox reaches 23% [14-30] at 1yr (+13pp over app-relay-only).
 
 **Full outbox routing** — replace your relay selection layer. For each followed author, route queries to their NIP-65 write relays instead of broadcasting to a fixed relay set. This is what Welshman/Coracle, rust-nostr, NDK, and Gossip do.
 
@@ -107,7 +107,7 @@ Thompson Sampling is a ~80 LOC upgrade that tracks relay delivery and feeds it b
 | **1yr** | 18-30% | 29-39% | +9-11pp | **+30-62%** | Relay retention: relays prune events >6-12mo |
 | **3yr** | 13-19% | 21-26% | +7-9pp | **+37-68%** | Severe retention: most relays have nothing >2yr |
 
-*EN data: 6 profiles, 10-run variance study (7d from HJO). JP data: 6 profiles, 5 sessions, `--no-phase2-cache`. JP profiles show larger absolute gains (+15pp 7d, +11pp 1yr) but wider variance (per-profile range: -5pp to +59pp at 1yr) due to concentrated JP relay topology. EN per-profile 1yr gains (10-run validated): fiatjaf +0pp, Gato +3pp, hodlbod +15pp, jb55 +15pp, ODELL +15pp, Telluride +4pp. JP per-profile 7d gains: tanakei +34pp, yutaro +9pp, darashi +3pp, rokuyo +12pp, kojira +20pp, shion +12pp.*
+*EN data: 6 profiles, 10-run variance study (7d from HJO). JP data: 6 profiles, 5 sessions, `--no-phase2-cache`. JP profiles show larger absolute gains (+15pp 7d, +11pp 1yr) but wider variance (per-profile range: -5pp to +59pp at 1yr) due to fragmented JP relay topology. EN per-profile 1yr gains (10-run validated): fiatjaf +0pp, Gato +3pp, hodlbod +15pp, jb55 +15pp, ODELL +15pp, Telluride +4pp. JP per-profile 7d gains: tanakei +34pp, yutaro +9pp, darashi +3pp, rokuyo +12pp, kojira +20pp, shion +12pp.*
 
 **The honest picture:** In absolute terms, +9pp at 1yr sounds modest. In relative terms, Thompson finds **30% more events** than stochastic at 1yr and **37% more at 3yr** — the gain grows with window length because the baseline drops faster than Thompson does. At 7d the baseline is already strong so relative gains are small (+5-8%).
 
@@ -628,7 +628,7 @@ analysis/
 
 ## Methodology note: phase2 cache bug
 
-The phase2 baseline cache (`bench/src/phase2/cache.ts`) had a lossy serialization bug that inflated multi-session recall in sessions 2+. Fixed in schema v2 (stores per-relay event IDs instead of union). Batch script updated to use `--no-phase2-cache`. All Thompson numbers in this document are from genuine methodology — either single-session (S1), 7d HJO data (6 profiles × 5 sessions), or the 10-run variance study (6 profiles × 10 independent 5-session sequences with `--no-phase2-cache`, 636 total invocations).
+The phase2 baseline cache (`bench/src/phase2/cache.ts`) had a lossy serialization bug that inflated multi-session recall in sessions 2+. Fixed in schema v2 (stores per-relay event IDs instead of union). Batch script updated to use `--no-phase2-cache`. All Thompson numbers in this document are from genuine methodology — either single-session (S1), 7d HJO data (6 profiles × 5 sessions), or the 10-run variance study (6 profiles × 10 independent 5-session sequences with `--no-phase2-cache`, 600 total invocations across 1yr and 3yr windows).
 
 ## Links
 

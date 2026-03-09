@@ -705,7 +705,7 @@ To test whether patterns generalize beyond fiatjaf, event recall was measured ac
 
 *[range] = min–max across 6 profiles (194–1,779 follows). The spread reflects real cross-profile heterogeneity — profiles with different follow counts and relay diversity get different recall. For stochastic algorithms, single-seed results add run-to-run variance on top (see variance analysis below).*
 
-The ~8pp gap between the best academic algorithm (92.4%) and the best practitioner algorithm (87.9%) represents the theoretical ceiling that no simple, deployable algorithm has reached. However, Welshman+Thompson Sampling (Section 8.3) closes most of this gap through learning at 7d — achieving 84-92% after 2-3 sessions (HJO data) without the implementation complexity of the academic algorithms. At 1yr, Thompson reaches 39% (10-run validated) — relay retention, not algorithmic quality, is the binding constraint at longer windows.
+The ~8pp gap between the best academic algorithm (92.4%) and the best 20-connection practitioner algorithm (Greedy, 84.4%) represents the theoretical ceiling that no simple, deployable algorithm has reached. Direct Mapping (87.9%) narrows this to ~4.5pp but requires unlimited connections. However, Welshman+Thompson Sampling (Section 8.3) closes most of this gap through learning at 7d — achieving 84-92% after 2-3 sessions (HJO data) without the implementation complexity of the academic algorithms. At 1yr, Thompson reaches 39% (10-run validated) — relay retention, not algorithmic quality, is the binding constraint at longer windows.
 
 Profile characteristics:
 
@@ -792,7 +792,7 @@ The NIP-66 liveness filter removes relays not confirmed alive by network monitor
 
 NIP-66 filtering consistently improves relay success rates substantially (about 1.5× to 3.1× in these profiles). Larger follow lists benefit more — they have more obscure relays in the candidate set. The filter removes 40–66% of declared relays, with the percentage increasing with follow count.
 
-NIP-66 filtering benefits stochastic algorithms (MAB-UCB, Welshman) most because they sample from the full relay pool — removing dead relays from that pool directly improves sample quality. Thompson Sampling and Greedy show negligible deltas since they already learn to avoid dead relays through delivery feedback. See [NIP-66 Comparison Report](bench/NIP66-COMPARISON-REPORT.md) for per-profile single-session data.
+NIP-66 filtering benefits stochastic algorithms (MAB-UCB, Welshman) most because they sample from the full relay pool — removing dead relays from that pool directly improves sample quality. Thompson Sampling shows negligible NIP-66 deltas because it learns to avoid dead relays through delivery feedback. Greedy also shows negligible deltas, but for a different reason — its deterministic coverage-maximization selects relays by declared write lists regardless of liveness. See [NIP-66 Comparison Report](bench/NIP66-COMPARISON-REPORT.md) for per-profile single-session data.
 
 **Thompson Sampling learning:**
 

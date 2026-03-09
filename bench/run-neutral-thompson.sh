@@ -3,6 +3,8 @@
 # 6 EN profiles × 5 sessions
 set -uo pipefail
 
+cd "$(dirname "$0")"
+
 ALGOS="ndk,ndk-thompson,ndk-thompson-neutral"
 COMMON="--verify --verify-window 31536000 --nip66-filter liveness --no-phase2-cache --fast --output table"
 

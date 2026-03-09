@@ -65,8 +65,8 @@ for WINDOW in $WINDOWS; do
         echo "FAILED: $key (log at ${logfile}.tmp)" >&2
       fi
 
-      # Rate limit detection
-      if grep -qi "rate.limit\|429\|too many\|throttl" "${logfile}.tmp" 2>/dev/null; then
+      # Rate limit detection (check final log location; .tmp only exists on failure)
+      if grep -qi "rate.limit\|429\|too many\|throttl" "$logfile" "${logfile}.tmp" 2>/dev/null; then
         echo "WARNING: Rate limiting detected. Doubling cooldown."
         sleep $COOLDOWN_PROFILE
       fi
