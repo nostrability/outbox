@@ -22,6 +22,7 @@ echo "Total runs: ~315"
 echo
 
 # ── Smoke test: greedy-thompson sanity check ──
+mkdir -p .cache
 echo "--- Smoke test: greedy-thompson cold start ---"
 SMOKE_PK="6a0c596c1484eae2e8131a030f269944921e52619c1dd143a029c64ea6cd9731"  # Gato
 SMOKE_LOG=".cache/greedy_thompson_smoke.log"
