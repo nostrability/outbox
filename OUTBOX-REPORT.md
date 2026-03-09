@@ -935,19 +935,21 @@ See [bench/src/algorithms/ditto-outbox.ts](bench/src/algorithms/ditto-outbox.ts)
 
 **Question:** Does Thompson Sampling help global-optimization algorithms (greedy set-cover) as much as per-author algorithms (Welshman, FD)?
 
-**Result: No — gains are modest (+2pp mean at 1yr, 6 EN profiles).** Greedy set-cover's deterministic coverage-maximization leaves little room for Thompson to improve. The greedy loop picks relays by uncovered-pubkey count; multiplying by a Beta sample occasionally reranks candidates but rarely changes which relay gets selected because coverage count dominates.
+**Result: No — gains are modest (+3pp mean at S5 1yr, 6 EN profiles).** Greedy set-cover's deterministic coverage-maximization leaves little room for Thompson to improve. The greedy loop picks relays by uncovered-pubkey count; multiplying by a Beta sample occasionally reranks candidates but rarely changes which relay gets selected because coverage count dominates.
 
-**1yr EN (6 profiles × 5 sessions, NIP-66 liveness, cap@20):**
+**1yr EN (6 profiles × 5 sessions with learning, NIP-66 liveness, cap@20, S5 shown):**
 
-| Profile (follows) | Greedy | Greedy+Thompson | Gain |
+| Profile (follows) | Greedy | Greedy+Thompson S5 | Gain |
 |---|:---:|:---:|:---:|
-| fiatjaf (194) | 27.8% | 27.1% | -0.7pp |
-| hodlbod (442) | 16.6% | 18.2% | +1.5pp |
-| jb55 (943) | 20.1% | 21.8% | +1.7pp |
-| ODELL (1,779) | 18.8% | 21.9% | +3.1pp |
-| Gato (399) | 14.0% | 16.9% | +2.8pp |
-| Telluride (2,784) | 20.6% | 22.6% | +2.0pp |
-| **6-profile mean** | **19.7%** | **21.4%** | **+1.8pp** |
+| fiatjaf (194) | 27.7% | 33.4% | +5.7pp |
+| Gato (399) | 14.6% | 20.1% | +5.5pp |
+| hodlbod (442) | 16.3% | 19.9% | +3.6pp |
+| jb55 (943) | 20.3% | 24.0% | +3.7pp |
+| ODELL (1,779) | 16.7% | 16.8% | +0.1pp |
+| Telluride (2,784) | 22.7% | 24.0% | +1.3pp |
+| **6-profile mean** | **19.7%** | **23.0%** | **+3.3pp** |
+
+*Mean across all 30 sessions (S1-S5): +2.4pp. Learning adds ~1pp over cold-start. ODELL is a near-zero responder — greedy already captures his relay graph optimally.*
 
 At 3yr, Greedy+Thompson shows near-zero or negative gains (fiatjaf -4.4pp, mean +0.7pp across 6 profiles). The greedy algorithm's strength — deterministic optimal coverage — is also its weakness for Thompson: there isn't enough stochasticity for learning to exploit.
 

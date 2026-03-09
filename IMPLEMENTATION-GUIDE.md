@@ -20,7 +20,7 @@ What's your starting point?
 │
 ├─ Basic outbox (real-time feeds)?
 │  ├─ Need connection minimization? → Greedy Set-Cover (16% [12–20] 1yr, 84% [77–94] 7d)
-│  │     With Thompson: Greedy+Thompson (+2pp at 1yr, modest; learning helps NDK/WT more)
+│  │     With Thompson: Greedy+Thompson (+3pp at 1yr, modest; learning helps NDK/WT more)
 │  ├─ Need zero-config library?     → Priority-Based / NDK (16% [12–19] 1yr, 83% [77–92] 7d)
 │  └─ Simplicity over optimization? → Direct Mapping (30% [17–40] 1yr, unlimited connections)
 │
@@ -60,7 +60,7 @@ The relative gain grows with window length: Thompson finds 30-62% more events at
 
 **Thompson gains are highly profile- and algorithm-dependent.** EN profiles (6, 10-run validated) show +0 to +15pp at 1yr for Welshman+Thompson. JP profiles (6, 5 sessions) show -5 to +59pp — wider range. The JP relay ecosystem is more fragmented than EN, giving Thompson more room to optimize for some algorithms. The binding constraint is relay graph complexity (how many distinct relay configurations exist among follows), not follow count.
 
-**Thompson does not help all base algorithms equally.** Greedy+Thompson shows only +2pp mean gain at 1yr (5 EN profiles) — the greedy algorithm's deterministic coverage-maximization leaves little room for Thompson to improve. FD+Thompson helps EN profiles (+8.7pp) but *hurts* JP profiles (-4.8pp mean) where the per-author structure interacts poorly with fragmented relay graphs. NDK+Thompson is the most consistently positive across both EN (+11pp 1yr) and JP (+9pp 1yr).
+**Thompson does not help all base algorithms equally.** Greedy+Thompson shows only +3pp mean gain at S5 1yr (6 EN profiles) — the greedy algorithm's deterministic coverage-maximization leaves little room for Thompson to improve. FD+Thompson helps EN profiles (+8.7pp) but *hurts* JP profiles (-4.8pp mean) where the per-author structure interacts poorly with fragmented relay graphs. NDK+Thompson is the most consistently positive across both EN (+11pp 1yr) and JP (+9pp 1yr).
 
 ### 1. Learn from what actually works
 
