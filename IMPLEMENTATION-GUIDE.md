@@ -117,10 +117,13 @@ is preserved — Thompson replaces the popularity ranking in the third tier. Aft
 
 *†Follow counts are from the benchmark snapshot used for each run. Contact lists change over time — hodlbod, jb55, and ODELL show different counts across benchmark batches because their follow lists grew between runs. Relative gains are not affected.*
 
-NDK+Thompson shows high variance: fiatjaf regresses (-18pp) consistently across 10 runs
-(14.4% ± 1.3 std) because NDK's cascade concentrates on relay.damus.io, which happens
-to work well for that follow graph — Thompson's exploration disrupts this. For the other
-5 profiles, gains range +12pp to +25pp.
+NDK+Thompson shows high variance: fiatjaf regresses (-18pp to -23pp) consistently across 10+ runs
+because NDK's cascade concentrates on relay.damus.io, which happens to cover fiatjaf's small
+follow graph well. Thompson's learning down-weights relay.damus.io (moderate 1yr delivery rate due
+to retention, not quality) and substitutes smaller relays with less coverage. A neutral cold-start
+variant (Beta(1,1) → 1.0) does not fix this — the regression comes from learned scores, not
+cold-start noise. See OUTBOX-REPORT Section 8.5c′ and 8.6 for analysis. For the other
+5 profiles, gains range +12pp to +35pp.
 NDK's selected-first priority cascade short-circuits Thompson scoring — if
 already-connected relays satisfy the per-author target, the Thompson scorer is never
 consulted. Welshman's per-user relay budgeting gives Thompson full control over

@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
-# Neutral cold start Thompson benchmark: ndk vs ndk-thompson vs ndk-thompson-neutral
-# 6 EN profiles × 5 sessions
+# NDK+Thompson Neutral benchmark: ndk vs ndk-thompson vs ndk-thompson-neutral
+# 6 EN profiles × 2 windows × 5 sessions = 60 runs
+# Three-way paired comparison from identical relay snapshots
 set -uo pipefail
 
 cd "$(dirname "$0")"
 
 ALGOS="ndk,ndk-thompson,ndk-thompson-neutral"
-COMMON="--verify --verify-window 31536000 --nip66-filter liveness --no-phase2-cache --fast --output table"
+SESSIONS=5
+COOLDOWN_PROFILE=60
+COOLDOWN_SESSION=120
 
 NAMES="fiatjaf hodlbod jb55 ODELL Gato Telluride"
 PK_fiatjaf="3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d"
@@ -16,35 +19,68 @@ PK_ODELL="04c915daefee38317fa734444acee390a8269fe5810b2241e5e6dd343dfbecc9"
 PK_Gato="6a0c596c1484eae2e8131a030f269944921e52619c1dd143a029c64ea6cd9731"
 PK_Telluride="2c65940725bbf10b452197fba41c6cb14afd41e28e0be22aab49bf246b0c84e3"
 
-SESSIONS=5
-LOGDIR="neutral-thompson-results"
-mkdir -p "$LOGDIR"
+WINDOWS="31536000 94608000"
+PROGRESS_FILE=".cache/neutral_thompson_progress.log"
+touch "$PROGRESS_FILE"
 
-for session in $(seq 1 $SESSIONS); do
-  for name in $NAMES; do
-    eval "pk=\$PK_${name}"
-    logfile="$LOGDIR/${name}_s${session}.log"
+echo "=== NDK+Thompson Neutral Benchmark ==="
+echo "Algorithms: $ALGOS"
+echo "Profiles: 6 EN × 2 windows × $SESSIONS sessions = 60 runs"
+echo "start=$(date +%s)" > ".cache/neutral_thompson_timestamps.txt"
+echo "Start: $(date)"
+echo
 
-    # Skip if already completed successfully
-    if [ -f "${logfile}.done" ]; then
-      echo "SKIP (already done): ${name}_s${session}"
-      continue
-    fi
+for WINDOW in $WINDOWS; do
+  COMMON="--verify --verify-window $WINDOW --verify-concurrency 10 --nip66-filter liveness --no-phase2-cache --fast --output both"
+  LOGDIR=".cache/neutral_thompson_logs/${WINDOW}"
+  mkdir -p "$LOGDIR"
 
-    echo "=== Session $session: $name (1yr, ndk vs ndk-thompson vs neutral) ==="
-    if deno task bench "$pk" --algorithms "$ALGOS" $COMMON > "${logfile}.tmp" 2>&1; then
-      mv "${logfile}.tmp" "$logfile"
-      touch "${logfile}.done"
-    else
-      echo "FAILED: ${name}_s${session} (exit $?), see ${logfile}.tmp"
-      continue
-    fi
-    grep -E '(Priority|NDK\+Thompson)' "$logfile" | grep -E 'Recall' | head -3
-    echo
-    sleep 30
+  # Resume-safe score clearing (both ndk-thompson and ndk-thompson-neutral)
+  MARKER=".cache/neutral_${WINDOW}_scores_cleared"
+  if [ ! -f "$MARKER" ]; then
+    echo "Clearing ndk-thompson and ndk-thompson-neutral scores for window=$WINDOW..."
+    rm -f .cache/relay_scores_*_${WINDOW}_liveness_ndk-thompson.json
+    rm -f .cache/relay_scores_*_${WINDOW}_liveness_ndk-thompson-neutral.json
+    touch "$MARKER"
+  fi
+
+  for session in $(seq 1 $SESSIONS); do
+    for name in $NAMES; do
+      pk_var="PK_${name}"
+      pk="${!pk_var}"
+      key="neutral_${WINDOW}_${name}_s${session}"
+      logfile="$LOGDIR/${name}_s${session}.log"
+
+      # Skip completed
+      if grep -qF "$key" "$PROGRESS_FILE" 2>/dev/null; then
+        echo "SKIP: $key"
+        continue
+      fi
+
+      echo "[S$session W$WINDOW] $name — $(date)"
+      deno task bench "$pk" --algorithms "$ALGOS" $COMMON 2>&1 | tee "${logfile}.tmp"
+      if [ ${PIPESTATUS[0]} -eq 0 ]; then
+        mv "${logfile}.tmp" "$logfile"
+        touch "${logfile}.done"
+        echo "$key" >> "$PROGRESS_FILE"
+        grep -iE '(Priority-Based|NDK\+Thompson)' "$logfile" | grep -iE 'Recall' | head -3
+      else
+        echo "FAILED: $key (log at ${logfile}.tmp)" >&2
+      fi
+
+      # Rate limit detection (check final log location; .tmp only exists on failure)
+      if grep -qi "rate.limit\|429\|too many\|throttl" "$logfile" "${logfile}.tmp" 2>/dev/null; then
+        echo "WARNING: Rate limiting detected. Doubling cooldown."
+        sleep $COOLDOWN_PROFILE
+      fi
+
+      echo "--- cooling ${COOLDOWN_PROFILE}s ---"
+      sleep $COOLDOWN_PROFILE
+    done
+    echo "--- Session $session (W$WINDOW) complete, cooling ${COOLDOWN_SESSION}s --- $(date)"
+    sleep $COOLDOWN_SESSION
   done
-  echo "--- Session $session complete, cooling 60s ---"
-  sleep 60
 done
 
-echo "=== All neutral Thompson runs complete ==="
+echo "end=$(date +%s)" >> ".cache/neutral_thompson_timestamps.txt"
+echo "=== NDK+Thompson Neutral complete === $(date)"

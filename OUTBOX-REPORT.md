@@ -970,6 +970,40 @@ At 3yr, Greedy+Thompson shows near-zero or negative gains (fiatjaf -4.4pp, mean 
 
 ODELL's unusually high 3yr baseline (93%) is due to relay.damus.io retaining a large fraction of events — NDK's priority cascade concentrates on this relay. fiatjaf shows regression (-8.9pp) at 3yr, consistent with the 1yr pattern where Thompson exploration disrupts NDK's fortuitous concentration on relay.damus.io.
 
+### 8.5c′ NDK+Thompson Neutral Cold Start
+
+**Question:** Does the fiatjaf regression come from Thompson's random cold start (Beta(1,1) = uniform noise), or from the learning itself? A neutral variant replaces cold-start randomness with a deterministic prior of 1.0 — unobserved relays get the same score as popularity alone.
+
+**Result: Neutral does NOT fix the fiatjaf regression.** The neutral prior only helps at S1 (exactly matches base NDK by design). Once learning begins, Neutral converges to the same destructive relay weights within 2-3 sessions.
+
+**1yr EN (6 profiles × 5 sessions, NIP-66 liveness, cap@20, S5 shown):**
+
+| Profile (follows) | NDK base | NDK+T | NDK+T Neutral | T delta | Neutral delta |
+|---|:---:|:---:|:---:|:---:|:---:|
+| fiatjaf (194) | 39.1% | 16.1% | 19.0% | -23.0pp | -20.1pp |
+| hodlbod (442) | 14.6% | 42.9% | 35.6% | +28.3pp | +21.0pp |
+| jb55 (943) | 20.1% | 35.3% | 34.4% | +15.2pp | +14.3pp |
+| ODELL (1,779) | 18.1% | 34.7% | 33.4% | +16.6pp | +15.3pp |
+| Gato (399) | 16.5% | 51.4% | 46.2% | +34.9pp | +29.7pp |
+| Telluride (2,784) | 22.6% | 41.2% | 34.1% | +18.6pp | +11.5pp |
+| **6-profile mean** | **21.8%** | **36.9%** | **33.8%** | **+15.1pp** | **+12.0pp** |
+
+**3yr EN (6 profiles × 5 sessions, S5 shown):**
+
+| Profile (follows) | NDK base | NDK+T | NDK+T Neutral | T delta | Neutral delta |
+|---|:---:|:---:|:---:|:---:|:---:|
+| fiatjaf (194) | 17.8% | 8.7% | 8.6% | -9.1pp | -9.2pp |
+| hodlbod (442) | 8.8% | 23.7% | 35.4% | +14.9pp | +26.6pp |
+| jb55 (943) | 12.5% | 23.0% | 23.2% | +10.5pp | +10.7pp |
+| ODELL (1,779) | 14.0% | 26.4% | 26.0% | +12.4pp | +12.0pp |
+| Gato (399) | 11.0% | 35.5% | 37.2% | +24.5pp | +26.2pp |
+| Telluride (2,784) | 17.7% | 35.0% | 34.5% | +17.3pp | +16.8pp |
+| **6-profile mean** | **13.6%** | **25.4%** | **27.5%** | **+11.8pp** | **+13.9pp** |
+
+At 1yr, regular Thompson leads by +3pp in the mean (driven by Gato and Telluride). At 3yr, Neutral leads by +2pp (driven by hodlbod +26.6pp vs +14.9pp). Both variants regress fiatjaf by ~20pp at 1yr and ~9pp at 3yr — confirming the regression is caused by Thompson's learned relay scores, not cold-start noise.
+
+**Root cause:** Thompson scores are per-relay aggregates across all followed authors. When relay.damus.io delivers only 20-30% of 1yr-old events (a retention issue, not quality), Thompson down-weights it. But for fiatjaf's small concentrated graph, relay.damus.io IS the coverage — no alternative relay covers those pubkeys. Thompson conflates relay retention with relay quality, and for small concentrated graphs there are no alternative relays to recover coverage. See Section 8.6 for discussion.
+
 ### 8.5d FD/NDK+Thompson JP Expansion
 
 **Question:** Do FD+Thompson and NDK+Thompson help JP profiles as much as EN?
@@ -1195,6 +1229,18 @@ Big Relays reaches full completeness at +0ms on most profiles (only 1-2 relays w
 Telluride's slow convergence (89% at @5s, 100% only at @15s) is driven by timeout overhead: 35 timed-out relays in a 20-concurrency pool means some batches wait the full 15s EOSE timeout.
 
 *Latency simulation uses per-relay timing from baseline queries. It models parallel WebSocket connections with the same concurrency as the live benchmark (20 concurrent). Timing includes connection establishment (DNS+TCP+TLS+WS upgrade) and query execution through EOSE. See [`bench/src/phase2/verify.ts`](bench/src/phase2/verify.ts) for the simulation code and [`bench/src/phase2/probe.ts`](bench/src/phase2/probe.ts) for the standalone relay latency probe.*
+
+### 8.6 Thompson regression analysis: coverage vs delivery rate
+
+Thompson Sampling scores relays by aggregate delivery rate — for each relay, it tracks what fraction of baseline events the relay delivered across all assigned pubkeys (see `relay-scores.ts`). This works well when delivery rate and coverage are correlated (large diverse follow graphs), but fails when they diverge.
+
+**The misalignment:** At 1yr, relay.damus.io might deliver only 20-30% of baseline events (a retention policy issue — events older than 6-12 months get pruned). Thompson learns low α/β → low Beta samples → low score. But for fiatjaf's 194 follows, relay.damus.io covers ~50 of them — no other relay comes close. Thompson demotes the most irreplaceable relay and substitutes smaller relays with higher delivery rates but far less coverage.
+
+**Why it only hurts small concentrated graphs:** For hodlbod (2,784 follows), demoting one relay merely shifts queries to other relays covering the same pubkeys. For fiatjaf (194 follows on a few popular relays), demoting relay.damus.io leaves pubkeys with no alternative coverage.
+
+**Neutral cold start does not help** because the problem is not cold-start randomness — it's that Thompson's learning objective (delivery rate) diverges from the algorithm's need (pubkey coverage) for this profile shape.
+
+**Potential mitigations** (untested): (1) Coverage-weighted scoring — weight Thompson updates by how irreplaceable a relay is for the profile, so high-coverage relays resist demotion. (2) Coverage floor — fall back to base NDK if Thompson's relay set covers fewer pubkeys than the base selection. (3) Per-author scoring — track (relay, pubkey-cluster) pairs instead of global relay scores, so fiatjaf's relays aren't penalized by delivery rates from unrelated authors.
 
 ---
 
