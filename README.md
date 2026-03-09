@@ -74,7 +74,7 @@ There are two architecturally distinct approaches to outbox routing. Both benefi
 | **Engineering effort** | Rewrite relay routing (~200-500 LOC) | Add outbox queries to 3-4 hooks (~80 LOC) |
 | **Best for** | Clients building relay routing from scratch, or with existing per-author routing | Clients with hardcoded app relays or fixed relay sets that can't change the feed path |
 
-*Hybrid+Thompson 1yr: Ditto-Mew (4 app relays) = 10.4% mean → Ditto+Outbox Thompson = 22.8% mean (+12.4pp, 6 EN profiles × 5 sessions). At 3yr: 7.0% → 15.4% (+8.4pp). Hybrid outbox doubles event recall relative to app-relay-only, though it remains below full outbox Welshman+Thompson (39% at 1yr). The hybrid approach queries fewer outbox relays per author (top 3) but compensates with the app relay safety net.*
+*Hybrid+Thompson 1yr: Ditto-Mew (4 app relays) = 10.1% mean → Ditto+Outbox Thompson = 22.8% mean (+12.6pp, 6 EN profiles × 5 sessions). At 3yr: 6.9% → 15.4% (+8.5pp). Hybrid outbox doubles event recall relative to app-relay-only, though it remains below full outbox Welshman+Thompson (39% at 1yr). The hybrid approach queries fewer outbox relays per author (top 3) but compensates with the app relay safety net.*
 
 **Decision tree:**
 
@@ -516,7 +516,7 @@ useEvent(parentRef.id, parentRef.relay ? [parentRef.relay] : undefined, parentRe
 |---|--:|--:|
 | **Event recall** | 6.2% [5–7] | 30.4% [24–41] |
 
-*Hybrid beats full outbox on cold start (30.4% vs 23.2% Welshman+Thompson S1) because the 4 app relays provide a guaranteed floor. Multi-session benchmarks confirm: 1yr mean Mew=10.4% → Outbox=22.8% (+12.4pp), 3yr mean 7.0% → 15.4% (+8.4pp). See [OUTBOX-REPORT.md § 8.5](OUTBOX-REPORT.md#85-hybrid-outbox-app-relay-broadcast--per-author-thompson) and [bench/src/algorithms/ditto-outbox.ts](bench/src/algorithms/ditto-outbox.ts).*
+*Hybrid beats full outbox on cold start (30.4% vs 23.2% Welshman+Thompson S1) because the 4 app relays provide a guaranteed floor. Multi-session benchmarks confirm: 1yr mean Mew=10.1% → Outbox=22.8% (+12.6pp), 3yr mean 6.9% → 15.4% (+8.5pp). See [OUTBOX-REPORT.md § 8.5](OUTBOX-REPORT.md#85-hybrid-outbox-app-relay-broadcast--per-author-thompson) and [bench/src/algorithms/ditto-outbox.ts](bench/src/algorithms/ditto-outbox.ts).*
 
 ### NIP-66 pre-filter
 

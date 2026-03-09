@@ -145,8 +145,8 @@ outbox queries only for profile views, event lookups, and thread traversal.
 
 | Window | Ditto-Mew (app relays only) | Ditto+Outbox Thompson | Gain |
 |:---:|:---:|:---:|:---:|
-| **1yr** | 10.4% [6–13] | 22.8% [14–30] | **+12.4pp (+119%)** |
-| **3yr** | 7.0% [4–11] | 15.4% [7–23] | **+8.4pp (+120%)** |
+| **1yr** | 10.1% [7–12] | 22.8% [14–30] | **+12.6pp (+125%)** |
+| **3yr** | 6.9% [4–10] | 15.4% [7–23] | **+8.5pp (+123%)** |
 
 Hybrid outbox doubles event recall relative to app-relay-only. ODELL shows the
 largest gain (+19pp at 1yr) due to many follows publishing on niche relays.

@@ -924,8 +924,8 @@ The algorithm models [Ditto-Mew](https://gitlab.com/soapbox-pub/ditto-mew)'s arc
 
 | Window | Ditto-Mew (app relays only) | Ditto+Outbox Thompson (S5 mean) | Gain |
 |:---:|:---:|:---:|:---:|
-| **1yr** | 10.4% [6–13] | 22.8% [14–30] | **+12.4pp (+119%)** |
-| **3yr** | 7.0% [4–11] | 15.4% [7–23] | **+8.4pp (+120%)** |
+| **1yr** | 10.1% [7–12] | 22.8% [14–30] | **+12.6pp (+125%)** |
+| **3yr** | 6.9% [4–10] | 15.4% [7–23] | **+8.5pp (+123%)** |
 
 Hybrid outbox roughly doubles event recall vs app-relay-only across both time windows. ODELL shows the largest 1yr gain (+19pp) due to many follows publishing on niche relays. Full outbox Welshman+Thompson still leads (39% at 1yr) because it has no app-relay floor diluting the relay budget.
 
@@ -935,9 +935,9 @@ See [bench/src/algorithms/ditto-outbox.ts](bench/src/algorithms/ditto-outbox.ts)
 
 **Question:** Does Thompson Sampling help global-optimization algorithms (greedy set-cover) as much as per-author algorithms (Welshman, FD)?
 
-**Result: No — gains are modest (+2pp mean at 1yr, 5 EN profiles).** Greedy set-cover's deterministic coverage-maximization leaves little room for Thompson to improve. The greedy loop picks relays by uncovered-pubkey count; multiplying by a Beta sample occasionally reranks candidates but rarely changes which relay gets selected because coverage count dominates.
+**Result: No — gains are modest (+2pp mean at 1yr, 6 EN profiles).** Greedy set-cover's deterministic coverage-maximization leaves little room for Thompson to improve. The greedy loop picks relays by uncovered-pubkey count; multiplying by a Beta sample occasionally reranks candidates but rarely changes which relay gets selected because coverage count dominates.
 
-**1yr EN (5 profiles × 5 sessions, NIP-66 liveness, cap@20):**
+**1yr EN (6 profiles × 5 sessions, NIP-66 liveness, cap@20):**
 
 | Profile (follows) | Greedy | Greedy+Thompson | Gain |
 |---|:---:|:---:|:---:|
@@ -946,9 +946,10 @@ See [bench/src/algorithms/ditto-outbox.ts](bench/src/algorithms/ditto-outbox.ts)
 | jb55 (943) | 20.1% | 21.8% | +1.7pp |
 | ODELL (1,779) | 18.8% | 21.9% | +3.1pp |
 | Gato (399) | 14.0% | 16.9% | +2.8pp |
-| **5-profile mean** | **19.5%** | **21.2%** | **+1.7pp** |
+| Telluride (2,784) | 20.6% | 22.6% | +2.0pp |
+| **6-profile mean** | **19.7%** | **21.4%** | **+1.8pp** |
 
-At 3yr, Greedy+Thompson shows near-zero or negative gains (fiatjaf -4.4pp, mean +0.8pp across 5 profiles). The greedy algorithm's strength — deterministic optimal coverage — is also its weakness for Thompson: there isn't enough stochasticity for learning to exploit.
+At 3yr, Greedy+Thompson shows near-zero or negative gains (fiatjaf -4.4pp, mean +0.7pp across 6 profiles). The greedy algorithm's strength — deterministic optimal coverage — is also its weakness for Thompson: there isn't enough stochasticity for learning to exploit.
 
 **Recommendation:** For greedy set-cover users (Gossip, Applesauce), Thompson Sampling is not the right upgrade path. Consider switching to a stochastic algorithm (Welshman) first, then adding Thompson, or adding NDK+Thompson integration which preserves deterministic priorities while allowing Thompson to influence the exploration tier.
 
@@ -963,7 +964,7 @@ At 3yr, Greedy+Thompson shows near-zero or negative gains (fiatjaf -4.4pp, mean 
 | jb55 (943) | 14.2% | 23.3% ± 1.6 | +9.1pp |
 | ODELL (1,779) | 93.1% | 96.7% ± 1.2 | +3.6pp |
 | Gato (399) | 10.6% | 16.4% ± 4.1 | +5.8pp |
-| Telluride (2,784) | 15.9% | 17.9% | +2.0pp (N=1) |
+| Telluride (2,784) | 17.4% ± 0.7 | 26.1% ± 2.4 | +8.8pp |
 
 ODELL's unusually high 3yr baseline (93%) is due to relay.damus.io retaining a large fraction of events — NDK's priority cascade concentrates on this relay. fiatjaf shows regression (-8.9pp) at 3yr, consistent with the 1yr pattern where Thompson exploration disrupts NDK's fortuitous concentration on relay.damus.io.
 
