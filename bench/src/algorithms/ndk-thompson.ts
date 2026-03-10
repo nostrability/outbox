@@ -71,6 +71,14 @@ export function ndkThompsonCG3(
   return ndkThompsonCore(input, params, rng, /* unified */ false, /* coverageGuarantee */ true, /* cgBudgetFraction */ 0.5, /* cgConditional */ true);
 }
 
+export function ndkThompsonSB(
+  input: BenchmarkInput,
+  params: AlgorithmParams,
+  rng: () => number,
+): AlgorithmResult {
+  return ndkThompsonCore(input, params, rng, /* unified */ false, /* coverageGuarantee */ false, /* cgBudgetFraction */ undefined, /* cgConditional */ false, /* soleSourceBoost */ 5.0);
+}
+
 function ndkThompsonCore(
   input: BenchmarkInput,
   params: AlgorithmParams,
@@ -79,6 +87,7 @@ function ndkThompsonCore(
   coverageGuarantee = false,
   cgBudgetFraction?: number,
   cgConditional = false,
+  soleSourceBoost?: number,
 ): AlgorithmResult {
   const start = performance.now();
   const relayGoalPerAuthor = params.relayGoalPerAuthor ?? params.maxRelaysPerUser ?? 2;
@@ -104,6 +113,28 @@ function ndkThompsonCore(
 
   // Process authors in deterministic order (sorted by hex pubkey)
   const sortedFollows = [...input.follows].sort();
+
+  // Score boost: detect sole-source relays and re-sort pubkeys
+  const soleSourceRelaySet = new Set<RelayUrl>();
+  const soleSourcePubkeys = new Set<Pubkey>();
+  if (soleSourceBoost) {
+    for (const pubkey of sortedFollows) {
+      const authorRelays = input.writerToRelays.get(pubkey);
+      if (authorRelays && authorRelays.size === 1) {
+        const [onlyRelay] = authorRelays;
+        soleSourceRelaySet.add(onlyRelay);
+        soleSourcePubkeys.add(pubkey);
+      }
+    }
+    // Re-sort: sole-source pubkeys first, then the rest (P1 mitigation)
+    sortedFollows.sort((a, b) => {
+      const aIsSS = soleSourcePubkeys.has(a) ? 0 : 1;
+      const bIsSS = soleSourcePubkeys.has(b) ? 0 : 1;
+      if (aIsSS !== bIsSS) return aIsSS - bIsSS;
+      return a < b ? -1 : a > b ? 1 : 0;
+    });
+    console.error(`Score boost: ${soleSourceRelaySet.size} sole-source relays at ${soleSourceBoost}x`);
+  }
 
   // Coverage guarantee: force-select sole-source relays
   const forcedRelays = new Set<RelayUrl>();
@@ -185,6 +216,11 @@ function ndkThompsonCore(
 
       let score = (1 + Math.log(weight)) * sample;
 
+      // Score boost for sole-source relays
+      if (soleSourceBoost && soleSourceRelaySet.has(relay)) {
+        score *= soleSourceBoost;
+      }
+
       // Optional latency discount
       const latMs = relayLatencies?.get(relay);
       if (latMs !== undefined) {
@@ -254,7 +290,8 @@ function ndkThompsonCore(
   const cgLabel = coverageGuarantee
     ? (cgSkipped ? "-skip" : (cgConditional ? "+CG3" : (cgBudgetFraction != null ? "+CG2" : "+CG")))
     : "";
-  const name = `NDK+Thompson (${variant})${cgLabel}${hasLatency ? "+Latency" : ""}`;
+  const sbLabel = soleSourceBoost ? "+SB" : "";
+  const name = `NDK+Thompson (${variant})${cgLabel}${sbLabel}${hasLatency ? "+Latency" : ""}`;
 
   const notes: string[] = [];
   if (relayPriors && relayPriors.size > 0) {
@@ -276,6 +313,9 @@ function ndkThompsonCore(
     } else {
       notes.push(`Coverage guarantee: ${forcedRelays.size} sole-source relays forced`);
     }
+  }
+  if (soleSourceBoost) {
+    notes.push(`Score boost: ${soleSourceRelaySet.size} sole-source relays at ${soleSourceBoost}x (${soleSourcePubkeys.size} pubkeys prioritized)`);
   }
 
   return {

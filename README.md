@@ -173,7 +173,7 @@ NDK+Thompson shows high variance across profiles. fiatjaf regresses consistently
 | Telluride (2,784) | 27.2% | 28.0% | 27.5% | +0.3pp | SKIPPED (30 >= 10) |
 | **6-profile mean** | **22.0%** | **26.2%** | **26.9%** | **+4.9pp** | |
 
-CG3 preserves the fiatjaf fix (+25.6pp), eliminates the ODELL/hodlbod regressions, and beats both T and CG on grand mean. Gato is a partial tradeoff: CG3 gains +2.4pp vs T but trails CG by 4.7pp — the partial-weight scoring reduces SE degradation but doesn't fully overcome relay-set anchoring from forced relays. See [OUTBOX-REPORT.md § 8.5c‴](OUTBOX-REPORT.md#85c-ndkthompson-cg3-conditional-cg--partial-weight-se) for the full analysis.
+CG3 preserves the fiatjaf fix (+25.6pp), eliminates the ODELL/hodlbod regressions, and beats both T and CG on grand mean. Gato is a partial tradeoff: CG3 gains +2.4pp vs T but trails CG by 4.7pp — the partial-weight scoring reduces score degradation from sole-source exclusion but doesn't fully overcome relay-set anchoring from forced relays. A softer alternative — **Score Boost (SB)**, a 5× score multiplier instead of hard forcing — was benchmarked and rejected: Score Boost grand mean 25.8% vs CG3 28.8% (−3.0pp), regressing on 5 of 6 profiles because it lacks CG3's conditional skip and over-concentrates budget on sole-source relays in large graphs. See [OUTBOX-REPORT.md § 8.5c‴](OUTBOX-REPORT.md#85c-ndkthompson-cg3-conditional-cg--partial-weight-se) for the full analysis.
 
 *10-run variance study confirms the fiatjaf regression is consistent (14.4% +/- 1.3, well below baseline 32.1% in every run), not a single-run artifact. Follower counts differ from the adjacent Welshman+Thompson table because the NDK benchmark was run on a different date with a different follower-graph snapshot.*
 
@@ -285,7 +285,7 @@ All deployed client algorithms plus key experimental ones:
 | **Welshman Stochastic** | Coracle | 24% [12–38] | 83% [75–93] | Best stateless deployed algorithm for archival — 1.5× Greedy at 1yr |
 | **Greedy Set-Cover** | Gossip, Applesauce, Wisp | 16% [12–20] | 84% [77–94] | Best on-paper coverage; degrades sharply for history |
 | **NDK+Thompson** | *not yet deployed* | 31% [14–39] | — | Upgrade path for NDK — learns from delivery (10-run mean). High variance: -18pp to +25pp gain vs NDK baseline. fiatjaf regression is NDK-specific (see CG3 variant). |
-| **NDK+Thompson CG3** | *not yet deployed* | 27% [19–39] | — | **Recommended NDK variant.** Conditional CG + partial-weight scoring. Fixes fiatjaf (+25.6pp vs T), eliminates large-graph regressions. Pareto-superior to both T and CG. |
+| **NDK+Thompson CG3** | *not yet deployed* | 27% [19–39] | — | **Recommended NDK variant.** Conditional CG + partial-weight scoring. Fixes fiatjaf (+25.6pp vs T), eliminates large-graph regressions. Pareto-superior to T, CG, and Score Boost. |
 | **NDK Priority** | NDK | 16% [12–19] | 83% [77–92] | Similar to Greedy; connected > selected > popular |
 | **Coverage Sort** | Nostur | 16% [9–22] | 65% [55–80] | Skip-top-relays heuristic costs 5-12% coverage |
 

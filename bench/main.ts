@@ -314,7 +314,7 @@ async function runDefault(
   const maxConnections = opts.maxConnections ?? 20;
 
   // Load per-algorithm Thompson Sampling priors (if available from previous sessions)
-  const THOMPSON_IDS = new Set(["welshman-thompson", "fd-thompson", "welshman-thompson-latency", "fd-thompson-latency", "ndk-thompson", "ndk-thompson-unified", "greedy-thompson", "ndk-thompson-neutral", "ndk-thompson-neutral-unified", "ndk-thompson-cw", "ndk-thompson-cg", "ndk-thompson-cg2", "ndk-thompson-cg3"]);
+  const THOMPSON_IDS = new Set(["welshman-thompson", "fd-thompson", "welshman-thompson-latency", "fd-thompson-latency", "ndk-thompson", "ndk-thompson-unified", "greedy-thompson", "ndk-thompson-neutral", "ndk-thompson-neutral-unified", "ndk-thompson-cw", "ndk-thompson-cg", "ndk-thompson-cg2", "ndk-thompson-cg3", "ndk-thompson-sb"]);
   const ALT_SCORING_IDS: Record<string, typeof updateRelayScores> = {
     "ndk-thompson-cw": updateRelayScoresCW,
     "ndk-thompson-cg": updateRelayScoresSE,

@@ -150,8 +150,11 @@ CG3 results (6 profiles × 5 sessions, 1yr, NIP-66 liveness, cap@20):
 
 CG3 preserves the fiatjaf fix (+25.6pp vs T), eliminates the ODELL regression (CG was -6.5pp vs T),
 and beats both T and CG on grand mean. Gato is a partial tradeoff: +2.4pp vs T but -4.7pp vs CG —
-partial-weight scoring reduces SE degradation but doesn't fully overcome relay-set anchoring from
-forced relays. See OUTBOX-REPORT Section 8.5c‴ for the full analysis.
+partial-weight scoring reduces score degradation from sole-source exclusion but doesn't fully overcome
+relay-set anchoring from forced relays. A softer alternative (Score Boost: 5× score multiplier instead
+of hard forcing) was benchmarked and rejected — Score Boost grand mean 25.8% vs CG3 28.8% (−3.0pp),
+regressing on 5 of 6 profiles.
+See OUTBOX-REPORT Section 8.5c‴ for the full analysis.
 NDK's selected-first priority cascade short-circuits Thompson scoring — if
 already-connected relays satisfy the per-author target, the Thompson scorer is never
 consulted. Welshman's per-user relay budgeting gives Thompson full control over

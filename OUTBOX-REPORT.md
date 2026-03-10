@@ -1126,7 +1126,21 @@ CG3's Gato result (+2.4pp vs T, -4.7pp vs CG) suggests the problem is partly **r
 - **Path B:** Accept CG3 as the best available tradeoff. The +2.4pp vs T on Gato is still positive, and the overall Pareto improvement makes CG3 the recommended NDK variant.
 - **Path C:** Replace forced inclusion with a softer mechanism — boost sole-source relays' Thompson scores instead of forcing them. Avoids anchoring while still biasing toward coverage.
 
-**Recommendation:** CG3 (`ndk-thompson-cg3`) is the recommended NDK+Thompson variant. It's Pareto-superior to both plain Thompson and CG on grand mean, preserves the critical fiatjaf fix, and eliminates all large-graph regressions. The Gato tradeoff (-4.7pp vs CG) is acceptable given that CG3 still beats plain T by +2.4pp on that profile.
+**Path C tested: Score Boost (SB) — result: rejected.** SB replaces CG's hard forcing with a soft 5× score multiplier for sole-source relays, using standard Thompson scoring (not partial-weight or sole-source exclusion). 30-run benchmark (6 EN × 5 sessions, 1yr, NIP-66 liveness, cap@20):
+
+| Profile | T (S5) | CG3 (S5) | SB (S5) | SB vs CG3 |
+|---|:---:|:---:|:---:|:---:|
+| fiatjaf | 15.2% | 40.6% | 38.8% | −1.8pp |
+| hodlbod | 30.5% | 27.2% | 20.3% | −6.9pp |
+| jb55 | 26.9% | 27.3% | 27.3% | ±0.0pp |
+| ODELL | 26.3% | 26.1% | 19.9% | −6.2pp |
+| Gato | 21.9% | 21.9% | 19.7% | −2.2pp |
+| Telluride | 30.0% | 29.9% | 28.8% | −1.1pp |
+| **Grand mean** | **25.1%** | **28.8%** | **25.8%** | **−3.0pp** |
+
+SB regresses on every profile except jb55 (tie). The root cause: SB lacks CG3's conditional skip. On large graphs (ODELL: 18 SS relays, hodlbod: 12, Telluride: 29), SB's priority re-sorting pushes sole-source pubkeys to the front of the processing queue, consuming most of the 20-relay budget on boosted sole-source relays before high-value multi-relay pubkeys are processed. The 5× boost overcomes Thompson's learned priors — even a relay with E=0.15 scores competitively when boosted. Adding a conditional skip to SB would fix the large-graph regression but leave SB worse than CG3 on the remaining profiles (fiatjaf −1.8pp, Gato −2.2pp). There is no configuration of SB that beats CG3.
+
+**Recommendation:** CG3 (`ndk-thompson-cg3`) is the recommended NDK+Thompson variant. It's Pareto-superior to both plain Thompson, CG, and Score Boost on grand mean, preserves the critical fiatjaf fix, and eliminates all large-graph regressions. The Gato tradeoff (-4.7pp vs CG) is acceptable given that CG3 still beats plain T by +2.4pp on that profile.
 
 ### 8.5d FD/NDK+Thompson JP Expansion
 
