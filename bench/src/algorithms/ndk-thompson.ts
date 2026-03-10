@@ -55,12 +55,21 @@ export function ndkThompsonCG(
   return ndkThompsonCore(input, params, rng, /* unified */ false, /* coverageGuarantee */ true);
 }
 
+export function ndkThompsonCG2(
+  input: BenchmarkInput,
+  params: AlgorithmParams,
+  rng: () => number,
+): AlgorithmResult {
+  return ndkThompsonCore(input, params, rng, /* unified */ false, /* coverageGuarantee */ true, /* cgBudgetFraction */ 0.5);
+}
+
 function ndkThompsonCore(
   input: BenchmarkInput,
   params: AlgorithmParams,
   rng: () => number,
   unified: boolean,
   coverageGuarantee = false,
+  cgBudgetFraction?: number,
 ): AlgorithmResult {
   const start = performance.now();
   const relayGoalPerAuthor = params.relayGoalPerAuthor ?? params.maxRelaysPerUser ?? 2;
@@ -90,18 +99,42 @@ function ndkThompsonCore(
   // Coverage guarantee: force-select sole-source relays
   const forcedRelays = new Set<RelayUrl>();
   if (coverageGuarantee) {
+    // Collect sole-source relays and the pubkeys they uniquely cover
+    const soleSourceRelays = new Map<RelayUrl, Set<Pubkey>>();
     for (const pubkey of sortedFollows) {
       const authorRelays = input.writerToRelays.get(pubkey);
       if (!authorRelays || authorRelays.size !== 1) continue;
       const [onlyRelay] = authorRelays;
-      forcedRelays.add(onlyRelay);
-      selectedRelays.add(onlyRelay);
-      const writers = relayAssignments.get(onlyRelay) ?? new Set<Pubkey>();
-      writers.add(pubkey);
-      relayAssignments.set(onlyRelay, writers);
-      pubkeyAssignments.set(pubkey, new Set([onlyRelay]));
+      const pubkeys = soleSourceRelays.get(onlyRelay) ?? new Set<Pubkey>();
+      pubkeys.add(pubkey);
+      soleSourceRelays.set(onlyRelay, pubkeys);
     }
-    console.error(`Coverage guarantee: ${forcedRelays.size} sole-source relays forced (${maxConnections} maxConnections budget)`);
+
+    // Budget cap: limit forced relays to a fraction of maxConnections
+    const cgCap = cgBudgetFraction != null
+      ? Math.floor(maxConnections * cgBudgetFraction)
+      : Infinity;
+    const totalSoleSource = soleSourceRelays.size;
+
+    // Sort by coverage value descending (most sole-source pubkeys first)
+    const sortedSoleSource = [...soleSourceRelays.entries()]
+      .sort((a, b) => b[1].size - a[1].size);
+
+    for (const [relay, pubkeys] of sortedSoleSource) {
+      if (forcedRelays.size >= cgCap) break;
+      forcedRelays.add(relay);
+      selectedRelays.add(relay);
+      for (const pubkey of pubkeys) {
+        const writers = relayAssignments.get(relay) ?? new Set<Pubkey>();
+        writers.add(pubkey);
+        relayAssignments.set(relay, writers);
+        pubkeyAssignments.set(pubkey, new Set([relay]));
+      }
+    }
+    const capLabel = cgBudgetFraction != null
+      ? ` (capped at ${cgCap}, ${totalSoleSource} total sole-source)`
+      : "";
+    console.error(`Coverage guarantee: ${forcedRelays.size} sole-source relays forced${capLabel} (${maxConnections} maxConnections budget)`);
   }
 
   for (const pubkey of sortedFollows) {
@@ -192,7 +225,7 @@ function ndkThompsonCore(
 
   const variant = unified ? "Unified" : "Priority";
   const hasLatency = relayLatencies != null;
-  const cgLabel = coverageGuarantee ? "+CG" : "";
+  const cgLabel = coverageGuarantee ? (cgBudgetFraction != null ? "+CG2" : "+CG") : "";
   const name = `NDK+Thompson (${variant})${cgLabel}${hasLatency ? "+Latency" : ""}`;
 
   const notes: string[] = [];
