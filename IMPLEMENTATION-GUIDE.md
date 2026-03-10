@@ -120,10 +120,17 @@ is preserved — Thompson replaces the popularity ranking in the third tier. Aft
 NDK+Thompson shows high variance: fiatjaf regresses (-18pp to -23pp) consistently across 10+ runs
 because NDK's cascade concentrates on relay.damus.io, which happens to cover fiatjaf's small
 follow graph well. Thompson's learning down-weights relay.damus.io (moderate 1yr delivery rate due
-to retention, not quality) and substitutes smaller relays with less coverage. A neutral cold-start
-variant (Beta(1,1) → 1.0) does not fix this — the regression comes from learned scores, not
-cold-start noise. See OUTBOX-REPORT Section 8.5c′ and 8.6 for analysis. For the other
-5 profiles, gains range +12pp to +35pp.
+to retention, not quality) and substitutes smaller relays with less coverage. **This regression is
+NDK-specific** — Welshman+Thompson (+1.5pp), FD+Thompson (+21.4pp), and Greedy+Thompson (+1.4pp)
+all show positive or flat results for fiatjaf because they don't have NDK's fragile priority
+cascade dependency on a single relay.
+
+**Coverage Guarantee (CG) mitigation:** A CG variant (`ndk-thompson-cg`) force-includes sole-source
+relays and excludes sole-source pubkeys from scoring. This fixes fiatjaf (+9.2pp vs NDK, was -17.6pp)
+but causes budget saturation on large follow graphs — forced sole-source relays consume the entire
+20-relay budget for ODELL (20 forced) and exceed it for Telluride (29 forced). Net across 6 profiles,
+CG ≈ NDK+T (28.8% vs 28.7%). A budget-capped variant (force ≤50% of maxConnections) is future work.
+See OUTBOX-REPORT Section 8.5c″ for full analysis. For the other 5 profiles, gains range +12pp to +35pp.
 NDK's selected-first priority cascade short-circuits Thompson scoring — if
 already-connected relays satisfy the per-author target, the Thompson scorer is never
 consulted. Welshman's per-user relay budgeting gives Thompson full control over

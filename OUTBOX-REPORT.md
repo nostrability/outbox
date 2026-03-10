@@ -1002,7 +1002,64 @@ ODELL's unusually high 3yr baseline (93%) is due to relay.damus.io retaining a l
 
 At 1yr, regular Thompson leads by +3pp in the mean (driven by Gato and Telluride). At 3yr, Neutral leads by +2pp (driven by hodlbod +26.6pp vs +14.9pp). Both variants regress fiatjaf by ~20pp at 1yr and ~9pp at 3yr — confirming the regression is caused by Thompson's learned relay scores, not cold-start noise.
 
-**Root cause:** Thompson scores are per-relay aggregates across all followed authors. When relay.damus.io delivers only 20-30% of 1yr-old events (a retention issue, not quality), Thompson down-weights it. But for fiatjaf's small concentrated graph, relay.damus.io IS the coverage — no alternative relay covers those pubkeys. Thompson conflates relay retention with relay quality, and for small concentrated graphs there are no alternative relays to recover coverage. See Section 8.6 for discussion.
+**Root cause:** Thompson scores are per-relay aggregates across all followed authors. When relay.damus.io delivers only 20-30% of 1yr-old events (a retention issue, not quality), Thompson down-weights it. But for fiatjaf's small concentrated graph, relay.damus.io IS the coverage — no alternative relay covers those pubkeys. Thompson conflates relay retention with relay quality, and for small concentrated graphs there are no alternative relays to recover coverage. See Section 8.6 for discussion and Section 8.5c″ for the Coverage Guarantee mitigation.
+
+**This regression is NDK-specific.** Other Thompson variants do not regress fiatjaf:
+
+| Algorithm | fiatjaf baseline | fiatjaf +Thompson | Delta |
+|---|:---:|:---:|:---:|
+| **NDK** | 31.2% | 13.6% | **-17.6pp** |
+| **Welshman** | 39.2% | 40.7% | +1.5pp |
+| **FD** | 19.3% | 40.7% | +21.4pp |
+| **Greedy** | 27.4% | 28.8% | +1.4pp |
+| **Ditto→Outbox** | 7.7% | 14.1% | +6.4pp |
+
+*Session means, 1yr, 5 sessions each. NDK's priority cascade fortuitously concentrates on relay.damus.io for fiatjaf's small graph. Thompson disrupts that specific concentration. FD's per-author decomposition keeps relay.damus.io selected for the pubkeys that need it. Welshman's stochasticity means Thompson's perturbation is additive noise. Greedy optimizes globally and doesn't depend on a single relay.*
+
+### 8.5c″ NDK+Thompson Coverage Guarantee (CG)
+
+**Question:** Can we fix the fiatjaf regression without giving up Thompson's gains on other profiles?
+
+**Approach:** Two complementary mechanisms (`ndk-thompson-cg`):
+1. **Coverage Guarantee** — pre-pass before relay selection: force-include relays that are the sole source for any pubkey. Prevents the death spiral where a low-scored relay never gets selected, so sole-source pubkeys get zero coverage.
+2. **Sole-Source Exclusion (SE)** — scoring change: skip alpha/beta updates for pubkeys where the relay is the only option. Scores reflect contested-pubkey performance only, so relays aren't penalized for retention limits on pubkeys with no alternative.
+
+**1yr EN (6 profiles × 5 sessions, NIP-66 liveness, cap@20):**
+
+| Profile (follows) | NDK | NDK+Thompson | NDK+Thompson CG | CG vs NDK | CG vs NDK+T |
+|---|:---:|:---:|:---:|:---:|:---:|
+| fiatjaf (194) | 31.2% | 13.6% | 40.4% | **+9.2pp** | **+26.8pp** |
+| hodlbod (442) | 14.9% | 32.4% | 30.3% | +15.4pp | -2.1pp |
+| jb55 (943) | 20.4% | 34.8% | 31.5% | +11.1pp | -3.3pp |
+| ODELL (1,779) | 16.7% | 32.2% | 23.3% | +6.6pp | -8.9pp |
+| Gato (399) | 15.4% | 27.5% | 20.6% | +5.2pp | -6.9pp |
+| Telluride (2,784) | 23.1% | 31.6% | 26.4% | +3.3pp | -5.2pp |
+| **6-profile mean** | **20.3%** | **28.7%** | **28.8%** | **+8.5pp** | **+0.1pp** |
+
+*62 runs (6 EN × 2 windows × 5 sessions), 55 with data. Gato 1yr S4 returned network failure. Telluride S4-S5 returned 0 follows.*
+
+**CG is always positive vs raw NDK** (+3 to +15pp). But it gives back Thompson gains on larger graphs — the net across 6 profiles is a wash (28.8% vs 28.7%). The fiatjaf regression swings from -17.6pp to +9.2pp, a 27pp improvement.
+
+**The cause: budget saturation.** CG force-includes every sole-source relay without a budget cap. The number of sole-source relays scales with follow count:
+
+| Profile (follows) | Forced relays | Budget remaining | CG trajectory |
+|---|:---:|:---:|---|
+| fiatjaf (194) | 9 | 11 of 20 | Stable 39-42% across S1-S5 |
+| Gato (399) | ~10 | ~10 of 20 | Volatile 18-24% |
+| hodlbod (442) | ~12 | ~8 of 20 | Learning: 17% → 36% |
+| jb55 (943) | ~14 | ~6 of 20 | Learning: 22% → 36% |
+| ODELL (1,779) | 18→20 | 2→0 of 20 | Rises S1-S2 (32%), collapses S4-S5 (18%) |
+| Telluride (2,784) | 29 | **exceeds budget** | Declining: 29% → 23% |
+
+For ODELL, the entire 20-relay budget is consumed by forced sole-source relays at S4-S5 (NIP-66 monitor data expansion surfaces more sole-source relays between sessions). Thompson's scoring loop has zero remaining slots to pick high-performing relays. For Telluride, 29 forced relays exceed the 20-relay budget entirely.
+
+**Quality displacement:** Forced relays are selected for coverage (sole-source), not delivery quality. They displace high-performing relays that regular Thompson discovers:
+- Displaced: nostr-pub.wellorder.net (59% delivery), theforest.nostr1.com (75% delivery)
+- Forced instead: relay.coinos.io (0-15% delivery), sendit.nosflare.com (0% delivery)
+
+**A secondary factor: score signal degradation.** Sole-Source Exclusion removes observations from the scoring loop. CG's Thompson scores are based on fewer relays (24 observed vs 41 for regular Thompson) with lower signal quality. This explains why Gato (~10 forced, 10 remaining) still regresses -6.9pp — the SE scoring is noisier even when budget isn't saturated.
+
+**Known limitation and future work:** The current CG implementation needs a budget cap — force at most `floor(maxConnections × 0.5)` sole-source relays, prioritized by coverage value (how many pubkeys each sole-source relay uniquely covers). This preserves the fiatjaf fix while leaving budget room for Thompson on large graphs. The SE scoring may also need tuning — consider making sole-source exclusion conditional on having sufficient contested observations.
 
 ### 8.5d FD/NDK+Thompson JP Expansion
 
@@ -1240,7 +1297,9 @@ Thompson Sampling scores relays by aggregate delivery rate — for each relay, i
 
 **Neutral cold start does not help** because the problem is not cold-start randomness — it's that Thompson's learning objective (delivery rate) diverges from the algorithm's need (pubkey coverage) for this profile shape.
 
-**Potential mitigations** (untested): (1) Coverage-weighted scoring — weight Thompson updates by how irreplaceable a relay is for the profile, so high-coverage relays resist demotion. (2) Coverage floor — fall back to base NDK if Thompson's relay set covers fewer pubkeys than the base selection. (3) Per-author scoring — track (relay, pubkey-cluster) pairs instead of global relay scores, so fiatjaf's relays aren't penalized by delivery rates from unrelated authors.
+**Tested mitigation — Coverage Guarantee (Section 8.5c″):** Force-include sole-source relays + exclude sole-source pubkeys from scoring. Fixes fiatjaf regression (+9.2pp vs NDK, was -17.6pp). But budget saturation on large graphs (ODELL, Telluride) gives back Thompson gains — net across 6 profiles is a wash. A budget-capped variant (force ≤50% of maxConnections) is the likely fix. This regression is NDK-specific — Welshman+Thompson, FD+Thompson, and Greedy+Thompson do not regress fiatjaf (see the cross-algorithm comparison in Section 8.5c′).
+
+**Untested mitigations:** (1) Coverage-weighted scoring — weight Thompson updates by how irreplaceable a relay is for the profile, so high-coverage relays resist demotion. (2) Per-author scoring — track (relay, pubkey-cluster) pairs instead of global relay scores, so fiatjaf's relays aren't penalized by delivery rates from unrelated authors.
 
 ---
 

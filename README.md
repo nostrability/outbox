@@ -159,7 +159,9 @@ The relay that's "best on paper" isn't always the one that delivers events. Gree
 | Telluride (2,784) | 22.7% | 38.1 +/- 2.5 | **+15pp** |
 | **6-profile mean** | **19.9%** | **30.8 +/- 3.8 SE** | **+11pp** |
 
-NDK+Thompson shows high variance across profiles. fiatjaf regresses consistently (14.4 +/- 1.3 across 10 runs) because NDK's priority cascade happens to concentrate on relay.damus.io, which works well for that specific follow graph — Thompson's exploration disrupts this lucky alignment. For the other 5 profiles, gains range from +12pp to +25pp. The mean gain (+11pp) is comparable to Welshman+Thompson (+9pp), but NDK+Thompson's variance is higher due to the priority cascade constraining Thompson to the third scoring tier.
+NDK+Thompson shows high variance across profiles. fiatjaf regresses consistently (14.4 +/- 1.3 across 10 runs) because NDK's priority cascade happens to concentrate on relay.damus.io, which works well for that specific follow graph — Thompson's exploration disrupts this lucky alignment. **This regression is NDK-specific** — Welshman+Thompson (+1.5pp), FD+Thompson (+21.4pp), and Greedy+Thompson (+1.4pp) all show positive or flat results for fiatjaf. For the other 5 profiles, gains range from +12pp to +25pp. The mean gain (+11pp) is comparable to Welshman+Thompson (+9pp), but NDK+Thompson's variance is higher due to the priority cascade constraining Thompson to the third scoring tier.
+
+**Coverage Guarantee (CG):** A variant (`ndk-thompson-cg`) that force-includes sole-source relays fixes the fiatjaf regression (+9.2pp vs NDK, was -17.6pp) but causes budget saturation on large follow graphs — forced relays consume the entire connection budget for profiles with >1000 follows. Net across 6 profiles: CG ≈ NDK+T (28.8% vs 28.7%). See [OUTBOX-REPORT.md § 8.5c″](OUTBOX-REPORT.md#85c-ndkthompson-coverage-guarantee-cg) for the full analysis and known limitations.
 
 *10-run variance study confirms the fiatjaf regression is consistent (14.4% +/- 1.3, well below baseline 32.1% in every run), not a single-run artifact. Follower counts differ from the adjacent Welshman+Thompson table because the NDK benchmark was run on a different date with a different follower-graph snapshot.*
 
@@ -270,7 +272,8 @@ All deployed client algorithms plus key experimental ones:
 | **Filter Decomposition** | rust-nostr | 25% [19–32] | 77% [71–88] | Per-author top-N write relays; strong at long windows |
 | **Welshman Stochastic** | Coracle | 24% [12–38] | 83% [75–93] | Best stateless deployed algorithm for archival — 1.5× Greedy at 1yr |
 | **Greedy Set-Cover** | Gossip, Applesauce, Wisp | 16% [12–20] | 84% [77–94] | Best on-paper coverage; degrades sharply for history |
-| **NDK+Thompson** | *not yet deployed* | 31% [14–39] | — | Upgrade path for NDK — learns from delivery (10-run mean). High variance: -18pp to +25pp gain vs NDK baseline. |
+| **NDK+Thompson** | *not yet deployed* | 31% [14–39] | — | Upgrade path for NDK — learns from delivery (10-run mean). High variance: -18pp to +25pp gain vs NDK baseline. fiatjaf regression is NDK-specific (see CG variant). |
+| **NDK+Thompson CG** | *not yet deployed* | 29% [21–40] | — | CG variant: fixes fiatjaf regression (+9pp vs NDK). Budget saturation limits large graphs (>1000 follows). |
 | **NDK Priority** | NDK | 16% [12–19] | 83% [77–92] | Similar to Greedy; connected > selected > popular |
 | **Coverage Sort** | Nostur | 16% [9–22] | 65% [55–80] | Skip-top-relays heuristic costs 5-12% coverage |
 
@@ -321,6 +324,7 @@ All deployed client algorithms plus key experimental ones:
 | Welshman+Thompson | Welshman scoring with `sampleBeta(α,β)` instead of `random()` — learns from delivery |
 | FD+Thompson | Filter Decomposition scoring with `sampleBeta(α,β)` — learns without popularity bias |
 | NDK+Thompson (Priority) | NDK priority cascade + Thompson scoring in popularity tier — learns from delivery |
+| NDK+Thompson CG (Priority) | NDK+Thompson + Coverage Guarantee: force-includes sole-source relays, excludes sole-source pubkeys from scoring |
 | NDK+Thompson (Unified) | NDK with soft selected-relay bonus (1.5x) + Thompson scoring — all tiers scored |
 | Ditto+Outbox Thompson | App relays + per-author outbox (top 3 write relays by Thompson) — no routing layer changes |
 | Greedy+ε-Explore | Greedy with 5% chance of picking a random relay instead of the best |
