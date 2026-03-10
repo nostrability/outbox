@@ -47,11 +47,20 @@ export function ndkThompsonUnified(
   return ndkThompsonCore(input, params, rng, /* unified */ true);
 }
 
+export function ndkThompsonCG(
+  input: BenchmarkInput,
+  params: AlgorithmParams,
+  rng: () => number,
+): AlgorithmResult {
+  return ndkThompsonCore(input, params, rng, /* unified */ false, /* coverageGuarantee */ true);
+}
+
 function ndkThompsonCore(
   input: BenchmarkInput,
   params: AlgorithmParams,
   rng: () => number,
   unified: boolean,
+  coverageGuarantee = false,
 ): AlgorithmResult {
   const start = performance.now();
   const relayGoalPerAuthor = params.relayGoalPerAuthor ?? params.maxRelaysPerUser ?? 2;
@@ -78,7 +87,25 @@ function ndkThompsonCore(
   // Process authors in deterministic order (sorted by hex pubkey)
   const sortedFollows = [...input.follows].sort();
 
+  // Coverage guarantee: force-select sole-source relays
+  const forcedRelays = new Set<RelayUrl>();
+  if (coverageGuarantee) {
+    for (const pubkey of sortedFollows) {
+      const authorRelays = input.writerToRelays.get(pubkey);
+      if (!authorRelays || authorRelays.size !== 1) continue;
+      const [onlyRelay] = authorRelays;
+      forcedRelays.add(onlyRelay);
+      selectedRelays.add(onlyRelay);
+      const writers = relayAssignments.get(onlyRelay) ?? new Set<Pubkey>();
+      writers.add(pubkey);
+      relayAssignments.set(onlyRelay, writers);
+      pubkeyAssignments.set(pubkey, new Set([onlyRelay]));
+    }
+    console.error(`Coverage guarantee: ${forcedRelays.size} sole-source relays forced (${maxConnections} maxConnections budget)`);
+  }
+
   for (const pubkey of sortedFollows) {
+    if (coverageGuarantee && pubkeyAssignments.has(pubkey)) continue; // already assigned by coverage guarantee
     const authorRelays = input.writerToRelays.get(pubkey);
     if (!authorRelays || authorRelays.size === 0) {
       orphanedPubkeys.add(pubkey);
@@ -165,7 +192,8 @@ function ndkThompsonCore(
 
   const variant = unified ? "Unified" : "Priority";
   const hasLatency = relayLatencies != null;
-  const name = `NDK+Thompson (${variant})${hasLatency ? "+Latency" : ""}`;
+  const cgLabel = coverageGuarantee ? "+CG" : "";
+  const name = `NDK+Thompson (${variant})${cgLabel}${hasLatency ? "+Latency" : ""}`;
 
   const notes: string[] = [];
   if (relayPriors && relayPriors.size > 0) {
@@ -180,6 +208,9 @@ function ndkThompsonCore(
   }
   if (hasLatency) {
     notes.push(`Latency discount: ${relayLatencies!.size} relays, ${latencyUsed} lookups`);
+  }
+  if (coverageGuarantee) {
+    notes.push(`Coverage guarantee: ${forcedRelays.size} sole-source relays forced`);
   }
 
   return {
