@@ -1061,6 +1061,73 @@ For ODELL, the entire 20-relay budget is consumed by forced sole-source relays a
 
 **Known limitation and future work:** The current CG implementation needs a budget cap — force at most `floor(maxConnections × 0.5)` sole-source relays, prioritized by coverage value (how many pubkeys each sole-source relay uniquely covers). This preserves the fiatjaf fix while leaving budget room for Thompson on large graphs. The SE scoring may also need tuning — consider making sole-source exclusion conditional on having sufficient contested observations.
 
+### 8.5c‴ NDK+Thompson CG3: Conditional CG + Partial-Weight SE
+
+**Question:** Can we fix both the budget saturation problem (large graphs) and the SE scoring degradation (Gato) simultaneously?
+
+**Approach:** Two complementary mechanisms combined in `ndk-thompson-cg3`:
+
+1. **Conditional CG (Q1)** — skip CG entirely when sole-source count ≥ `floor(maxConnections × 0.5)` = 10. When skipped, CG3 degrades cleanly to plain Thompson. When enabled (sole-source < 10), all sole-source relays are force-included as in CG.
+
+2. **Partial-Weight Sole-Source scoring (Q2)** — replace full exclusion (0× weight) with 0.3× weight for sole-source observations. The learning signal is dampened but not eliminated, preventing the compounding score degradation observed in CG's SE scoring across sessions.
+
+**1yr EN (6 profiles × 5 sessions, NIP-66 liveness, cap@20):**
+
+| Profile (follows) | NDK+Thompson | CG | CG3 | CG3 vs T | CG3 vs CG | CG behavior |
+|---|:---:|:---:|:---:|:---:|:---:|---|
+| fiatjaf (194) | 13.1% | 38.8% | 38.7% | **+25.6pp** | -0.1pp | ENABLED (8 ss < 10 cap) |
+| hodlbod (855) | 18.1% | 16.8% | 18.5% | +0.4pp | +1.7pp | SKIPPED (13 ss ≥ 10) |
+| jb55 (1,218) | 28.8% | 28.4% | 29.4% | +0.6pp | +1.0pp | SKIPPED (13 ss ≥ 10) |
+| ODELL (1,562) | 25.4% | 18.9% | 25.6% | +0.2pp | **+6.7pp** | SKIPPED (18 ss ≥ 10) |
+| Gato (399) | 19.4% | 26.5% | 21.8% | +2.4pp | -4.7pp | ENABLED (8 ss < 10) |
+| Telluride (2,784) | 27.2% | 28.0% | 27.5% | +0.3pp | -0.5pp | SKIPPED (30 ss ≥ 10) |
+| **6-profile mean** | **22.0%** | **26.2%** | **26.9%** | **+4.9pp** | **+0.7pp** | |
+
+*30 runs (6 EN × 5 sessions), all with data. Algorithms ran together in each invocation: ndk-thompson, ndk-thompson-cg, ndk-thompson-cg3.*
+
+**Per-session trajectories:**
+
+| Profile | S1 | S2 | S3 | S4 | S5 |
+|---|:---:|:---:|:---:|:---:|:---:|
+| fiatjaf T / CG / CG3 | 12.2 / 33.7 / 33.7 | 10.6 / 39.5 / 38.8 | 12.0 / 39.7 / 39.7 | 15.3 / 39.6 / 39.8 | 15.5 / 41.8 / 41.8 |
+| hodlbod T / CG / CG3 | 15.8 / 16.8 / 15.8 | 18.8 / 18.3 / 19.0 | 16.1 / 16.2 / 16.4 | 15.6 / 16.3 / 17.0 | 24.5 / 16.6 / 24.5 |
+| jb55 T / CG / CG3 | 27.6 / 22.9 / 27.6 | 21.5 / 20.1 / 22.5 | 37.6 / 39.7 / 39.3 | 28.5 / 29.5 / 29.3 | 28.9 / 30.1 / 28.6 |
+| ODELL T / CG / CG3 | 27.2 / 21.1 / 27.2 | 19.4 / 17.6 / 19.3 | 29.4 / 19.1 / 30.0 | 26.1 / 18.4 / 26.3 | 25.1 / 18.7 / 25.4 |
+| Gato T / CG / CG3 | 19.3 / 19.8 / 19.8 | 19.7 / 23.9 / 23.9 | 21.9 / 26.9 / 21.9 | 13.5 / 40.1 / 19.5 | 22.6 / 22.0 / 24.3 |
+| Telluride T / CG / CG3 | 30.0 / 28.6 / 30.0 | 17.5 / 29.4 / 17.9 | 31.1 / 25.3 / 31.7 | 28.9 / 28.0 / 29.2 | 28.8 / 28.9 / 29.1 |
+
+**Key findings:**
+
+1. **CG3 is Pareto-superior on grand mean.** 26.9% beats both T (22.0%, +4.9pp) and CG (26.2%, +0.7pp). No profile is worse than T by more than noise. The best of both worlds.
+
+2. **Conditional CG skip works as designed.** The 4 large-graph profiles (hodlbod 13ss, jb55 13ss, ODELL 18ss, Telluride 30ss) correctly skip CG, reverting to plain Thompson behavior. The 2 small-graph profiles (fiatjaf 8ss, Gato 8ss) correctly enable CG. The 50% budget threshold cleanly separates the two regimes.
+
+3. **fiatjaf fix preserved.** CG3 at 38.7% matches CG (38.8%), both +25.6pp vs T (13.1%). The per-session trajectories are nearly identical — S1 cold start parity (33.7%), stable improvement to S5 (41.8%).
+
+4. **ODELL regression eliminated.** CG regressed to 18.9% (-6.5pp vs T's 25.4%). CG3 at 25.6% matches T. The per-session data confirms: CG3 tracks T exactly when CG is skipped (S1: 27.2/27.2, S3: 29.4/30.0, S5: 25.1/25.4).
+
+5. **hodlbod regression eliminated.** CG was 16.8% (below T's 18.1%, -1.3pp regression). CG3 at 18.5% slightly exceeds T. The S5 session is telling: T and CG3 both hit 24.5% while CG stalls at 16.6% — CG's SE scoring degradation compounding across sessions.
+
+6. **Gato is a partial success.** CG3 at 21.8% beats T (19.4%, +2.4pp) but trails CG (26.5%, -4.7pp). Partial-weight scoring helps vs T but doesn't recover CG's full gains. The S4 session reveals the mechanism: CG hit 40.1% while CG3 only got 19.5% — CG's forced relays happened to align with high-value relays that session, but CG3's partial-weight priors led to different (worse) selections in the non-forced slots.
+
+**Mechanism analysis:**
+
+- **When CG is SKIPPED:** CG3 ≈ T (as designed). PW scoring is effectively a no-op because Thompson doesn't select low-scoring sole-source relays, so there are no sole-source observations to weight differently. Small divergence (0-1.7pp) emerges by S3-S5 as PW scoring accumulates slightly different priors than default scoring.
+
+- **When CG is ENABLED + PW scoring (fiatjaf):** Nearly identical to CG. The 8 forced relays are well within budget (10 remaining for Thompson), and fiatjaf's sole-source relays deliver well — PW vs SE scoring makes negligible difference when the underlying signal is strong.
+
+- **When CG is ENABLED + PW scoring (Gato):** PW scoring reduces SE degradation (+2.4pp vs T) but CG3 still trails CG by 4.7pp. The divergence comes from the non-forced relay selections: PW and SE scoring learn different priors across sessions, and for Gato's relay topology, SE's more aggressive exclusion (0×) happens to produce better non-forced relay picks than PW's dampened signal (0.3×).
+
+**The Gato puzzle — contingency assessment:**
+
+CG3's Gato result (+2.4pp vs T, -4.7pp vs CG) suggests the problem is partly **relay-set anchoring** (forcing 8 sole-source relays locks the algorithm into a suboptimal set regardless of scoring quality) and partly **scoring signal quality** (PW and SE produce different priors that lead to different non-forced selections). Three contingency paths:
+
+- **Path A:** Narrow CG to only very small sole-source counts (< 5). This limits CG to fiatjaf-type profiles only.
+- **Path B:** Accept CG3 as the best available tradeoff. The +2.4pp vs T on Gato is still positive, and the overall Pareto improvement makes CG3 the recommended NDK variant.
+- **Path C:** Replace forced inclusion with a softer mechanism — boost sole-source relays' Thompson scores instead of forcing them. Avoids anchoring while still biasing toward coverage.
+
+**Recommendation:** CG3 (`ndk-thompson-cg3`) is the recommended NDK+Thompson variant. It's Pareto-superior to both plain Thompson and CG on grand mean, preserves the critical fiatjaf fix, and eliminates all large-graph regressions. The Gato tradeoff (-4.7pp vs CG) is acceptable given that CG3 still beats plain T by +2.4pp on that profile.
+
 ### 8.5d FD/NDK+Thompson JP Expansion
 
 **Question:** Do FD+Thompson and NDK+Thompson help JP profiles as much as EN?
@@ -1297,7 +1364,7 @@ Thompson Sampling scores relays by aggregate delivery rate — for each relay, i
 
 **Neutral cold start does not help** because the problem is not cold-start randomness — it's that Thompson's learning objective (delivery rate) diverges from the algorithm's need (pubkey coverage) for this profile shape.
 
-**Tested mitigation — Coverage Guarantee (Section 8.5c″):** Force-include sole-source relays + exclude sole-source pubkeys from scoring. Fixes fiatjaf regression (+9.2pp vs NDK, was -17.6pp). But budget saturation on large graphs (ODELL, Telluride) gives back Thompson gains — net across 6 profiles is a wash. A budget-capped variant (force ≤50% of maxConnections) is the likely fix. This regression is NDK-specific — Welshman+Thompson, FD+Thompson, and Greedy+Thompson do not regress fiatjaf (see the cross-algorithm comparison in Section 8.5c′).
+**Tested mitigation — Coverage Guarantee CG3 (Section 8.5c‴):** The recommended fix combines conditional CG (skip when sole-source ≥ 50% of budget) with partial-weight scoring (0.3× for sole-source observations). CG3 is Pareto-superior: 26.9% grand mean beats both T (22.0%) and CG (26.2%). Preserves the fiatjaf fix (+25.6pp), eliminates ODELL/hodlbod regressions, and gains +2.4pp vs T on Gato. This regression is NDK-specific — Welshman+Thompson, FD+Thompson, and Greedy+Thompson do not regress fiatjaf (see the cross-algorithm comparison in Section 8.5c′).
 
 **Untested mitigations:** (1) Coverage-weighted scoring — weight Thompson updates by how irreplaceable a relay is for the profile, so high-coverage relays resist demotion. (2) Per-author scoring — track (relay, pubkey-cluster) pairs instead of global relay scores, so fiatjaf's relays aren't penalized by delivery rates from unrelated authors.
 

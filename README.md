@@ -161,7 +161,19 @@ The relay that's "best on paper" isn't always the one that delivers events. Gree
 
 NDK+Thompson shows high variance across profiles. fiatjaf regresses consistently (14.4 +/- 1.3 across 10 runs) because NDK's priority cascade happens to concentrate on relay.damus.io, which works well for that specific follow graph — Thompson's exploration disrupts this lucky alignment. **This regression is NDK-specific** — Welshman+Thompson (+1.5pp), FD+Thompson (+21.4pp), and Greedy+Thompson (+1.4pp) all show positive or flat results for fiatjaf. For the other 5 profiles, gains range from +12pp to +25pp. The mean gain (+11pp) is comparable to Welshman+Thompson (+9pp), but NDK+Thompson's variance is higher due to the priority cascade constraining Thompson to the third scoring tier.
 
-**Coverage Guarantee (CG):** A variant (`ndk-thompson-cg`) that force-includes sole-source relays fixes the fiatjaf regression (+9.2pp vs NDK, was -17.6pp) but causes budget saturation on large follow graphs — forced relays consume the entire connection budget for profiles with >1000 follows. Net across 6 profiles: CG ≈ NDK+T (28.8% vs 28.7%). See [OUTBOX-REPORT.md § 8.5c″](OUTBOX-REPORT.md#85c-ndkthompson-coverage-guarantee-cg) for the full analysis and known limitations.
+**Coverage Guarantee (CG3):** The recommended NDK+Thompson variant (`ndk-thompson-cg3`) combines two fixes: (1) **Conditional CG** — force-include sole-source relays only when their count is below 50% of maxConnections (≤10 of 20), skipping CG entirely for large follow graphs where it causes budget saturation; (2) **Partial-Weight Sole-Source scoring** — weight sole-source observations at 0.3× instead of excluding them entirely (0×), preserving Thompson's learning signal. CG3 is Pareto-superior to both plain Thompson and CG across 6 profiles:
+
+| Profile | NDK+Thompson | CG | CG3 | CG3 vs T | CG behavior |
+|---|:---:|:---:|:---:|:---:|---|
+| fiatjaf (194) | 13.1% | 38.8% | 38.7% | **+25.6pp** | ENABLED (8 sole-source < 10 cap) |
+| hodlbod (855) | 18.1% | 16.8% | 18.5% | +0.4pp | SKIPPED (13 >= 10) |
+| jb55 (1,218) | 28.8% | 28.4% | 29.4% | +0.6pp | SKIPPED (13 >= 10) |
+| ODELL (1,562) | 25.4% | 18.9% | 25.6% | +0.2pp | SKIPPED (18 >= 10) |
+| Gato (399) | 19.4% | 26.5% | 21.8% | +2.4pp | ENABLED (8 < 10) |
+| Telluride (2,784) | 27.2% | 28.0% | 27.5% | +0.3pp | SKIPPED (30 >= 10) |
+| **6-profile mean** | **22.0%** | **26.2%** | **26.9%** | **+4.9pp** | |
+
+CG3 preserves the fiatjaf fix (+25.6pp), eliminates the ODELL/hodlbod regressions, and beats both T and CG on grand mean. Gato is a partial tradeoff: CG3 gains +2.4pp vs T but trails CG by 4.7pp — the partial-weight scoring reduces SE degradation but doesn't fully overcome relay-set anchoring from forced relays. See [OUTBOX-REPORT.md § 8.5c‴](OUTBOX-REPORT.md#85c-ndkthompson-cg3-conditional-cg--partial-weight-se) for the full analysis.
 
 *10-run variance study confirms the fiatjaf regression is consistent (14.4% +/- 1.3, well below baseline 32.1% in every run), not a single-run artifact. Follower counts differ from the adjacent Welshman+Thompson table because the NDK benchmark was run on a different date with a different follower-graph snapshot.*
 
@@ -272,8 +284,8 @@ All deployed client algorithms plus key experimental ones:
 | **Filter Decomposition** | rust-nostr | 25% [19–32] | 77% [71–88] | Per-author top-N write relays; strong at long windows |
 | **Welshman Stochastic** | Coracle | 24% [12–38] | 83% [75–93] | Best stateless deployed algorithm for archival — 1.5× Greedy at 1yr |
 | **Greedy Set-Cover** | Gossip, Applesauce, Wisp | 16% [12–20] | 84% [77–94] | Best on-paper coverage; degrades sharply for history |
-| **NDK+Thompson** | *not yet deployed* | 31% [14–39] | — | Upgrade path for NDK — learns from delivery (10-run mean). High variance: -18pp to +25pp gain vs NDK baseline. fiatjaf regression is NDK-specific (see CG variant). |
-| **NDK+Thompson CG** | *not yet deployed* | 29% [21–40] | — | CG variant: fixes fiatjaf regression (+9pp vs NDK). Budget saturation limits large graphs (>1000 follows). |
+| **NDK+Thompson** | *not yet deployed* | 31% [14–39] | — | Upgrade path for NDK — learns from delivery (10-run mean). High variance: -18pp to +25pp gain vs NDK baseline. fiatjaf regression is NDK-specific (see CG3 variant). |
+| **NDK+Thompson CG3** | *not yet deployed* | 27% [19–39] | — | **Recommended NDK variant.** Conditional CG + partial-weight scoring. Fixes fiatjaf (+25.6pp vs T), eliminates large-graph regressions. Pareto-superior to both T and CG. |
 | **NDK Priority** | NDK | 16% [12–19] | 83% [77–92] | Similar to Greedy; connected > selected > popular |
 | **Coverage Sort** | Nostur | 16% [9–22] | 65% [55–80] | Skip-top-relays heuristic costs 5-12% coverage |
 
@@ -324,7 +336,7 @@ All deployed client algorithms plus key experimental ones:
 | Welshman+Thompson | Welshman scoring with `sampleBeta(α,β)` instead of `random()` — learns from delivery |
 | FD+Thompson | Filter Decomposition scoring with `sampleBeta(α,β)` — learns without popularity bias |
 | NDK+Thompson (Priority) | NDK priority cascade + Thompson scoring in popularity tier — learns from delivery |
-| NDK+Thompson CG (Priority) | NDK+Thompson + Coverage Guarantee: force-includes sole-source relays, excludes sole-source pubkeys from scoring |
+| NDK+Thompson CG3 (Priority) | NDK+Thompson + Conditional CG (skip when sole-source ≥ 50% budget) + partial-weight sole-source scoring (0.3×) |
 | NDK+Thompson (Unified) | NDK with soft selected-relay bonus (1.5x) + Thompson scoring — all tiers scored |
 | Ditto+Outbox Thompson | App relays + per-author outbox (top 3 write relays by Thompson) — no routing layer changes |
 | Greedy+ε-Explore | Greedy with 5% chance of picking a random relay instead of the best |

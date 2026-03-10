@@ -464,6 +464,151 @@ export function updateRelayScoresSE(
   return db;
 }
 
+/**
+ * Partial-Weight Sole-Source variant of updateRelayScores.
+ *
+ * Instead of fully excluding sole-source observations (0x weight as in SE),
+ * applies a reduced weight (0.3x) so Thompson still learns from them.
+ * Removes the fallback rewind mechanism — with partial weight, even relays
+ * with only sole-source observations accumulate meaningful signal.
+ */
+export function updateRelayScoresPW(
+  db: RelayScoreDB,
+  algorithmName: string,
+  relayAssignments: Map<RelayUrl, Set<Pubkey>>,
+  _pubkeyAssignments: Map<Pubkey, Set<RelayUrl>>,
+  baselines: Map<Pubkey, PubkeyBaseline>,
+  cache: QueryCache,
+  relayOutcomes?: ReadonlyMap<RelayUrl, RelayOutcome>,
+  writerToRelays?: ReadonlyMap<Pubkey, Set<RelayUrl>>,
+): RelayScoreDB {
+  const SOLE_SOURCE_WEIGHT = 0.3;
+
+  // Apply decay to existing scores
+  for (const entry of Object.values(db.relays)) {
+    entry.alpha = 1 + (entry.alpha - 1) * DECAY_FACTOR;
+    entry.beta = 1 + (entry.beta - 1) * DECAY_FACTOR;
+  }
+
+  // Compute new observations from this session
+  const degrading: string[] = [];
+  let totalSoleSourceWeighted = 0;
+  let relaysWithSoleSource = 0;
+  const forcedRelayScores: string[] = [];
+
+  for (const [relay, pubkeys] of relayAssignments) {
+    const entry: RelayScoreEntry = db.relays[relay] ?? {
+      alpha: 1,
+      beta: 1,
+      lastQueried: 0,
+      totalEvents: 0,
+      totalExpected: 0,
+    };
+
+    entry.lastQueried = Date.now();
+
+    let sessionDelivered = 0;
+    let sessionExpected = 0;
+    let soleSourceWeighted = 0;
+
+    for (const pubkey of pubkeys) {
+      const baseline = baselines.get(pubkey);
+      if (!baseline || baseline.eventIds.size === 0) continue;
+
+      const relayEvents = cache.get(relay, pubkey);
+      const relayEventCount = relayEvents ? relayEvents.size : 0;
+      const baselineCount = baseline.eventIds.size;
+
+      // Sole-source check: use data (writerToRelays), not selection (pubkeyAssignments)
+      const authorRelays = writerToRelays?.get(pubkey);
+      const alternatives = authorRelays?.size ?? 1;
+      if (alternatives <= 1) {
+        // Sole-source: partial weight (0.3x) instead of full exclusion
+        const delivered = Math.min(relayEventCount / baselineCount, 1);
+        entry.alpha += delivered * SOLE_SOURCE_WEIGHT;
+        entry.beta += (1 - delivered) * SOLE_SOURCE_WEIGHT;
+        entry.totalEvents += relayEventCount;
+        entry.totalExpected += baselineCount;
+        sessionDelivered += relayEventCount;
+        sessionExpected += baselineCount;
+        soleSourceWeighted++;
+        continue;
+      }
+
+      const delivered = Math.min(relayEventCount / baselineCount, 1);
+      entry.alpha += delivered;
+      entry.beta += (1 - delivered);
+      entry.totalEvents += relayEventCount;
+      entry.totalExpected += baselineCount;
+
+      sessionDelivered += relayEventCount;
+      sessionExpected += baselineCount;
+    }
+
+    if (soleSourceWeighted > 0) {
+      totalSoleSourceWeighted += soleSourceWeighted;
+      relaysWithSoleSource++;
+      const e = entry.alpha / (entry.alpha + entry.beta);
+      forcedRelayScores.push(`${relay}(E=${e.toFixed(3)})`);
+    }
+
+    // Track session delivery rate
+    const sessionRate = sessionExpected > 0 ? sessionDelivered / sessionExpected : 0;
+    const history = entry.sessionRates ?? [];
+    history.push(sessionRate);
+    if (history.length > MAX_SESSION_HISTORY) history.shift();
+    entry.sessionRates = history;
+
+    // Compute trend from session history
+    entry.trend = computeTrend(history);
+    if (entry.trend === "declining" && history.length >= TREND_MIN_SESSIONS) {
+      degrading.push(relay);
+    }
+
+    // EWMA latency update from relay outcomes
+    if (relayOutcomes) {
+      const outcome = relayOutcomes.get(relay);
+      if (outcome?.connected) {
+        const measured = outcome.connectTimeMs + outcome.queryTimeMs;
+        const prev = entry.latencyObservations ?? 0;
+        entry.latencyMs = (prev === 0 || !Number.isFinite(entry.latencyMs))
+          ? measured
+          : (entry.latencyMs! * 0.7 + measured * 0.3);
+        entry.latencyObservations = prev + 1;
+      }
+    }
+
+    db.relays[relay] = entry;
+  }
+
+  db.sessionCount++;
+  db.updatedAt = Date.now();
+
+  console.error(
+    `[relay-scores-pw] Updated scores for ${algorithmName}: ` +
+    `${Object.keys(db.relays).length} relays, session ${db.sessionCount}`,
+  );
+  if (totalSoleSourceWeighted > 0) {
+    console.error(
+      `[relay-scores-pw] Partial-weighted ${totalSoleSourceWeighted} sole-source observations across ${relaysWithSoleSource} relays (${SOLE_SOURCE_WEIGHT}x)`,
+    );
+  }
+  if (forcedRelayScores.length > 0) {
+    console.error(
+      `[relay-scores-pw] Sole-source relays and scores: ${forcedRelayScores.slice(0, 10).join(", ")}` +
+      (forcedRelayScores.length > 10 ? ` (+${forcedRelayScores.length - 10} more)` : ""),
+    );
+  }
+  if (degrading.length > 0) {
+    console.error(
+      `[relay-scores-pw] Degrading relays (${degrading.length}): ${degrading.slice(0, 5).join(", ")}` +
+      (degrading.length > 5 ? ` (+${degrading.length - 5} more)` : ""),
+    );
+  }
+
+  return db;
+}
+
 export async function saveRelayScores(db: RelayScoreDB, filterMode?: string, algorithmId?: string): Promise<void> {
   await Deno.mkdir(CACHE_DIR, { recursive: true });
   const prefix = db.pubkey.slice(0, 16);

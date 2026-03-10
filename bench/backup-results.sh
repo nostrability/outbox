@@ -15,7 +15,7 @@ WORKTREE_DIR="/tmp/outbox-data-worktree"
 mkdir -p "$BACKUP_DIR"
 
 DIRS_TO_BACKUP=""
-for d in 3yr-base-results thompson-variance-1yr thompson-variance-3yr 1yr-results 1yr-results-ndk hjo-results neutral-thompson-results .cache/stage1_hybrid_logs .cache/stage2_greedy_logs .cache/stage3_ndk3yr_logs .cache/stage4a_jp_fdndk_logs .cache/stage4b_jp_nip66_logs .cache/stage5_connlimit_logs; do
+for d in 3yr-base-results thompson-variance-1yr thompson-variance-3yr 1yr-results 1yr-results-ndk hjo-results neutral-thompson-results .cache/stage1_hybrid_logs .cache/stage2_greedy_logs .cache/stage3_ndk3yr_logs .cache/stage4a_jp_fdndk_logs .cache/stage4b_jp_nip66_logs .cache/stage5_connlimit_logs .cache/cg2_comparison_logs .cache/cg3_comparison_logs; do
   [ -d "$BENCH_DIR/$d" ] && DIRS_TO_BACKUP="$DIRS_TO_BACKUP $d"
 done
 
@@ -72,7 +72,7 @@ if [ ! -d "$WORKTREE_DIR/.git" ] && [ ! -f "$WORKTREE_DIR/.git" ]; then
 fi
 
 # Copy log files to worktree
-for d in 3yr-base-results thompson-variance-1yr thompson-variance-3yr 1yr-results 1yr-results-ndk hjo-results neutral-thompson-results .cache/stage1_hybrid_logs .cache/stage2_greedy_logs .cache/stage3_ndk3yr_logs .cache/stage4a_jp_fdndk_logs .cache/stage4b_jp_nip66_logs .cache/stage5_connlimit_logs; do
+for d in 3yr-base-results thompson-variance-1yr thompson-variance-3yr 1yr-results 1yr-results-ndk hjo-results neutral-thompson-results .cache/stage1_hybrid_logs .cache/stage2_greedy_logs .cache/stage3_ndk3yr_logs .cache/stage4a_jp_fdndk_logs .cache/stage4b_jp_nip66_logs .cache/stage5_connlimit_logs .cache/cg2_comparison_logs .cache/cg3_comparison_logs; do
   if [ -d "$BENCH_DIR/$d" ]; then
     # Recreate directory structure under bench/
     find "$BENCH_DIR/$d" -name "*.log" | while read -r f; do

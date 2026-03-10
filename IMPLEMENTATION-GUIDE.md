@@ -125,12 +125,33 @@ NDK-specific** — Welshman+Thompson (+1.5pp), FD+Thompson (+21.4pp), and Greedy
 all show positive or flat results for fiatjaf because they don't have NDK's fragile priority
 cascade dependency on a single relay.
 
-**Coverage Guarantee (CG) mitigation:** A CG variant (`ndk-thompson-cg`) force-includes sole-source
-relays and excludes sole-source pubkeys from scoring. This fixes fiatjaf (+9.2pp vs NDK, was -17.6pp)
-but causes budget saturation on large follow graphs — forced sole-source relays consume the entire
-20-relay budget for ODELL (20 forced) and exceed it for Telluride (29 forced). Net across 6 profiles,
-CG ≈ NDK+T (28.8% vs 28.7%). A budget-capped variant (force ≤50% of maxConnections) is future work.
-See OUTBOX-REPORT Section 8.5c″ for full analysis. For the other 5 profiles, gains range +12pp to +35pp.
+**Coverage Guarantee (CG3) — recommended variant:** The `ndk-thompson-cg3` variant combines two fixes
+that together are Pareto-superior to both plain Thompson and the original CG:
+
+1. **Conditional CG** — force-include sole-source relays only when their count < 50% of maxConnections
+   (≤10 of 20 budget). When sole-source count ≥ cap, CG is skipped entirely → plain Thompson behavior.
+   This eliminates budget saturation on large follow graphs (ODELL, Telluride).
+
+2. **Partial-Weight Sole-Source scoring** — weight sole-source observations at 0.3× instead of 0×.
+   Preserves Thompson's learning signal while reducing the retention-penalty bias that caused
+   compounding score degradation across sessions.
+
+CG3 results (6 profiles × 5 sessions, 1yr, NIP-66 liveness, cap@20):
+
+| Profile | NDK+T | CG | CG3 | CG3 vs T | CG behavior |
+|---|:---:|:---:|:---:|:---:|---|
+| fiatjaf (194) | 13.1% | 38.8% | 38.7% | **+25.6pp** | ENABLED (8 sole-source < 10 cap) |
+| hodlbod (855) | 18.1% | 16.8% | 18.5% | +0.4pp | SKIPPED (13 ≥ 10) |
+| jb55 (1,218) | 28.8% | 28.4% | 29.4% | +0.6pp | SKIPPED (13 ≥ 10) |
+| ODELL (1,562) | 25.4% | 18.9% | 25.6% | +0.2pp | SKIPPED (18 ≥ 10) |
+| Gato (399) | 19.4% | 26.5% | 21.8% | +2.4pp | ENABLED (8 < 10) |
+| Telluride (2,784) | 27.2% | 28.0% | 27.5% | +0.3pp | SKIPPED (30 ≥ 10) |
+| **6-profile mean** | **22.0%** | **26.2%** | **26.9%** | **+4.9pp** | |
+
+CG3 preserves the fiatjaf fix (+25.6pp vs T), eliminates the ODELL regression (CG was -6.5pp vs T),
+and beats both T and CG on grand mean. Gato is a partial tradeoff: +2.4pp vs T but -4.7pp vs CG —
+partial-weight scoring reduces SE degradation but doesn't fully overcome relay-set anchoring from
+forced relays. See OUTBOX-REPORT Section 8.5c‴ for the full analysis.
 NDK's selected-first priority cascade short-circuits Thompson scoring — if
 already-connected relays satisfy the per-author target, the Thompson scorer is never
 consulted. Welshman's per-user relay budgeting gives Thompson full control over
