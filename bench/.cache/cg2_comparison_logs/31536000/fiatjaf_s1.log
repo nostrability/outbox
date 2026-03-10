@@ -1,0 +1,22 @@
+[0m[32mTask[0m [0m[36mbench[0m deno run --allow-net --allow-read --allow-write main.ts "3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d" "--algorithms" "ndk-thompson,ndk-thompson-cg,ndk-thompson-cg2" "--verify-window" "31536000" "--verify" "--verify-concurrency" "10" "--nip66-filter" "liveness" "--no-phase2-cache" "--fast" "--output" "both"
+Target: 3bf0c63fcb934634...
+Seed: 0 | Filter: strict | Runs: 3
+Using cached data (fetched 2026-03-10T02:45:38.940Z)
+
+=== Fetch Quality ===
+Indexers: wss://purplepag.es (0 events, 1286ms), wss://relay.damus.io (123 events, 598ms), wss://nos.lol (154 events, 822ms)
+Follows: 196 | With relay list: 151 (77.0%) | Missing: 45 (23.0%) | Filtered-to-empty: 3
+Filter profile: strict | Filtered URLs: 34 (2 localhost, 3 insecure ws, 29 known-bad)
+Unique valid write relays: 233 | Seed: 0
+[nip66] Using cached monitor data (1707 relays)
+
+=== NIP-66 Liveness Filter (liveness) ===
+Monitor data: 1707 relays
+Candidate relays: 233
+  Known alive: 156
+  Unknown (removed): 77
+  .onion preserved: 1
+  Parse-failed preserved: 0
+  Authors filtered to empty: 1
+Relays after filter: 156
+Coverage guarantee: 8 sole-source relays forced (20 maxConnections budget)

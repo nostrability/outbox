@@ -1,0 +1,183 @@
+[0m[32mTask[0m [0m[36mbench[0m deno run --allow-net --allow-read --allow-write main.ts "97c70a44366a6535c145b333f973ea86dfdc2d7a99da618c40c64705ad98e322" "--algorithms" "ndk-thompson,ndk-thompson-cg,ndk-thompson-cg3" "--verify-window" "31536000" "--verify" "--verify-concurrency" "10" "--nip66-filter" "liveness" "--no-phase2-cache" "--fast" "--output" "both"
+Target: 97c70a44366a6535...
+Seed: 0 | Filter: strict | Runs: 3
+Using cached data (fetched 2026-03-10T16:04:38.618Z)
+
+=== Fetch Quality ===
+Indexers: wss://purplepag.es (454 events, 1142ms), wss://relay.damus.io (0 events, 460ms, errors: WebSocket error: NetworkError: failed to connect to WebSocket: Invalid status code 400 Bad Request), wss://nos.lol (402 events, 713ms)
+Follows: 453 | With relay list: 394 (87.0%) | Missing: 59 (13.0%) | Filtered-to-empty: 8
+Filter profile: strict | Filtered URLs: 141 (6 localhost, 13 insecure ws, 8 IP-only, 114 known-bad)
+Unique valid write relays: 481 | Seed: 0
+[nip66] Using cached monitor data (1158 relays)
+
+=== NIP-66 Liveness Filter (liveness) ===
+Monitor data: 1158 relays
+Candidate relays: 481
+  Known alive: 248
+  Unknown (removed): 233
+  .onion preserved: 10
+  Parse-failed preserved: 0
+  Authors filtered to empty: 3
+Relays after filter: 248
+[relay-scores] Loaded 20 relay priors (session 1, from 2026-03-10T16:05:56.092Z)
+
+Thompson Sampling [ndk-thompson]: loaded 20 relay priors (session 1)
+[relay-scores] Loaded 20 relay priors (session 1, from 2026-03-10T16:05:56.102Z)
+
+Thompson Sampling [ndk-thompson-cg]: loaded 20 relay priors (session 1)
+[relay-scores] Loaded 20 relay priors (session 1, from 2026-03-10T16:05:56.112Z)
+
+Thompson Sampling [ndk-thompson-cg3]: loaded 20 relay priors (session 1)
+Coverage guarantee: 13 sole-source relays forced (20 maxConnections budget)
+Coverage guarantee: 13 sole-source relays forced (20 maxConnections budget)
+Coverage guarantee: 13 sole-source relays forced (20 maxConnections budget)
+Coverage guarantee: SKIPPED (13 sole-source >= 10 cap)
+Coverage guarantee: SKIPPED (13 sole-source >= 10 cap)
+Coverage guarantee: SKIPPED (13 sole-source >= 10 cap)
+
+=== Regime A: Fixed 20 Connections ===
+  Algorithm                      |  Relays |   Assign% |  Orphans |  Alg.Orph |  Avg/pk |   Gini |    HHI
+  -------------------------------+---------+-----------+----------+-----------+---------+--------+-------
+  NDK+Thompson (Priority)        |      20 |     82.8% (0.0sd) |       78 |        19 |     1.9 |   0.73 |  0.213
+  NDK+Thompson (Priority)+CG     |      20 |     84.0% (0.0sd) | 72.66666666666667 | 13.666666666666666 |     1.9 |   0.74 |  0.217
+  NDK+Thompson (Priority)-skip   |      20 |     82.8% (0.0sd) |       78 |        19 |     1.9 |   0.74 |  0.218
+Coverage guarantee: 13 sole-source relays forced (20 maxConnections budget)
+Coverage guarantee: SKIPPED (13 sole-source >= 10 cap)
+
+=== Phase 2: Event Verification ===
+Window: 31536000s | Kinds: 1 | Concurrency: 10
+[baseline] Querying 248 relays for 391 authors (window: 31536000s)
+[pool] CLOSED from wss://hole.v0l.io: error: queries not allowed
+[baseline] Progress: 50/248 relays queried
+[pool] CLOSED from wss://relay.getalby.com/v1: blocked: Request rejected
+[pool] CLOSED from wss://greensoul.space: auth-required: only authenticated users can read from this relay
+[pool] CLOSED from wss://sendit.nosflare.com: restricted: this relay does not accept REQs
+[pool] CLOSED from wss://relay.nosflare.com: auth-required: authentication required to subscribe
+[pool] CLOSED from wss://creatr.nostr.wine: auth-required: please authenticate before sending REQs
+[baseline] Progress: 100/248 relays queried
+[pool] CLOSED from wss://inbox.nostr.wine: blocked: this relay does not store any of the kinds in this request
+[pool] CLOSED from wss://david.nostr1.com: auth-required: you must auth
+[pool] CLOSED from wss://relay.shawnyeager.com/chat: auth-required: all requests must be authenticated
+[pool] CLOSED from wss://auth.nostr1.com: auth-required: you must auth
+[baseline] Progress: 150/248 relays queried
+[pool] CLOSED from wss://bostr.erechorse.com: auth-required: authentication is required to perform this action.
+[pool] CLOSED from wss://relay.nsec.app: blocked: we only keep kind 24133 or 24135
+[baseline] Progress: 200/248 relays queried
+[pool] CLOSED from wss://relay.danieldaquino.me/private: auth-required: this query requires you to be authenticated
+[pool] CLOSED from wss://relay.albylabs.com: blocked: Request rejected
+[pool] CLOSED from wss://aplaceinthesun.nostr1.com: auth-required: you must auth
+[baseline] Progress: 248/248 relays queried
+[phase2] Subscription timeouts (no EOSE): 15
+[phase2] CLOSED messages received: 15
+  wss://hole.v0l.io: error: queries not allowed
+  wss://relay.getalby.com/v1: blocked: Request rejected
+  wss://greensoul.space: auth-required: only authenticated users can read from this relay
+  wss://sendit.nosflare.com: restricted: this relay does not accept REQs
+  wss://relay.nosflare.com: auth-required: authentication required to subscribe
+  wss://creatr.nostr.wine: auth-required: please authenticate before sending REQs
+  wss://inbox.nostr.wine: blocked: this relay does not store any of the kinds in this request
+  wss://david.nostr1.com: auth-required: you must auth
+  wss://relay.shawnyeager.com/chat: auth-required: all requests must be authenticated
+  wss://auth.nostr1.com: auth-required: you must auth
+
+=== Phase 2: Event Verification (365d window) ===
+Baseline: 248 relays queried (80.2% success), 1.6min
+  Timing: connect 1.1s median (2.3s p95) | query 2.0s median (16.0s p95) | 15 timeouts (16 relays)
+  Authors: 391 with relay data
+    Testable (reliable): 265 | Testable (partial): 0 | Zero events: 123 | Unreliable: 3
+  Baseline events: 53,632 (mean 202.4/author, median 41)
+  Events per (relay,pubkey) capped at: 10000
+
+  Headline metrics (265 testable-reliable authors, 53,632 baseline events):
+
+  Algorithm                        |   Evt Recall |   Auth Recall |  Relay OK% |     TTFE |      p50 |      p80 | Timeouts
+  ---------------------------------+--------------+---------------+------------+----------+----------+----------+---------
+  NDK+Thompson (Priority) (seed=0, single run) |        18.8% |         80.0% |      80.0% |     1.2s |     7.0s |     9.0s |        0
+  NDK+Thompson CG (Priority) (seed=0, single run) |        18.3% |         82.3% |      75.0% |     1.2s |     6.7s |    10.6s |        1
+  NDK+Thompson CG3 (Priority) (seed=0, single run) |        19.0% |         80.4% |      80.0% |     1.2s |     7.0s |     9.0s |        0
+
+  Per-author recall distribution:
+  Algorithm                        |   Median |  % at 0% |      p25 |      p75
+  ---------------------------------+----------+----------+----------+---------
+  NDK+Thompson (Priority) (seed=0, single run) |    38.5% |    20.0% |     1.5% |   100.0%
+  NDK+Thompson CG (Priority) (seed=0, single run) |    33.0% |    17.7% |     2.7% |   100.0%
+  NDK+Thompson CG3 (Priority) (seed=0, single run) |    38.5% |    19.6% |     1.7% |   100.0%
+
+  Latency simulation (parallel relay query):
+  Algorithm                        |     TTFE |      p50 |      p80 |      Max |   TO |   TO Tax |   Relays |   Events
+  ---------------------------------+----------+----------+----------+----------+------+----------+----------+---------
+  NDK+Thompson (Priority) (seed=0, single run) |     1.2s |     7.0s |     9.0s |    13.1s |    0 |      0ms | 15/17/20 |   20,138
+  NDK+Thompson CG (Priority) (seed=0, single run) |     1.2s |     6.7s |    10.6s |    19.5s |    1 |    15.0s | 14/16/20 |   18,250
+  NDK+Thompson CG3 (Priority) (seed=0, single run) |     1.2s |     7.0s |     9.0s |    13.1s |    0 |      0ms | 15/17/20 |   20,138
+  (Relays: with-events/connected/total | TO Tax: ceil(timeouts/concurrency) × EOSE timeout)
+
+  Progressive completeness (% of recall achieved by time):
+  Algorithm                        |      @1s |      @2s |      @5s |     @10s |     @15s
+  ---------------------------------+----------+----------+----------+----------+---------
+  NDK+Thompson (Priority) (seed=0, single run) |     0.0% |     0.0% |    19.4% |    71.8% |   100.0%
+  NDK+Thompson CG (Priority) (seed=0, single run) |     0.0% |     2.5% |    20.6% |    71.4% |   100.0%
+  NDK+Thompson CG3 (Priority) (seed=0, single run) |     0.0% |     0.0% |    17.6% |    71.6% |   100.0%
+
+  EOSE-race simulation (stop after first EOSE + grace period):
+  Algorithm                        |     +0ms |   +200ms |   +500ms |      +1s |      +2s
+  ---------------------------------+----------+----------+----------+----------+---------
+  NDK+Thompson (Priority) (seed=0, single run) |     1.0% |     1.0% |     6.8% |     6.8% |    10.9%
+  NDK+Thompson CG (Priority) (seed=0, single run) |     2.5% |     5.1% |     5.1% |    10.1% |    12.7%
+  NDK+Thompson CG3 (Priority) (seed=0, single run) |     1.0% |     1.0% |     6.7% |     6.7% |    10.7%
+  (First EOSE: NDK+Thompson (Priority) (seed=0, single run)=2.3s, NDK+Thompson CG (Priority) (seed=0, single run)=1.9s, NDK+Thompson CG3 (Priority) (seed=0, single run)=2.3s)
+
+  Profile-view latency (per-author outbox query, top 3 write relays):
+    Authors simulated: 265 | Hit rate: 100.0%
+    TTFE: 1.2s median, 1.7s mean, 2.7s p95
+    Relays/profile: 2.8 queried, 2.5 with events, 0.07 timeouts
+
+  Feed vs profile-view TTFE comparison:
+  Algorithm                        |  Feed TTFE |  Profile TTFE |    Delta
+  ---------------------------------+------------+---------------+---------
+  NDK+Thompson (Priority) (seed=0, single run) |       1.2s |          1.2s |     +0ms
+  NDK+Thompson CG (Priority) (seed=0, single run) |       1.2s |          1.2s |     +0ms
+  NDK+Thompson CG3 (Priority) (seed=0, single run) |       1.2s |          1.2s |     +0ms
+
+=== NIP-66 RTT vs Measured Latency (225 relays, data age: 39min) ===
+                             N   Spearman r      MAE    Bias    Top5   Top10   Top20
+------------------------  ----  -----------  -------  ------  ------  ------  ------
+rttOpen vs connect         225         0.11     1.0s    1.0x    0.0%    0.0%   15.0%
+rttRead vs query           193         0.06     2.5s   11.1x    0.0%   10.0%   20.0%
+(Bias = measured/nip66, >1 = NIP-66 underestimates. TopK = overlap of K fastest relays.)
+Monitor: 9ba046db56b8..., 9ba1d7892cd0..., 9bbbb845e5b6..., 0b01aa38c2cc..., 9bac3d58ef5a..., http-api..., b2c949c0fb79..., 58faef87b342...
+[relay-scores] Updated scores for ndk-thompson: 26 relays, session 2
+[relay-scores] Saved to .cache/relay_scores_97c70a44366a6535_31536000_liveness_ndk-thompson.json
+
+Thompson Sampling [ndk-thompson] learning state:
+  Session: 2
+  Relays with observations: 26
+  Mean prior α: 13.1, β: 25.5
+  Relays with strong preference (α>5): 10
+  Relays learned to avoid (β>5): 13
+[relay-scores-se] Relay wss://relay.day.ag: 0 contested obs (fallback dampening applied)
+[relay-scores-se] Relay wss://thatwhichisnotseen.net/outbox: 0 contested obs (fallback dampening applied)
+[relay-scores-se] Relay wss://nostr.lopp.social: 0 contested obs (fallback dampening applied)
+[relay-scores-se] Updated scores for ndk-thompson-cg: 22 relays, session 2
+[relay-scores-se] Skipped 13 sole-source observations across 10 relays
+[relay-scores-se] Force-included relays and scores: wss://relay.ditto.pub(E=0.619), wss://relay.primal.net(E=0.290), wss://nostr.bitcoiner.social(E=0.469), wss://relay.damus.io(E=0.316), wss://nostr.land(E=0.311), wss://nos.lol(E=0.363), wss://relay.day.ag(E=0.747), wss://thatwhichisnotseen.net/outbox(E=0.747), wss://premium.primal.net(E=0.317), wss://nostr.lopp.social(E=0.747)
+[relay-scores] Saved to .cache/relay_scores_97c70a44366a6535_31536000_liveness_ndk-thompson-cg.json
+
+Thompson Sampling [ndk-thompson-cg] learning state:
+  Session: 2
+  Relays with observations: 22
+  Mean prior α: 14.2, β: 30.5
+  Relays with strong preference (α>5): 9
+  Relays learned to avoid (β>5): 13
+[relay-scores-pw] Updated scores for ndk-thompson-cg3: 26 relays, session 2
+[relay-scores-pw] Partial-weighted 9 sole-source observations across 6 relays (0.3x)
+[relay-scores-pw] Sole-source relays and scores: wss://nos.lol(E=0.382), wss://relay.damus.io(E=0.326), wss://nostr.bitcoiner.social(E=0.469), wss://relay.primal.net(E=0.279), wss://nostr.land(E=0.348), wss://relay.ditto.pub(E=0.508)
+[relay-scores] Saved to .cache/relay_scores_97c70a44366a6535_31536000_liveness_ndk-thompson-cg3.json
+
+Thompson Sampling [ndk-thompson-cg3] learning state:
+  Session: 2
+  Relays with observations: 26
+  Mean prior α: 12.6, β: 25.6
+  Relays with strong preference (α>5): 10
+  Relays learned to avoid (β>5): 13
+
+JSON results written to: results/97c70a44366a6535_1773159994038.json
