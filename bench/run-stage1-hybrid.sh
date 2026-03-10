@@ -38,7 +38,7 @@ for WINDOW in $WINDOWS; do
   MARKER=".cache/stage1_${WINDOW}_scores_cleared"
   if [ ! -f "$MARKER" ]; then
     echo "Clearing ditto-outbox Thompson scores for window=$WINDOW..."
-    rm -f .cache/relay_scores_*_${WINDOW}_none_ditto-outbox.json
+    rm -f .cache/relay_scores_*_${WINDOW}_ditto-outbox.json
     touch "$MARKER"
   fi
 
