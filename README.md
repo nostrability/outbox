@@ -266,11 +266,21 @@ The discount is hyperbolic, not exponential — a slow-but-reliable relay at 2s 
 
 *Data: 6 profiles (194–2,795 follows), 5 learning sessions each, 7d window, NIP-66 liveness filtered, cap@20. FD+Thompson+Latency shows the same pattern with ~2× the recall cost — Welshman variant is strictly safer. See [OUTBOX-REPORT.md § 8.6](OUTBOX-REPORT.md#86-latency-aware-thompson-sampling) for per-profile tables and session progression.*
 
-### 6. 20 relay connections is enough
+### 6. 20 relay connections is enough for most users
 
-Most recall is captured at 20 relay connections. Small graphs (<200 follows) reach near-ceiling at 10 relays. Larger graphs benefit from 20–30, though gains are variable session to session.
+How much recall does each additional relay budget buy? Welshman+Thompson at cap@10, cap@15, and cap@30 (1yr, NIP-66 liveness, S5 shown):
 
-**What to do:** Cap at 20 connections. For the ~3-5% of active follows without relay lists, use fallback strategies (relay hints from tags, indexer queries, hardcoded popular relays).
+| Profile (follows) | cap@10 | cap@15 | cap@20* | cap@30 | Δ(10→30) |
+|---|:---:|:---:|:---:|:---:|:---:|
+| tanakei (84) | 60.0% | 66.6% | ~75%* | 67.0% | +7.0pp |
+| Gato (399) | 17.5% | 21.2% | ~26%* | 34.8% | +17.3pp |
+| Telluride (2,784) | 33.0% | 35.4% | ~39%* | 34.1% | +1.1pp |
+
+\*cap@20 from separate benchmarks — not directly comparable. Session-to-session variance is high (e.g., tanakei cap@10: 35–69% across S1–S5). At 5 sessions, per-profile scaling claims are tentative. See [OUTBOX-REPORT.md § 8.5f](OUTBOX-REPORT.md#85f-adaptive-connection-limits) for variance ranges and session-level data.
+
+Small graphs saturate quickly — tanakei (84 follows) reaches 60% at just 10 relays, gaining only +7pp from 20 more. Medium graphs benefit most reliably — Gato (399 follows) shows +17pp. Large graphs are noisy — Telluride (2,784 follows) ranges from +1pp to +13pp depending on which sessions you measure.
+
+**What to do:** Default to 20 connections. Profiles with <200 follows can reduce to 10–15 without meaningful recall loss. Profiles with 300–500 follows benefit from 20–30. For >1000 follows, more connections help on average but gains are variable — don't over-invest here. For the ~3-5% of active follows without relay lists, use fallback strategies (relay hints from tags, indexer queries, hardcoded popular relays).
 
 ## Algorithm quick reference
 
