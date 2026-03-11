@@ -268,7 +268,7 @@ The discount is hyperbolic, not exponential — a slow-but-reliable relay at 2s 
 
 ### 6. 20 relay connections is enough
 
-All algorithms reach within 1-2% of their unlimited ceiling at 20 relays.
+Most recall is captured at 20 relay connections. Small graphs (<200 follows) reach near-ceiling at 10 relays. Larger graphs benefit from 20–30, though gains are variable session to session.
 
 **What to do:** Cap at 20 connections. For the ~3-5% of active follows without relay lists, use fallback strategies (relay hints from tags, indexer queries, hardcoded popular relays).
 

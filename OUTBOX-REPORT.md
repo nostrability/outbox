@@ -1170,15 +1170,15 @@ At 3yr, the same pattern holds: FD+T mean = -3.5pp, NDK+T mean = +6.4pp across J
 
 | Profile (follows) | Greedy | Welshman | Welshman+Thompson | WT Gain |
 |---|:---:|:---:|:---:|:---:|
-| tanakei (84) | 21.0% | 62.1% | 68.6% | +6.5pp |
-| yutaro (240) | 12.9% | 21.6% | 22.7% | +1.2pp |
-| shion (1,746) | 27.4% | 35.3% | 37.4% | +2.1pp |
-| rokuyo (898) | 24.8% | 33.4% | 36.0% | +2.7pp |
-| darashi (353) | 14.3% | 24.3% | 27.7% | +3.4pp |
-| kojira (1,017) | 22.2% | 29.6% | 36.6% | +7.0pp |
-| **6-profile mean** | **20.4%** | **34.4%** | **38.2%** | **+3.8pp** |
+| tanakei (84) | 23.0% | 55.4% | 74.7% | +19.3pp |
+| yutaro (240) | 13.6% | 17.7% | 18.5% | +0.8pp |
+| shion (1,746) | 28.7% | 36.6% | 32.3% | −4.3pp |
+| rokuyo (898) | 26.7% | 30.5% | 28.7% | −1.8pp |
+| darashi (353) | 15.8% | 20.4% | 24.7% | +4.3pp |
+| kojira (1,017) | 23.7% | 31.4% | 30.9% | −0.5pp |
+| **6-profile mean** | **21.9%** | **32.0%** | **35.0%** | **+3.0pp** |
 
-JP Welshman+Thompson gains (+3.8pp mean at 1yr) are more modest than EN (+9pp). At 3yr, gains are mixed: tanakei +14.5pp and yutaro +10.5pp, but shion/rokuyo/darashi show slight regressions. NIP-66 coverage for JP relays is lower (~47% vs ~60% for EN), which reduces the candidate relay pool and may limit Thompson's optimization space.
+JP Welshman+Thompson gains (+3.0pp mean at 1yr) are concentrated in tanakei (+19pp) and darashi (+4pp). Other JP profiles show negligible or negative Thompson gains. At 3yr, tanakei dominates even more (+26pp) while most other profiles regress or stay flat. Thompson's effectiveness in JP is profile-specific, not community-wide. NIP-66 coverage for JP relays is lower (~47% vs ~60% for EN), which reduces the candidate relay pool.
 
 ### 8.5f Adaptive Connection Limits
 
@@ -1188,21 +1188,25 @@ JP Welshman+Thompson gains (+3.8pp mean at 1yr) are more modest than EN (+9pp). 
 
 | Profile (follows) | cap@10 | cap@15 | cap@20* | cap@30 | Δ(10→30) |
 |---|:---:|:---:|:---:|:---:|:---:|
-| tanakei (84) | 67.6% | 69.5% | ~69%* | 75.2% | +7.6pp |
-| Gato (399) | 21.0% | 25.4% | ~26%* | 32.1% | +11.1pp |
-| Telluride (2,784) | 24.0% | 36.8% | ~42%* | 45.8% | +21.8pp |
+| tanakei (84) | 60.0% | 66.6% | ~75%* | 67.0% | +7.0pp |
+| Gato (399) | 17.5% | 21.2% | ~26%* | 34.8% | +17.3pp |
+| Telluride (2,784) | 33.0% | 35.4% | ~39%* | 34.1% | +1.1pp |
 
-*cap@20 values approximate from prior benchmarks (different sessions).
+\*cap@20 values from separate benchmarks (different sessions/dates) — not directly comparable.
+
+Session-to-session variance is high (S1–S5 Evt Recall ranges: tanakei cap@10 35–69%, cap@15 50–67%, cap@30 44–67%; Gato cap@10 17–26%, cap@15 19–24%, cap@30 24–35%; Telluride cap@10 19–33%, cap@15 32–35%, cap@30 34–40%). With only 5 sessions, per-profile Δ(10→30) is noisy.
 
 **Key findings:**
 
-1. **Small graphs plateau early.** tanakei (84 follows) gets 90% of its cap@30 recall at just cap@10. The relay graph is simple enough that 10 relays cover most combinations.
+1. **More connections generally help, but gains are profile-specific and noisy.** Aggregate Δ(10→30) is positive for all profiles, but the magnitude varies dramatically by session. At 5 sessions, individual scaling claims should be treated as tentative.
 
-2. **Large graphs keep benefiting from more connections.** Telluride (2,784 follows) gains +21.8pp from cap@10→30 — each additional relay unlocks previously unreachable authors.
+2. **Small graphs saturate quickly.** tanakei (84 follows) reaches 60% at cap@10 — adding 20 more relays gains only +7pp at S5 (and as little as +1pp at S3–S5 mean). The relay graph is simple enough that 10–15 relays cover most paths.
 
-3. **Medium graphs show diminishing returns.** Gato (399 follows) gains +11pp from cap@10→30, with most improvement between cap@10 and cap@15.
+3. **Medium graphs benefit most reliably from more connections.** Gato (399 follows) shows the most consistent scaling: +17pp at S5, +11pp at S3–S5 mean.
 
-**Recommendation for adaptive budgets:** Default to cap@20. Profiles with <200 follows could reduce to cap@10-15 without recall loss. Profiles with >1000 follows benefit from cap@25-30 if the client can maintain the connections.
+4. **Large graphs show high variance.** Telluride (2,784 follows) ranges from +1pp to +13pp depending on metric. More budget doesn't guarantee proportionally more recall — session-to-session noise dominates.
+
+**Recommendation for adaptive budgets:** Default to cap@20. Profiles with <200 follows can reduce to cap@10–15. Profiles with 300–500 follows benefit from cap@20–30. For >1000 follows, more connections help on average but gains are variable.
 
 ### 8.6 Latency-Aware Thompson Sampling
 
