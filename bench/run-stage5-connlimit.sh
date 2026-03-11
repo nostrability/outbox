@@ -39,7 +39,7 @@ for BUDGET in $BUDGETS; do
     echo "Clearing welshman-thompson scores for cap@$BUDGET..."
     for name in $NAMES; do
       eval "pk=\$PK_${name}"
-      rm -f ".cache/relay_scores_${pk}_${WINDOW}_liveness_welshman-thompson.json"
+      rm -f ".cache/relay_scores_${pk:0:16}_${WINDOW}_liveness_welshman-thompson.json"
     done
     touch "$MARKER"
   fi
