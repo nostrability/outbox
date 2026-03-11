@@ -1166,7 +1166,7 @@ At 3yr, the same pattern holds: FD+T mean = -3.5pp, NDK+T mean = +6.4pp across J
 
 ### 8.5e JP NIP-66 Comparison
 
-**JP profiles with NIP-66 liveness filter (6 JP profiles × 5 sessions, cap@20):**
+**JP profiles with NIP-66 liveness filter (6 JP profiles × 5 sessions, cap@20, S5 shown):**
 
 | Profile (follows) | Greedy | Welshman | Welshman+Thompson | WT Gain |
 |---|:---:|:---:|:---:|:---:|
@@ -1184,7 +1184,7 @@ JP Welshman+Thompson gains (+3.0pp mean at 1yr) are concentrated in tanakei (+19
 
 **Question:** At what relay budget does recall plateau for different follow graph sizes?
 
-**Welshman+Thompson at cap@10, cap@15, cap@30 (tanakei=84, Gato=399, Telluride=2,784 follows; 5 sessions each, 1yr, NIP-66 liveness):**
+**Welshman+Thompson at cap@10, cap@15, cap@30 (tanakei=84, Gato=399, Telluride=2,784 follows; 5 sessions each, 1yr, NIP-66 liveness, S5 shown):**
 
 | Profile (follows) | cap@10 | cap@15 | cap@20* | cap@30 | Δ(10→30) |
 |---|:---:|:---:|:---:|:---:|:---:|
