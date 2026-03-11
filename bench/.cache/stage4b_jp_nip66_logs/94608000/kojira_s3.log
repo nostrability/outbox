@@ -1,148 +1,143 @@
 [0m[32mTask[0m [0m[36mbench[0m deno run --allow-net --allow-read --allow-write main.ts "b3e43e8cc7e6dff23a33d9213a3e912d895b1c3e4250240e0c99dbefe3068b5f" "--algorithms" "greedy,welshman,welshman-thompson" "--verify" "--verify-window" "94608000" "--verify-concurrency" "10" "--nip66-filter" "liveness" "--no-phase2-cache" "--fast" "--output" "both"
 Target: b3e43e8cc7e6dff2...
 Seed: 0 | Filter: strict | Runs: 3
-Using cached data (fetched 2026-03-08T11:23:20.396Z)
+Using cached data (fetched 2026-03-10T23:46:32.177Z)
 
 === Fetch Quality ===
-Indexers: wss://purplepag.es (1016 events, 1333ms), wss://relay.damus.io (366 events, 285ms), wss://nos.lol (597 events, 1585ms)
+Indexers: wss://purplepag.es (1016 events, 997ms), wss://relay.damus.io (367 events, 1205ms), wss://nos.lol (597 events, 762ms)
 Follows: 1017 | With relay list: 594 (58.4%) | Missing: 423 (41.6%) | Filtered-to-empty: 7
 Filter profile: strict | Filtered URLs: 54 (5 localhost, 5 insecure ws, 5 IP-only, 39 known-bad)
-Unique valid write relays: 366 | Seed: 0
-[nip66] Using cached monitor data (1145 relays)
+Unique valid write relays: 367 | Seed: 0
+[nip66] Using cached monitor data (1152 relays)
 
 === NIP-66 Liveness Filter (liveness) ===
-Monitor data: 1145 relays
-Candidate relays: 366
-  Known alive: 165
-  Unknown (removed): 201
-  .onion preserved: 5
+Monitor data: 1152 relays
+Candidate relays: 367
+  Known alive: 154
+  Unknown (removed): 213
+  .onion preserved: 6
   Parse-failed preserved: 0
   Authors filtered to empty: 14
-Relays after filter: 165
-[relay-scores] Loaded 29 relay priors (session 7, from 2026-03-08T11:49:13.848Z)
+Relays after filter: 154
+[relay-scores] Loaded 23 relay priors (session 2, from 2026-03-11T00:01:11.538Z)
 
-Thompson Sampling [welshman-thompson]: loaded 29 relay priors (session 7)
+Thompson Sampling [welshman-thompson]: loaded 23 relay priors (session 2)
 
 === Regime A: Fixed 20 Connections ===
   Algorithm                      |  Relays |   Assign% |  Orphans |  Alg.Orph |  Avg/pk |   Gini |    HHI
   -------------------------------+---------+-----------+----------+-----------+---------+--------+-------
   Greedy Set-Cover               |      20 |     56.7% |      440 |        17 |     1.9 |   0.80 |  0.294
-  Weighted Stochastic (cap@20)   |      20 |     56.5% (0.0sd) | 442.3333333333333 | 19.333333333333332 |     2.5 |   0.60 |  0.146
-  Welshman+Thompson (cap@20)     |      20 |     56.8% (0.0sd) | 439.6666666666667 | 16.666666666666668 |     2.5 |   0.69 |  0.182
+  Weighted Stochastic (cap@20)   |      20 |     56.6% (0.0sd) | 441.6666666666667 | 18.666666666666668 |     2.5 |   0.60 |  0.147
+  Welshman+Thompson (cap@20)     |      20 |     56.5% (0.0sd) | 442.3333333333333 | 19.333333333333332 |     2.5 |   0.70 |  0.183
 
 === Phase 2: Event Verification ===
 Window: 94608000s | Kinds: 1 | Concurrency: 10
-[baseline] Querying 165 relays for 580 authors (window: 94608000s)
-[baseline] Progress: 50/165 relays queried
-[pool] CLOSED from wss://creatr.nostr.wine: auth-required: please authenticate before sending REQs
+[baseline] Querying 154 relays for 580 authors (window: 94608000s)
+[pool] CLOSED from wss://bostr.erechorse.com: auth-required: authentication is required to perform this action.
+[pool] CLOSED from wss://aggr.nostr.land: auth-required: auth required for aggregator
+[baseline] Progress: 50/154 relays queried
 [pool] CLOSED from wss://inbox.nostr.wine: blocked: this relay does not store any of the kinds in this request
+[pool] CLOSED from wss://creatr.nostr.wine: auth-required: please authenticate before sending REQs
 [pool] CLOSED from wss://relay.getalby.com/v1: blocked: Request rejected
 [pool] CLOSED from wss://sendit.nosflare.com: restricted: this relay does not accept REQs
 [pool] CLOSED from wss://hole.v0l.io: error: queries not allowed
-[baseline] Progress: 100/165 relays queried
+[baseline] Progress: 100/154 relays queried
 [pool] CLOSED from wss://relay.nosflare.com: auth-required: authentication required to subscribe
 [pool] CLOSED from wss://groups.0xchat.com: blocked: invalid query, must have 'h', 'e' or 'a' tag
-[pool] CLOSED from wss://relay.danieldaquino.me/chat: blocked: you must be in the web of trust to chat with the relay owner
 [pool] CLOSED from wss://relay.danieldaquino.me/private: auth-required: this query requires you to be authenticated
-[pool] CLOSED from wss://relay29.notoshi.win: blocked: invalid query, must have 'h', 'e' or 'a' tag
 [pool] CLOSED from wss://auth.nostr1.com: auth-required: you must auth
+[pool] CLOSED from wss://relay29.notoshi.win: blocked: invalid query, must have 'h', 'e' or 'a' tag
 [pool] CLOSED from wss://nostr-relay.moctane.net: auth-required: authentication required to subscribe
 [pool] CLOSED from wss://groups.yugoatobe.com: blocked: invalid query, must have 'h', 'e' or 'a' tag
-[baseline] Progress: 150/165 relays queried
-[baseline] Progress: 165/165 relays queried
-[phase2] Subscription timeouts (no EOSE): 10
-[phase2] CLOSED messages received: 13
-  wss://creatr.nostr.wine: auth-required: please authenticate before sending REQs
+[baseline] Progress: 150/154 relays queried
+[baseline] Progress: 154/154 relays queried
+[phase2] Subscription timeouts (no EOSE): 9
+[phase2] CLOSED messages received: 14
+  wss://bostr.erechorse.com: auth-required: authentication is required to perform this action.
+  wss://aggr.nostr.land: auth-required: auth required for aggregator
   wss://inbox.nostr.wine: blocked: this relay does not store any of the kinds in this request
+  wss://creatr.nostr.wine: auth-required: please authenticate before sending REQs
   wss://relay.getalby.com/v1: blocked: Request rejected
   wss://sendit.nosflare.com: restricted: this relay does not accept REQs
   wss://hole.v0l.io: error: queries not allowed
   wss://relay.nosflare.com: auth-required: authentication required to subscribe
   wss://groups.0xchat.com: blocked: invalid query, must have 'h', 'e' or 'a' tag
-  wss://relay.danieldaquino.me/chat: blocked: you must be in the web of trust to chat with the relay owner
   wss://relay.danieldaquino.me/private: auth-required: this query requires you to be authenticated
-  wss://relay29.notoshi.win: blocked: invalid query, must have 'h', 'e' or 'a' tag
 
 === Phase 2: Event Verification (1095d window) ===
-Baseline: 165 relays queried (49.1% success), 36s
-  Timing: connect 711ms median (1.4s p95) | query 1.2s median (15.7s p95) | 10 timeouts (10 relays)
+Baseline: 154 relays queried (79.9% success), 44s
+  Timing: connect 774ms median (1.4s p95) | query 1.5s median (15.2s p95) | 9 timeouts (9 relays)
   Authors: 580 with relay data
-    Testable (reliable): 11 | Testable (partial): 49 | Zero events: 3 | Unreliable: 517
-  Baseline events: 32,603 (mean 543.4/author, median 81)
+    Testable (reliable): 260 | Testable (partial): 0 | Zero events: 318 | Unreliable: 2
+  Baseline events: 58,509 (mean 225.0/author, median 37)
   Events per (relay,pubkey) capped at: 10000
 
-  Headline metrics (11 testable-reliable authors, 6,914 baseline events):
+  Headline metrics (260 testable-reliable authors, 58,509 baseline events):
 
   Algorithm                        |   Evt Recall |   Auth Recall |  Relay OK% |     TTFE |      p50 |      p80 | Timeouts
   ---------------------------------+--------------+---------------+------------+----------+----------+----------+---------
-  Greedy Set-Cover                 |         3.8% |         27.3% |      10.0% |     1.9s |     2.4s |     2.3s |        0
-  Weighted Stochastic (seed=0, single run) |         0.0% |          0.0% |       0.0% |      N/A |      N/A |      N/A |        0
-  Welshman+Thompson (seed=0, single run) |         0.7% |          9.1% |       5.0% |     1.3s |     1.9s |     1.9s |        0
+  Greedy Set-Cover                 |        18.1% |         81.2% |      90.0% |    944ms |     2.8s |     3.9s |        1
+  Weighted Stochastic (seed=0, single run) |        25.2% |         87.7% |      90.0% |    944ms |     2.9s |     3.8s |        0
+  Welshman+Thompson (seed=0, single run) |        23.7% |         90.0% |      90.0% |    850ms |     2.8s |     3.9s |        1
 
   Per-author recall distribution:
   Algorithm                        |   Median |  % at 0% |      p25 |      p75
   ---------------------------------+----------+----------+----------+---------
-  Greedy Set-Cover                 |     0.0% |    72.7% |     0.0% |     0.0%
-  Weighted Stochastic (seed=0, single run) |     0.0% |   100.0% |     0.0% |     0.0%
-  Welshman+Thompson (seed=0, single run) |     0.0% |    90.9% |     0.0% |     0.0%
+  Greedy Set-Cover                 |    58.2% |    18.8% |     2.2% |   100.0%
+  Weighted Stochastic (seed=0, single run) |   100.0% |    12.3% |    13.1% |   100.0%
+  Welshman+Thompson (seed=0, single run) |   100.0% |    10.0% |    25.1% |   100.0%
 
   Latency simulation (parallel relay query):
   Algorithm                        |     TTFE |      p50 |      p80 |      Max |   TO |   TO Tax |   Relays |   Events
   ---------------------------------+----------+----------+----------+----------+------+----------+----------+---------
-  Greedy Set-Cover                 |     1.9s |     2.4s |     2.3s |     2.4s |    0 |      0ms |   2/2/20 |      351
-  Weighted Stochastic (seed=0, single run) |      N/A |      N/A |      N/A |      N/A |    0 |      0ms |   0/0/20 |        0
-  Welshman+Thompson (seed=0, single run) |     1.3s |     1.9s |     1.9s |     1.9s |    0 |      0ms |   1/1/20 |      500
+  Greedy Set-Cover                 |    944ms |     2.8s |     3.9s |    16.5s |    1 |    15.0s | 18/19/20 |   26,157
+  Weighted Stochastic (seed=0, single run) |    944ms |     2.9s |     3.8s |     6.9s |    0 |      0ms | 18/18/20 |   28,304
+  Welshman+Thompson (seed=0, single run) |    850ms |     2.8s |     3.9s |    16.5s |    1 |    15.0s | 17/19/20 |   26,754
   (Relays: with-events/connected/total | TO Tax: ceil(timeouts/concurrency) × EOSE timeout)
 
   Progressive completeness (% of recall achieved by time):
   Algorithm                        |      @1s |      @2s |      @5s |     @10s |     @15s
   ---------------------------------+----------+----------+----------+----------+---------
-  Greedy Set-Cover                 |     0.0% |     0.0% |   100.0% |   100.0% |   100.0%
-  Welshman+Thompson (seed=0, single run) |     0.0% |   100.0% |   100.0% |   100.0% |   100.0%
+  Greedy Set-Cover                 |     0.0% |    17.0% |    62.8% |   100.0% |   100.0%
+  Weighted Stochastic (seed=0, single run) |     0.0% |    17.6% |    67.1% |   100.0% |   100.0%
+  Welshman+Thompson (seed=0, single run) |     0.0% |    14.1% |    63.1% |   100.0% |   100.0%
 
   EOSE-race simulation (stop after first EOSE + grace period):
   Algorithm                        |     +0ms |   +200ms |   +500ms |      +1s |      +2s
   ---------------------------------+----------+----------+----------+----------+---------
-  Greedy Set-Cover                 |    96.5% |   100.0% |   100.0% |   100.0% |   100.0%
-  Welshman+Thompson (seed=0, single run) |   100.0% |   100.0% |   100.0% |   100.0% |   100.0%
-  (First EOSE: Greedy Set-Cover=2.3s, Welshman+Thompson (seed=0, single run)=1.9s)
+  Greedy Set-Cover                 |     0.0% |     0.0% |     0.8% |    55.3% |    59.3%
+  Weighted Stochastic (seed=0, single run) |     1.5% |     1.5% |     2.6% |    36.7% |    43.8%
+  Welshman+Thompson (seed=0, single run) |     2.0% |     2.2% |     4.9% |    38.9% |    41.9%
+  (First EOSE: Greedy Set-Cover=1.2s, Weighted Stochastic (seed=0, single run)=1.2s, Welshman+Thompson (seed=0, single run)=1.2s)
 
   Profile-view latency (per-author outbox query, top 3 write relays):
-    Authors simulated: 60 | Hit rate: 51.7%
-    TTFE: 1.7s median, 1.8s mean, 3.0s p95
-    Relays/profile: 2.9 queried, 0.6 with events, 0.05 timeouts
+    Authors simulated: 260 | Hit rate: 100.0%
+    TTFE: 944ms median, 1.2s mean, 1.7s p95
+    Relays/profile: 2.8 queried, 2.6 with events, 0.02 timeouts
 
   Feed vs profile-view TTFE comparison:
   Algorithm                        |  Feed TTFE |  Profile TTFE |    Delta
   ---------------------------------+------------+---------------+---------
-  Greedy Set-Cover                 |       1.9s |          1.7s |   -188ms
-  Weighted Stochastic (seed=0, single run) |        N/A |          1.7s |      N/A
-  Welshman+Thompson (seed=0, single run) |       1.3s |          1.7s |   +390ms
+  Greedy Set-Cover                 |      944ms |         944ms |     +0ms
+  Weighted Stochastic (seed=0, single run) |      944ms |         944ms |     +0ms
+  Welshman+Thompson (seed=0, single run) |      850ms |         944ms |    +93ms
 
-  Including partial-baseline authors (60 testable authors, 32,603 baseline events):
-
-  Algorithm                        |   Evt Recall |   Auth Recall
-  ---------------------------------+--------------+--------------
-  Greedy Set-Cover                 |         0.8% |          5.0%
-  Weighted Stochastic (seed=0, single run) |         0.0% |          0.0%
-  Welshman+Thompson (seed=0, single run) |         0.4% |          5.0%
-
-=== NIP-66 RTT vs Measured Latency (103 relays, data age: 64min) ===
+=== NIP-66 RTT vs Measured Latency (142 relays, data age: 44min) ===
                              N   Spearman r      MAE    Bias    Top5   Top10   Top20
 ------------------------  ----  -----------  -------  ------  ------  ------  ------
-rttOpen vs connect         103         0.19    655ms    0.7x   20.0%   40.0%   45.0%
-rttRead vs query            53         0.40     1.7s    6.8x   20.0%   60.0%   60.0%
+rttOpen vs connect         142         0.01    505ms    1.2x    0.0%    0.0%   10.0%
+rttRead vs query           122        -0.05     1.8s    9.0x    0.0%   10.0%   10.0%
 (Bias = measured/nip66, >1 = NIP-66 underestimates. TopK = overlap of K fastest relays.)
-Monitor: 9ba0ce3dcc28..., 45df0580711f..., 0b01aa38c2cc..., b2c949c0fb79..., 9ba1d7892cd0..., 58faef87b342..., http-api..., 9bbbb845e5b6...
-[relay-scores] Updated scores for welshman-thompson: 29 relays, session 8
-[relay-scores] Degrading relays (2): wss://nostr.bitcoiner.social, wss://nostr-pub.wellorder.net
+Monitor: 9ba1d7892cd0..., 9bbbb845e5b6..., 9bac3d58ef5a..., 0b01aa38c2cc..., 58faef87b342..., 9ba046db56b8..., b2c949c0fb79..., 45df0580711f..., http-api..., 9ba6484003e8..., 9b85d54cc4bc...
+[relay-scores] Updated scores for welshman-thompson: 28 relays, session 3
+[relay-scores] Degrading relays (3): wss://nos.lol, wss://nostr.bitcoiner.social, wss://relay.ditto.pub
 [relay-scores] Saved to .cache/relay_scores_b3e43e8cc7e6dff2_94608000_liveness_welshman-thompson.json
 
 Thompson Sampling [welshman-thompson] learning state:
-  Session: 8
-  Relays with observations: 29
-  Mean prior α: 53.0, β: 85.9
-  Relays with strong preference (α>5): 19
-  Relays learned to avoid (β>5): 25
+  Session: 3
+  Relays with observations: 28
+  Mean prior α: 27.0, β: 41.2
+  Relays with strong preference (α>5): 13
+  Relays learned to avoid (β>5): 21
 
-JSON results written to: results/b3e43e8cc7e6dff2_1772971282674.json
+JSON results written to: results/b3e43e8cc7e6dff2_1773188049211.json
