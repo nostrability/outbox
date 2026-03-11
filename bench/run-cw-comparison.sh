@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# Coverage Guarantee + Sole-Source Exclusion Thompson benchmark:
-#   ndk vs ndk-thompson vs ndk-thompson-cg
+# Coverage-Weighted Thompson benchmark: ndk vs ndk-thompson vs ndk-thompson-cw
 #
-# Stage A: fiatjaf canary (3 sessions, 1yr) — quick check that CG fixes regression
+# Stage A: fiatjaf canary (3 sessions, 1yr) — quick check that CW dampening helps
 # Stage B: full campaign (6 EN × 2 windows × 5 sessions = 60 runs)
 #
 # Three-way paired comparison from identical relay snapshots.
@@ -10,7 +9,7 @@ set -uo pipefail
 
 cd "$(dirname "$0")"
 
-ALGOS="ndk,ndk-thompson,ndk-thompson-cg"
+ALGOS="ndk,ndk-thompson,ndk-thompson-cw"
 SESSIONS=5
 COOLDOWN_PROFILE=60
 COOLDOWN_SESSION=120
@@ -26,36 +25,36 @@ PK_Telluride="2c65940725bbf10b452197fba41c6cb14afd41e28e0be22aab49bf246b0c84e3"
 WINDOWS="31536000 94608000"
 CANARY_WINDOW="31536000"
 CANARY_SESSIONS=3
-PROGRESS_FILE=".cache/cg_comparison_progress.log"
+PROGRESS_FILE=".cache/cw_comparison_progress.log"
 touch "$PROGRESS_FILE"
 
 COMMON="--verify --verify-concurrency 10 --nip66-filter liveness --no-phase2-cache --fast --output both"
 
-echo "=== Coverage Guarantee Thompson Benchmark ==="
+echo "=== Coverage-Weighted Thompson Benchmark ==="
 echo "Algorithms: $ALGOS"
-echo "start=$(date +%s)" > ".cache/cg_comparison_timestamps.txt"
+echo "start=$(date +%s)" > ".cache/cw_comparison_timestamps.txt"
 echo "Start: $(date)"
 echo
 
 # ─── Score clearing (resume-safe) ───
 for WINDOW in $WINDOWS; do
-  # Clear both ndk-thompson and ndk-thompson-cg scores for clean paired comparison
-  MARKER=".cache/cg_${WINDOW}_scores_cleared"
+  # Clear both ndk-thompson and ndk-thompson-cw scores for clean comparison
+  MARKER=".cache/cw_${WINDOW}_scores_cleared"
   if [ ! -f "$MARKER" ]; then
-    echo "Clearing ndk-thompson and ndk-thompson-cg scores for window=$WINDOW..."
+    echo "Clearing ndk-thompson and ndk-thompson-cw scores for window=$WINDOW..."
     rm -f .cache/relay_scores_*_${WINDOW}_liveness_ndk-thompson.json
-    rm -f .cache/relay_scores_*_${WINDOW}_liveness_ndk-thompson-cg.json
+    rm -f .cache/relay_scores_*_${WINDOW}_liveness_ndk-thompson-cw.json
     touch "$MARKER"
   fi
 done
 
 # ─── Stage A: fiatjaf canary ───
 echo "=== Stage A: fiatjaf canary ($CANARY_SESSIONS sessions, 1yr) ==="
-LOGDIR=".cache/cg_comparison_logs/${CANARY_WINDOW}"
+LOGDIR=".cache/cw_comparison_logs/${CANARY_WINDOW}"
 mkdir -p "$LOGDIR"
 
 for session in $(seq 1 $CANARY_SESSIONS); do
-  key="cg_canary_${CANARY_WINDOW}_fiatjaf_s${session}"
+  key="cw_canary_${CANARY_WINDOW}_fiatjaf_s${session}"
   logfile="$LOGDIR/fiatjaf_canary_s${session}.log"
 
   if grep -qF "$key" "$PROGRESS_FILE" 2>/dev/null; then
@@ -83,34 +82,43 @@ for session in $(seq 1 $CANARY_SESSIONS); do
   sleep $COOLDOWN_PROFILE
 done
 
-# Check canary results: inspect relay.damus.io CG score vs regular Thompson
+# Check canary results: inspect relay.damus.io CW score
 echo
 echo "=== Stage A canary check ==="
-CG_SCORE_FILE=$(ls -t .cache/relay_scores_*_${CANARY_WINDOW}_liveness_ndk-thompson-cg.json 2>/dev/null | head -1)
-REG_SCORE_FILE=$(ls -t .cache/relay_scores_*_${CANARY_WINDOW}_liveness_ndk-thompson.json 2>/dev/null | head -1)
-if [ -n "$CG_SCORE_FILE" ] && [ -n "$REG_SCORE_FILE" ]; then
-  python3 -c "
+CW_SCORE_FILE=$(ls -t .cache/relay_scores_*_${CANARY_WINDOW}_liveness_ndk-thompson-cw.json 2>/dev/null | head -1)
+if [ -n "$CW_SCORE_FILE" ]; then
+  # Extract relay.damus.io alpha/(alpha+beta)
+  DAMUS_SCORE=$(python3 -c "
 import json, sys
-for label, path in [('CG', '$CG_SCORE_FILE'), ('Regular', '$REG_SCORE_FILE')]:
-    with open(path) as f:
-        db = json.load(f)
-    r = db.get('relays', {}).get('wss://relay.damus.io/', {})
-    a = r.get('alpha', 1)
-    b = r.get('beta', 1)
-    score = a / (a + b)
-    print(f'relay.damus.io {label} score: alpha={a:.1f} beta={b:.1f} E={score:.3f}')
-" 2>&1
+with open('$CW_SCORE_FILE') as f:
+    db = json.load(f)
+r = db.get('relays', {}).get('wss://relay.damus.io/', {})
+a = r.get('alpha', 1)
+b = r.get('beta', 1)
+score = a / (a + b)
+print(f'relay.damus.io CW score: alpha={a:.1f} beta={b:.1f} E={score:.3f}')
+if score < 0.3:
+    print('WARNING: CW score < 0.3 — dampening may not be sufficient. Consider lowering CW_BETA_DAMP_MIN.')
+    sys.exit(1)
+" 2>&1)
+  echo "$DAMUS_SCORE"
+  if echo "$DAMUS_SCORE" | grep -q "WARNING"; then
+    echo
+    echo "Stage A canary WARNING detected. Review before continuing to Stage B."
+    echo "Press Enter to continue to Stage B, or Ctrl-C to abort."
+    read -r
+  fi
 else
-  echo "Score file(s) not found — skipping canary check"
+  echo "No CW score file found — skipping canary check"
 fi
 
 # ─── Score clearing for Stage B (canary warm-starts fiatjaf priors) ───
 for WINDOW in $WINDOWS; do
-  MARKER=".cache/cg_${WINDOW}_stageB_scores_cleared"
+  MARKER=".cache/cw_${WINDOW}_stageB_scores_cleared"
   if [ ! -f "$MARKER" ]; then
-    echo "Clearing ndk-thompson and ndk-thompson-cg scores for Stage B (window=$WINDOW)..."
+    echo "Clearing ndk-thompson and ndk-thompson-cw scores for Stage B (window=$WINDOW)..."
     rm -f .cache/relay_scores_*_${WINDOW}_liveness_ndk-thompson.json
-    rm -f .cache/relay_scores_*_${WINDOW}_liveness_ndk-thompson-cg.json
+    rm -f .cache/relay_scores_*_${WINDOW}_liveness_ndk-thompson-cw.json
     touch "$MARKER"
   fi
 done
@@ -120,14 +128,14 @@ echo
 echo "=== Stage B: full campaign (6 profiles × 2 windows × $SESSIONS sessions = 60 runs) ==="
 
 for WINDOW in $WINDOWS; do
-  LOGDIR=".cache/cg_comparison_logs/${WINDOW}"
+  LOGDIR=".cache/cw_comparison_logs/${WINDOW}"
   mkdir -p "$LOGDIR"
 
   for session in $(seq 1 $SESSIONS); do
     for name in $NAMES; do
       pk_var="PK_${name}"
       pk="${!pk_var}"
-      key="cg_${WINDOW}_${name}_s${session}"
+      key="cw_${WINDOW}_${name}_s${session}"
       logfile="$LOGDIR/${name}_s${session}.log"
 
       # Skip completed
@@ -161,5 +169,5 @@ for WINDOW in $WINDOWS; do
   done
 done
 
-echo "end=$(date +%s)" >> ".cache/cg_comparison_timestamps.txt"
-echo "=== Coverage Guarantee Thompson benchmark complete === $(date)"
+echo "end=$(date +%s)" >> ".cache/cw_comparison_timestamps.txt"
+echo "=== Coverage-Weighted Thompson benchmark complete === $(date)"
