@@ -30,7 +30,7 @@ If you're building on an existing library, here's where you stand and what to do
 | If you use… | You're at step… | Next upgrade | Details |
 |---|:---:|---|---|
 | **Welshman/Coracle** | 2 (stochastic) | Add Thompson Sampling — replace `random()` with `sampleBeta()` | [analysis/clients/welshman-coracle.md](analysis/clients/welshman-coracle.md) |
-| **NDK** | 1 (priority-based) | Add Thompson Sampling — +11pp mean event recall (10-run mean, high variance, 6 profiles) | [analysis/clients/ndk-applesauce-nostrudel.md](analysis/clients/ndk-applesauce-nostrudel.md) |
+| **NDK** | 1 (priority-based) | Add Thompson **with [CG3](OUTBOX-REPORT.md#85c-ndkthompson-cg3-conditional-cg--partial-weight-se)** — +11pp mean, Pareto-superior to plain Thompson (which regresses concentrated graphs). | [analysis/clients/ndk-applesauce-nostrudel.md](analysis/clients/ndk-applesauce-nostrudel.md) |
 | **Applesauce/noStrudel** | 1 (greedy set-cover) | Add stochastic factor, then Thompson | [analysis/clients/ndk-applesauce-nostrudel.md](analysis/clients/ndk-applesauce-nostrudel.md) |
 | **Gossip** | 1 (greedy set-cover) | Add stochastic factor or Thompson | [analysis/clients/gossip.md](analysis/clients/gossip.md) |
 | **rust-nostr** | 1 (filter decomp) | Add FD+Thompson — same per-author structure, learns from delivery | [analysis/clients/rust-nostr-voyage-nosotros-wisp-shopstr.md](analysis/clients/rust-nostr-voyage-nosotros-wisp-shopstr.md) |
