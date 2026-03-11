@@ -36,7 +36,7 @@ If you're building on an existing library, here's where you stand and what to do
 | **rust-nostr** | 1 (filter decomp) | Add FD+Thompson — +12pp mean (EN). Same per-author structure, learns from delivery. **Hurts JP profiles** (−4.8pp); use Welshman+Thompson for JP. | [analysis/clients/rust-nostr-voyage-nosotros-wisp-shopstr.md](analysis/clients/rust-nostr-voyage-nosotros-wisp-shopstr.md) |
 | **Amethyst** | 1 (direct mapping) | Add NIP-66 filtering — unlimited connections already give high recall | [analysis/clients/amethyst.md](analysis/clients/amethyst.md) |
 | **Nostur** | 1 (coverage sort) | Remove skipTopRelays (costs 5-12% coverage), add stochastic factor | [analysis/clients/nostur-yakihonne-notedeck.md](analysis/clients/nostur-yakihonne-notedeck.md) |
-| **Ditto-Mew** | 0 (4 app relays) | Add hybrid outbox — 10% → 23% (+13pp), no routing layer changes, ~80 LOC | [details below](#two-ways-to-add-outbox) |
+| **Ditto-Mew** | 0 (4 app relays) | Add hybrid outbox — 10% → 23% (+12pp), no routing layer changes, ~80 LOC | [details below](#two-ways-to-add-outbox) |
 | **Nothing yet** | 0 | Start with hybrid outbox or big relays, then add full outbox when ready | [IMPLEMENTATION-GUIDE.md](IMPLEMENTATION-GUIDE.md) |
 
 *Each link goes to a per-client cheat sheet with specific code paths, current behavior, and upgrade recommendations.*
