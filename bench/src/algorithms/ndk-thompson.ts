@@ -47,11 +47,47 @@ export function ndkThompsonUnified(
   return ndkThompsonCore(input, params, rng, /* unified */ true);
 }
 
+export function ndkThompsonCG(
+  input: BenchmarkInput,
+  params: AlgorithmParams,
+  rng: () => number,
+): AlgorithmResult {
+  return ndkThompsonCore(input, params, rng, /* unified */ false, /* coverageGuarantee */ true);
+}
+
+export function ndkThompsonCG2(
+  input: BenchmarkInput,
+  params: AlgorithmParams,
+  rng: () => number,
+): AlgorithmResult {
+  return ndkThompsonCore(input, params, rng, /* unified */ false, /* coverageGuarantee */ true, /* cgBudgetFraction */ 0.5);
+}
+
+export function ndkThompsonCG3(
+  input: BenchmarkInput,
+  params: AlgorithmParams,
+  rng: () => number,
+): AlgorithmResult {
+  return ndkThompsonCore(input, params, rng, /* unified */ false, /* coverageGuarantee */ true, /* cgBudgetFraction */ 0.5, /* cgConditional */ true);
+}
+
+export function ndkThompsonSB(
+  input: BenchmarkInput,
+  params: AlgorithmParams,
+  rng: () => number,
+): AlgorithmResult {
+  return ndkThompsonCore(input, params, rng, /* unified */ false, /* coverageGuarantee */ false, /* cgBudgetFraction */ undefined, /* cgConditional */ false, /* soleSourceBoost */ 5.0);
+}
+
 function ndkThompsonCore(
   input: BenchmarkInput,
   params: AlgorithmParams,
   rng: () => number,
   unified: boolean,
+  coverageGuarantee = false,
+  cgBudgetFraction?: number,
+  cgConditional = false,
+  soleSourceBoost?: number,
 ): AlgorithmResult {
   const start = performance.now();
   const relayGoalPerAuthor = params.relayGoalPerAuthor ?? params.maxRelaysPerUser ?? 2;
@@ -78,7 +114,88 @@ function ndkThompsonCore(
   // Process authors in deterministic order (sorted by hex pubkey)
   const sortedFollows = [...input.follows].sort();
 
+  // Score boost: detect sole-source relays and re-sort pubkeys
+  const soleSourceRelaySet = new Set<RelayUrl>();
+  const soleSourcePubkeys = new Set<Pubkey>();
+  if (soleSourceBoost) {
+    for (const pubkey of sortedFollows) {
+      const authorRelays = input.writerToRelays.get(pubkey);
+      if (authorRelays && authorRelays.size === 1) {
+        const [onlyRelay] = authorRelays;
+        soleSourceRelaySet.add(onlyRelay);
+        soleSourcePubkeys.add(pubkey);
+      }
+    }
+    // Re-sort: sole-source pubkeys first, then the rest (P1 mitigation)
+    sortedFollows.sort((a, b) => {
+      const aIsSS = soleSourcePubkeys.has(a) ? 0 : 1;
+      const bIsSS = soleSourcePubkeys.has(b) ? 0 : 1;
+      if (aIsSS !== bIsSS) return aIsSS - bIsSS;
+      return a < b ? -1 : a > b ? 1 : 0;
+    });
+    console.error(`Score boost: ${soleSourceRelaySet.size} sole-source relays at ${soleSourceBoost}x`);
+  }
+
+  // Coverage guarantee: force-select sole-source relays
+  const forcedRelays = new Set<RelayUrl>();
+  let cgSkipped = false;
+  if (coverageGuarantee) {
+    // Collect sole-source relays and the pubkeys they uniquely cover
+    const soleSourceRelays = new Map<RelayUrl, Set<Pubkey>>();
+    for (const pubkey of sortedFollows) {
+      const authorRelays = input.writerToRelays.get(pubkey);
+      if (!authorRelays || authorRelays.size !== 1) continue;
+      const [onlyRelay] = authorRelays;
+      const pubkeys = soleSourceRelays.get(onlyRelay) ?? new Set<Pubkey>();
+      pubkeys.add(pubkey);
+      soleSourceRelays.set(onlyRelay, pubkeys);
+    }
+
+    // Conditional CG: skip entirely if sole-source count >= budget cap
+    if (cgConditional) {
+      const cgCap = Math.floor(maxConnections * (cgBudgetFraction ?? 0.5));
+      if (soleSourceRelays.size >= cgCap) {
+        cgSkipped = true;
+        console.error(
+          `Coverage guarantee: SKIPPED ` +
+          `(${soleSourceRelays.size} sole-source >= ${cgCap} cap)`,
+        );
+        // fall through to main loop with no forced relays
+      }
+    }
+
+    if (!cgSkipped) {
+      // Budget cap: limit forced relays to a fraction of maxConnections
+      // (redundant when cgConditional=true: if size < cap, all fit; if size >= cap, skipped above)
+      const cgCap = cgBudgetFraction != null
+        ? Math.floor(maxConnections * cgBudgetFraction)
+        : Infinity;
+      const totalSoleSource = soleSourceRelays.size;
+
+      // Sort by coverage value descending (most sole-source pubkeys first)
+      const sortedSoleSource = [...soleSourceRelays.entries()]
+        .sort((a, b) => b[1].size - a[1].size);
+
+      for (const [relay, pubkeys] of sortedSoleSource) {
+        if (forcedRelays.size >= cgCap) break;
+        forcedRelays.add(relay);
+        selectedRelays.add(relay);
+        for (const pubkey of pubkeys) {
+          const writers = relayAssignments.get(relay) ?? new Set<Pubkey>();
+          writers.add(pubkey);
+          relayAssignments.set(relay, writers);
+          pubkeyAssignments.set(pubkey, new Set([relay]));
+        }
+      }
+      const capLabel = cgBudgetFraction != null
+        ? ` (capped at ${cgCap}, ${totalSoleSource} total sole-source)`
+        : "";
+      console.error(`Coverage guarantee: ${forcedRelays.size} sole-source relays forced${capLabel} (${maxConnections} maxConnections budget)`);
+    }
+  }
+
   for (const pubkey of sortedFollows) {
+    if (coverageGuarantee && pubkeyAssignments.has(pubkey)) continue; // already assigned by coverage guarantee
     const authorRelays = input.writerToRelays.get(pubkey);
     if (!authorRelays || authorRelays.size === 0) {
       orphanedPubkeys.add(pubkey);
@@ -98,6 +215,11 @@ function ndkThompsonCore(
       if (prior) priorsUsed++;
 
       let score = (1 + Math.log(weight)) * sample;
+
+      // Score boost for sole-source relays
+      if (soleSourceBoost && soleSourceRelaySet.has(relay)) {
+        score *= soleSourceBoost;
+      }
 
       // Optional latency discount
       const latMs = relayLatencies?.get(relay);
@@ -165,7 +287,11 @@ function ndkThompsonCore(
 
   const variant = unified ? "Unified" : "Priority";
   const hasLatency = relayLatencies != null;
-  const name = `NDK+Thompson (${variant})${hasLatency ? "+Latency" : ""}`;
+  const cgLabel = coverageGuarantee
+    ? (cgSkipped ? "-skip" : (cgConditional ? "+CG3" : (cgBudgetFraction != null ? "+CG2" : "+CG")))
+    : "";
+  const sbLabel = soleSourceBoost ? "+SB" : "";
+  const name = `NDK+Thompson (${variant})${cgLabel}${sbLabel}${hasLatency ? "+Latency" : ""}`;
 
   const notes: string[] = [];
   if (relayPriors && relayPriors.size > 0) {
@@ -180,6 +306,16 @@ function ndkThompsonCore(
   }
   if (hasLatency) {
     notes.push(`Latency discount: ${relayLatencies!.size} relays, ${latencyUsed} lookups`);
+  }
+  if (coverageGuarantee) {
+    if (cgSkipped) {
+      notes.push("Coverage guarantee: SKIPPED (conditional — sole-source >= budget cap)");
+    } else {
+      notes.push(`Coverage guarantee: ${forcedRelays.size} sole-source relays forced`);
+    }
+  }
+  if (soleSourceBoost) {
+    notes.push(`Score boost: ${soleSourceRelaySet.size} sole-source relays at ${soleSourceBoost}x (${soleSourcePubkeys.size} pubkeys prioritized)`);
   }
 
   return {

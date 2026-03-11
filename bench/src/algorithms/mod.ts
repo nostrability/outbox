@@ -35,7 +35,9 @@ import { fdThompson } from "./fd-thompson.ts";
 import { dittoMew } from "./ditto-mew.ts";
 import { dittoOutbox } from "./ditto-outbox.ts";
 import { voyageMultiphase } from "./voyage-multiphase.ts";
-import { ndkThompson, ndkThompsonUnified } from "./ndk-thompson.ts";
+import { ndkThompson, ndkThompsonUnified, ndkThompsonCG, ndkThompsonCG2, ndkThompsonCG3, ndkThompsonSB } from "./ndk-thompson.ts";
+import { ndkThompsonNeutral, ndkThompsonNeutralUnified } from "./ndk-thompson-neutral.ts";
+import { greedyThompson } from "./greedy-thompson.ts";
 
 export interface AlgorithmEntry {
   id: string;
@@ -262,6 +264,70 @@ export const ALGORITHM_REGISTRY: AlgorithmEntry[] = [
     id: "ndk-thompson-unified",
     name: "NDK+Thompson (Unified)",
     fn: ndkThompsonUnified,
+    nativeCap: true,
+    stochastic: true,
+    defaults: { maxRelaysPerUser: 2 },
+  },
+  {
+    id: "greedy-thompson",
+    name: "Greedy+Thompson",
+    fn: greedyThompson,
+    nativeCap: true,
+    stochastic: true,
+    defaults: { maxConnections: 20, maxRelaysPerUser: 2 },
+  },
+  {
+    id: "ndk-thompson-cw",
+    name: "NDK+Thompson CW (Priority)",
+    fn: ndkThompson,
+    nativeCap: true,
+    stochastic: true,
+    defaults: { maxRelaysPerUser: 2 },
+  },
+  {
+    id: "ndk-thompson-cg",
+    name: "NDK+Thompson CG (Priority)",
+    fn: ndkThompsonCG,
+    nativeCap: true,
+    stochastic: true,
+    defaults: { maxRelaysPerUser: 2 },
+  },
+  {
+    id: "ndk-thompson-cg2",
+    name: "NDK+Thompson CG2 (Priority)",
+    fn: ndkThompsonCG2,
+    nativeCap: true,
+    stochastic: true,
+    defaults: { maxRelaysPerUser: 2 },
+  },
+  {
+    id: "ndk-thompson-cg3",
+    name: "NDK+Thompson CG3 (Priority)",
+    fn: ndkThompsonCG3,
+    nativeCap: true,
+    stochastic: true,
+    defaults: { maxRelaysPerUser: 2 },
+  },
+  {
+    id: "ndk-thompson-sb",
+    name: "NDK+Thompson SB (Priority)",
+    fn: ndkThompsonSB,
+    nativeCap: true,
+    stochastic: true,
+    defaults: { maxRelaysPerUser: 2 },
+  },
+  {
+    id: "ndk-thompson-neutral",
+    name: "NDK+Thompson Neutral (Priority)",
+    fn: ndkThompsonNeutral,
+    nativeCap: true,
+    stochastic: true,
+    defaults: { maxRelaysPerUser: 2 },
+  },
+  {
+    id: "ndk-thompson-neutral-unified",
+    name: "NDK+Thompson Neutral (Unified)",
+    fn: ndkThompsonNeutralUnified,
     nativeCap: true,
     stochastic: true,
     defaults: { maxRelaysPerUser: 2 },

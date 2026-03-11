@@ -24,6 +24,9 @@ import { parseNip66FilterArg, classifyCandidates } from "./src/nip66/filter.ts";
 import {
   loadRelayScores,
   updateRelayScores,
+  updateRelayScoresCW,
+  updateRelayScoresSE,
+  updateRelayScoresPW,
   saveRelayScores,
   getRelayPriors,
   getRelayLatencies,
@@ -311,7 +314,13 @@ async function runDefault(
   const maxConnections = opts.maxConnections ?? 20;
 
   // Load per-algorithm Thompson Sampling priors (if available from previous sessions)
-  const THOMPSON_IDS = new Set(["welshman-thompson", "fd-thompson", "welshman-thompson-latency", "fd-thompson-latency", "ndk-thompson", "ndk-thompson-unified"]);
+  const THOMPSON_IDS = new Set(["welshman-thompson", "fd-thompson", "welshman-thompson-latency", "fd-thompson-latency", "ndk-thompson", "ndk-thompson-unified", "greedy-thompson", "ndk-thompson-neutral", "ndk-thompson-neutral-unified", "ndk-thompson-cw", "ndk-thompson-cg", "ndk-thompson-cg2", "ndk-thompson-cg3", "ndk-thompson-sb"]);
+  const ALT_SCORING_IDS: Record<string, typeof updateRelayScores> = {
+    "ndk-thompson-cw": updateRelayScoresCW,
+    "ndk-thompson-cg": updateRelayScoresSE,
+    "ndk-thompson-cg2": updateRelayScoresSE,
+    "ndk-thompson-cg3": updateRelayScoresPW,
+  };
   const hasThompson = algorithms.some((a) => THOMPSON_IDS.has(a.id));
   const thompsonDBs = new Map<string, ReturnType<typeof loadRelayScores>>();
   const thompsonPriors = new Map<string, Map<string, { alpha: number; beta: number }>>();
@@ -486,15 +495,29 @@ async function runDefault(
         let db = thompsonDBs.get(entry.id) ??
           loadRelayScores(input.targetPubkey, opts.verifyWindow, opts.nip66Filter || undefined, entry.id);
 
-        db = updateRelayScores(
-          db,
-          entry.id,
-          thompsonResult.relayAssignments,
-          thompsonResult.pubkeyAssignments,
-          phase2Result._baselines,
-          phase2Result._cache as QueryCache,
-          phase2Result._relayOutcomes,
-        );
+        const altScoring = ALT_SCORING_IDS[entry.id];
+        if (altScoring) {
+          db = altScoring(
+            db,
+            entry.id,
+            thompsonResult.relayAssignments,
+            thompsonResult.pubkeyAssignments,
+            phase2Result._baselines,
+            phase2Result._cache as QueryCache,
+            phase2Result._relayOutcomes,
+            input.writerToRelays,
+          );
+        } else {
+          db = updateRelayScores(
+            db,
+            entry.id,
+            thompsonResult.relayAssignments,
+            thompsonResult.pubkeyAssignments,
+            phase2Result._baselines,
+            phase2Result._cache as QueryCache,
+            phase2Result._relayOutcomes,
+          );
+        }
         thompsonDBs.set(entry.id, db);
         await saveRelayScores(db, opts.nip66Filter || undefined, entry.id);
 

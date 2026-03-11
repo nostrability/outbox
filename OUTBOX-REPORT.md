@@ -705,7 +705,7 @@ To test whether patterns generalize beyond fiatjaf, event recall was measured ac
 
 *[range] = min–max across 6 profiles (194–1,779 follows). The spread reflects real cross-profile heterogeneity — profiles with different follow counts and relay diversity get different recall. For stochastic algorithms, single-seed results add run-to-run variance on top (see variance analysis below).*
 
-The ~8pp gap between the best academic algorithm (92.4%) and the best practitioner algorithm (87.9%) represents the theoretical ceiling that no simple, deployable algorithm has reached. However, Welshman+Thompson Sampling (Section 8.3) closes most of this gap through learning — achieving 92-97% after 2-3 sessions without the implementation complexity of the academic algorithms.
+The ~8pp gap between the best academic algorithm (92.4%) and the best 20-connection practitioner algorithm (Greedy, 84.4%) represents the theoretical ceiling that no simple, deployable algorithm has reached. Direct Mapping (87.9%) narrows this to ~4.5pp but requires unlimited connections. However, Welshman+Thompson Sampling (Section 8.3) closes most of this gap through learning at 7d — achieving 84-92% after 2-3 sessions (HJO data) without the implementation complexity of the academic algorithms. At 1yr, Thompson reaches 39% (10-run validated) — relay retention, not algorithmic quality, is the binding constraint at longer windows.
 
 Profile characteristics:
 
@@ -722,7 +722,7 @@ Cross-profile patterns:
 
 *At 7d:*
 - **Direct Mapping leads at 87.9% mean** but uses unlimited connections (50-200+). Among 20-connection algorithms, Greedy/NDK/Welshman cluster at 83-84% — effectively tied.
-- **~8pp gap to academic ceiling** (92% vs 88% mean). Closable through learning: Welshman+Thompson Sampling (Section 8.3) reaches 92-97% after 2-3 sessions.
+- **~8pp gap to academic ceiling** (92% vs 88% mean). Closable through learning: Welshman+Thompson Sampling (Section 8.3) reaches 84-92% at 7d after 2-3 sessions (HJO data); 39% at 1yr (10-run validated).
 - **Greedy Set-Cover ranks 2nd among 20-connection algorithms** but the margin is narrow — assignment coverage optimization provides modest benefit at 7d because most relays still have recent events.
 
 *At 1yr:*
@@ -754,13 +754,19 @@ Key observations:
 
 ### 8.3 Expanded Benchmark: NIP-66 Filter, Thompson Sampling, and Multi-Session Learning
 
-> **⚠️ Methodology note — phase2 cache bug:** The multi-session Thompson results in this section (and Sections 8.4–8.5) were collected using `run-benchmark-batch.sh`, which did **not** use `--no-phase2-cache`. The phase2 baseline cache had a lossy serialization bug: it stored the **union** of event IDs across all relays but lost per-relay mappings. When loaded in sessions 2+, the full union was assigned to every relay that had events, inflating verification recall. A deterministic algorithm (NDK baseline) jumped from ~16% (S1) to ~96% (S2+) despite selecting the same relays — proving the inflation.
->
-> **Affected data:** All S2+ recall values in the Thompson learning curve table, 5-session comparison tables, and session progression tables in Sections 8.3–8.5. Session 1 values are genuine (no cache). Relative comparisons between algorithms are directionally valid (the bug inflated all algorithms equally). Single-session and stateless algorithm numbers (NIP-66 filter effect, algorithm comparison averaged across sessions, event distribution) are unaffected.
->
-> **Trustworthy Thompson data:** 7d HJO benchmark (6 profiles × 5 sessions, genuine), NDK+Thompson 1yr (collected with `--no-phase2-cache`), and all S1 values.
->
-> **Fix:** Cache code fixed (schema v2 stores per-relay event IDs). Batch script updated to use `--no-phase2-cache`. Re-benchmarking in progress.
+**Key learning: how much does Thompson actually help?** Thompson's gain is real but depends on time window. The binding constraint shifts from relay selection to relay retention as the window grows:
+
+| Window | Stochastic baseline | Thompson (5 sessions) | Absolute | Relative | What limits further gains |
+|:---:|:---:|:---:|:---:|:---:|---|
+| **7d** | 63-90% | 78-92% | +4-15pp | +5-19% | EN baseline already high; JP lower due to fragmented relays |
+| **1yr** | 18-30% | 29-39% | +9-11pp | **+30-62%** | Relay retention: events pruned after 6-12 months |
+| **3yr** | 13-19% | 21-26% | +7-9pp | **+37-68%** | Severe retention: most relays empty beyond 2 years |
+
+*EN data: 6 profiles, 10-run variance study (7d from HJO). JP data: 6 profiles, 5 sessions, `--no-phase2-cache`. JP profiles show larger absolute gains (+15pp 7d, +11pp 1yr) but wider per-profile variance (-5pp to +59pp at 1yr) due to more fragmented relay topology.*
+
+*Thompson gains are highly profile-dependent — driven by relay graph complexity, not follow count. The original EN-only data suggested an inverted-U (small graphs = budget saturation, large graphs = connection cap). JP data breaks this: tanakei (84 follows) shows the largest gains across all 12 profiles (+34pp 7d, +59pp 1yr) because the JP relay ecosystem is fragmented enough that even small follow graphs have meaningful relay diversity for Thompson to exploit.*
+
+*Methodology note: The phase2 baseline cache had a serialization bug (fixed in schema v2) that inflated multi-session results. All Thompson numbers below are from genuine `--no-phase2-cache` methodology or single-session (S1) data. See README for the 10-run variance study.*
 
 A second round of benchmarks expanded the test matrix: 4 profiles across 3 time windows, 5 learning sessions per configuration, with and without NIP-66 liveness filtering (120 total runs). Two new algorithms were added: Welshman+Thompson Sampling (learning from event delivery) and Greedy+ε-Explore (5% random exploration).
 
@@ -786,59 +792,17 @@ The NIP-66 liveness filter removes relays not confirmed alive by network monitor
 
 NIP-66 filtering consistently improves relay success rates substantially (about 1.5× to 3.1× in these profiles). Larger follow lists benefit more — they have more obscure relays in the candidate set. The filter removes 40–66% of declared relays, with the percentage increasing with follow count.
 
-**Event recall impact of NIP-66 filtering (averaged across 5 sessions):**
+NIP-66 filtering benefits stochastic algorithms (MAB-UCB, Welshman) most because they sample from the full relay pool — removing dead relays from that pool directly improves sample quality. Thompson Sampling shows negligible NIP-66 deltas because it learns to avoid dead relays through delivery feedback. Greedy also shows negligible deltas, but for a different reason — its deterministic coverage-maximization selects relays by declared write lists regardless of liveness. See [NIP-66 Comparison Report](bench/NIP66-COMPARISON-REPORT.md) for per-profile single-session data.
 
-| Algorithm | Without NIP-66 | With NIP-66 | Delta |
-|-----------|:--------------:|:-----------:|:-----:|
-| MAB-UCB | 79.2% | 84.5% | +5.3pp |
-| Welshman Stochastic | 74.7% | 79.9% | +5.2pp |
-| Welshman+Thompson | 81.0% | 80.6% | -0.4pp |
-| Greedy Set-Cover | 77.4% | 76.8% | -0.7pp |
-| Greedy+ε-Explore | 77.3% | 76.6% | -0.7pp |
+**Thompson Sampling learning:**
 
-*1yr window, averaged across all 4 profiles.*
+Thompson Sampling persists per-relay Beta(α,β) parameters across sessions. Session 1 uses uniform priors (equivalent to baseline Welshman). Subsequent sessions use learned priors. Genuine multi-session results from the 10-run variance study (6 profiles × 10 independent 5-session sequences, `--no-phase2-cache`):
 
-NIP-66 filtering benefits stochastic algorithms (MAB-UCB, Welshman) most because they sample from the full relay pool — removing dead relays from that pool directly improves sample quality. Thompson Sampling and Greedy show negligible or slightly negative deltas — likely noise from stochastic selection variance and intermittently available relays (online during our query window but offline when the monitor checked) rather than a systematic effect.
+- **1yr:** Welshman+Thompson = 39.0% ± 2.7 SE (+9pp over stochastic baseline, +30% relative). FD+Thompson = 37.2% ± 2.8 SE. NDK+Thompson = 30.8% ± 3.8 SE.
+- **3yr:** Paired deltas: WT +7.2pp, FD +8.6pp, NDK +8.8pp (all delta/SE > 4, statistically significant). +37% relative gain.
+- **7d (HJO data):** +4pp (WT) / +7pp (FD) mean S1→S5 gain. Baseline already 79-90%, so gains are smaller in absolute terms (+5-8% relative).
 
-**Thompson Sampling learning curves:**
-
-Thompson Sampling persists per-relay Beta(α,β) parameters across sessions. Session 1 uses uniform priors (equivalent to baseline Welshman). Subsequent sessions use learned priors.
-
-*⚠️ S2+ values in this table are inflated by the phase2 cache bug (see methodology note above). S1 values and the 7d row are genuine. The large S1→S2 jumps at 1yr/3yr (e.g., 24.5% → 96.1%) are artifacts — genuine Thompson gains at 1yr are much smaller (see NDK+Thompson benchmark for genuine 1yr data: +5-15pp).*
-
-| Profile (follows) | Window | Session 1 | Session 2 | Session 5 | Total gain |
-|---|---|---|---|---|---|
-| Gato (399) | 1yr | 24.5% | ⚠️ 96.1% | ⚠️ 97.4% | ⚠️ +72.9pp |
-| Gato (399) | 3yr | 15.7% | ⚠️ 94.7% | ⚠️ 93.6% | ⚠️ +77.9pp |
-| ValderDama (1,077) | 1yr | 28.7% | ⚠️ 91.3% | ⚠️ 92.8% | ⚠️ +64.1pp |
-| ValderDama (1,077) | 3yr | 20.4% | ⚠️ 82.6% | ⚠️ 91.0% | ⚠️ +70.7pp |
-| Telluride (2,784) | 1yr | 33.1% | ⚠️ 92.0% | ⚠️ 92.6% | ⚠️ +59.4pp |
-| Telluride (2,784) | 3yr | 27.1% | ⚠️ 29.1% | ⚠️ 86.1% | ⚠️ +58.9pp |
-| fiatjaf (194) | 7d | 88.6% | 96.2% | 95.0% | +6.4pp |
-| fiatjaf (194) | 1yr | 83.6% | 83.6% | 83.6% | +0.0pp |
-
-Key patterns:
-- **Convergence in 2–3 sessions.** Most improvement happens Session 1→2. Sessions 3–5 show minimal further gains.
-- **Gains scale with problem difficulty.** The hardest cases (large follow counts, long windows) show the largest gains because there's more room to learn.
-- **Short windows show modest improvement.** At 7d, relay success rates are already high and most relays have the events — less room for learning.
-- **Small profiles at long windows show no learning.** fiatjaf at 1yr shows 0pp gain — the profile is small enough that the 20-relay budget can already cover most relay combinations.
-
-**Algorithm comparison across all sessions (5-algorithm runs, NIP-66 liveness filter, averaged):**
-
-| Profile | Window | Greedy | Welshman | Greedy+ε | Thompson | MAB-UCB |
-|---------|--------|:------:|:--------:|:--------:|:--------:|:-------:|
-| fiatjaf (194) | 7d | 98.2% | 94.9% | **98.5%** | 94.7% | 96.0% |
-| Gato (399) | 7d | 86.1% | 86.3% | 86.1% | 86.3% | **86.7%** |
-| Gato (399) | 1yr | 79.3% | 82.9% | 79.3% | 82.6% | **83.5%** |
-| Gato (399) | 3yr | 76.5% | 79.6% | 76.5% | 78.2% | **80.1%** |
-| ValderDama (1,077) | 7d | 93.7% | 92.9% | 93.7% | 94.6% | **96.5%** |
-| ValderDama (1,077) | 1yr | 76.8% | 80.0% | 76.5% | 79.7% | **82.9%** |
-| ValderDama (1,077) | 3yr | 71.0% | 76.8% | 70.8% | 75.2% | **80.0%** |
-| Telluride (2,784) | 7d | 94.2% | 92.8% | 94.2% | 93.9% | **95.6%** |
-| Telluride (2,784) | 1yr | 76.0% | 76.9% | 76.0% | 80.6% | **84.5%** |
-| Telluride (2,784) | 3yr | 55.7% | 59.6% | 55.7% | 62.8% | **67.0%** |
-
-MAB-UCB wins most comparisons (43% of all profile×window groups). Thompson Sampling wins 23%, primarily in the "without NIP-66" condition where it compensates for dead relays through learning. Greedy+ε matches Greedy almost exactly — the 5% random exploration has negligible impact on coverage but slightly improves relay success rates.
+MAB-UCB remains the best single-session algorithm — its internal exploration-exploitation (500 simulated rounds) defines the benchmark ceiling. Thompson needs 2-3 sessions to approach it but is actually deployable.
 
 **Event distribution (power-law characteristics):**
 
@@ -856,7 +820,7 @@ A small fraction of prolific authors produce the majority of events. This power-
 
 **Key findings from expanded benchmarks:**
 
-1. **Thompson Sampling is the first relay selection algorithm that closes the feedback loop** — and it works at 7d (genuine HJO data shows +40-57pp gains). The 1yr/3yr multi-session numbers in this section are inflated by a cache bug (see methodology note above) and need re-benchmarking. Genuine 1yr data from NDK+Thompson (collected with `--no-phase2-cache`) shows +5-15pp gains — meaningful but much smaller than the inflated claims.
+1. **Thompson Sampling is the first relay selection algorithm that closes the feedback loop** — and it works. At 7d: HJO data shows +4pp (WT) / +7pp (FD) mean S1→S5 gain (per-profile range: -1pp to +11pp — the baseline is already 79-90%). At 1yr: 10-run variance study confirms Welshman+Thompson = 39.0% ± 2.7 SE (+9pp over stochastic baseline), FD+Thompson = 37.2% ± 2.8 SE, NDK+Thompson = 30.8% ± 3.8 SE. At 3yr: paired deltas of +7-9pp are statistically significant (delta/SE > 4 for all three algorithm pairs). Per-profile std is typically 1-5pp, with outliers on fiatjaf (8-11pp) and Gato NDK+T (11pp). FD controlled comparison (same-run S1→S5) shows +14pp mean gain at 1yr.
 
 2. **NIP-66 liveness filtering is high-value, low-effort.** It requires no algorithmic changes — just remove dead relays before running any algorithm. The impact is largest for stochastic algorithms and larger follow counts.
 
@@ -865,6 +829,8 @@ A small fraction of prolific authors produce the majority of events. This power-
 4. **MAB-UCB remains the best single-session algorithm — but isn't shippable.** Without learning history, MAB-UCB's internal exploration-exploitation (500 simulated rounds) outperforms everything. It defines the benchmark ceiling. Thompson Sampling needs 2–3 sessions to match it but is actually deployable.
 
 5. **The 20-connection limit is the fundamental bottleneck at scale.** Telluride (2,784 follows) at 3yr shows all algorithms struggling: Greedy at 56%, Thompson at 63%, MAB-UCB at 67%. The relay diversity needed to cover 2,784 authors' 3-year history exceeds what 20 connections can provide.
+
+6. **3yr recall drops ~35-40% relative to 1yr for all algorithms.** Clean 3yr baselines (no-cache, 5 profiles): Welshman 19.2%, FD 16.6%, Greedy 13.6%, NDK 13.3%. Thompson at 3yr: WT 26.6%, FD+T 25.8%, NDK+T 23.4%. The binding constraint is relay retention — relays prune events older than 1-2 years — not algorithmic quality. Thompson's +7-9pp 3yr paired deltas confirm it still learns effectively at longer windows, but can't recover events that no longer exist on any relay.
 
 **Key real-world event verification findings:**
 
@@ -880,7 +846,7 @@ A small fraction of prolific authors produce the majority of events. This power-
 5. **Author recall is more stable than event recall.** You can *find* most authors even at long windows (74-81% author recall at 1 year), but you miss most of their posts. The disparity means relay retention policies are the binding constraint, not relay selection.
 
 *Academic context:*
-6. **The academic ceiling is ~92% at 7d** (Streaming Coverage, ILP, Spectral Clustering). The ~5-8pp gap vs the best practitioner algorithm (88%) is closable through learning (Thompson Sampling reaches 92-97% after 2-3 sessions) rather than through more complex static algorithms.
+7. **The academic ceiling is ~92% at 7d** (Streaming Coverage, ILP, Spectral Clustering). The ~5-8pp gap vs the best practitioner algorithm (88%) is closable through learning (Thompson Sampling reaches 84-92% at 7d after 2-3 sessions per HJO data) rather than through more complex static algorithms.
 
 ### 8.4 FD+Thompson: Filter Decomposition with Thompson Sampling
 
@@ -916,34 +882,13 @@ The algorithm is a direct upgrade path for rust-nostr: same per-author structure
 | Telluride (2,784) | 38.6% | 32.3% | +6.3pp | +20% |
 | **4-profile mean** | **31.8%** [21–39] | **23.1%** [13–32] | **+8.7pp** | **+38%** |
 
-**5-session learning comparison (1yr event recall, cap@20, NIP-66 filtered, per-algorithm score DBs):**
-
-*⚠️ S2+ values in this table and the session progression below are inflated by the phase2 cache bug (see [Section 8.3 methodology note](#83-expanded-benchmark-nip-66-filter-thompson-sampling-and-multi-session-learning)). S1 values and relative comparisons between algorithms are genuine.*
-
-| Profile (follows) | FD+Thompson | Welshman+Thompson | Gap |
-|---|:---:|:---:|:---:|
-| fiatjaf (194) | ⚠️ 75.1% | ⚠️ 82.0% | -6.9pp |
-| Gato (399) | ⚠️ 91.9% | ⚠️ 95.5% | -3.6pp |
-| ODELL (1,779) | ⚠️ 85.3% | ⚠️ 90.5% | -5.2pp |
-| Telluride (2,784) | ⚠️ 83.4% | ⚠️ 89.5% | -6.1pp |
-| **4-profile mean** | ⚠️ **83.9%** [75–92] | ⚠️ **89.4%** [82–96] | **-5.5pp** |
-
-**FD+Thompson session progression (1yr event recall):**
-
-*⚠️ S2+ values inflated by cache bug. S1 values are genuine.*
-
-| Profile (follows) | S1 | S2 | S3 | S4 | S5 |
-|---|:---:|:---:|:---:|:---:|:---:|
-| fiatjaf (194) | 16.5% | ⚠️ 63.8% | ⚠️ 75.1% | ⚠️ 75.1% | ⚠️ 75.1% |
-| Gato (399) | 37.9% | ⚠️ 84.4% | ⚠️ 88.9% | ⚠️ 92.3% | ⚠️ 91.9% |
-| ODELL (1,779) | 17.5% | ⚠️ 59.1% | ⚠️ 77.5% | ⚠️ 80.3% | ⚠️ 85.3% |
-| Telluride (2,784) | 17.1% | ⚠️ 54.4% | ⚠️ 78.2% | ⚠️ 81.5% | ⚠️ 83.4% |
+**FD+Thompson vs Welshman+Thompson (10-run variance study, 1yr):** Welshman+Thompson = 39.0% ± 2.7 SE, FD+Thompson = 37.2% ± 2.8 SE. The gap (~2pp) is smaller than the per-profile variance. FD controlled comparison (same-run FD S1 → FD+T S5) shows +14pp mean gain across 5 profiles.
 
 **Key findings:**
 
-1. **Both Thompson variants exceed their stateless baselines in session 1.** FD+Thompson averages 31.8% event recall from a single session vs Filter Decomposition's 23.1% at 1yr — a +38% relative improvement. *Note: The previously reported multi-session numbers (83.9%, 89.4%) are inflated by the cache bug. Genuine 1yr multi-session gains are under re-benchmarking.*
+1. **Both Thompson variants exceed their stateless baselines.** FD+Thompson averages 31.8% event recall in a single session vs Filter Decomposition's 23.1% at 1yr — a +38% relative improvement. After learning (10-run variance study): Welshman+Thompson = 39.0% ± 2.7 SE, FD+Thompson = 37.2% ± 2.8 SE at 1yr.
 
-2. **Welshman+Thompson leads by 5-7pp at all profile sizes after convergence.** The `(1 + log(weight))` popularity factor provides a consistent advantage — the popularity signal helps identify relays that retain events across all follow-count scales, not just large graphs. The gap is narrowest on Gato (3.6pp) and widest on fiatjaf (6.9pp).
+2. **Welshman+Thompson leads by ~2pp after convergence (10-run validated).** The `(1 + log(weight))` popularity factor provides a modest advantage. At 3yr, the gap narrows further (WT 26.6% vs FD+T 25.8%, <1pp).
 
 3. **Median recall tells a different story.** FD+Thompson's 39.4% median on fiatjaf (vs 18.7% for Welshman+Thompson) shows more equitable per-author coverage — fewer authors with zero recall. At larger scales, Welshman+Thompson's median advantage (64% vs 55% on ODELL) reflects better overall delivery.
 
@@ -959,53 +904,309 @@ The algorithm models [Ditto-Mew](https://gitlab.com/soapbox-pub/ditto-mew)'s arc
 
 **Why this matters:** Full outbox routing requires rewriting the relay routing layer — a significant engineering investment. Hybrid outbox is ~80 LOC of hook-level changes with no routing layer modifications. The question is how much recall this sacrifices.
 
-**1yr cross-profile comparison (cap@20, NIP-66 liveness filtered):**
+**1yr cold-start comparison (cap@20, NIP-66 liveness filtered, S1 only — genuine):**
 
-*⚠️ S5 and session progression values below are inflated by the phase2 cache bug (see [Section 8.3 methodology note](#83-expanded-benchmark-nip-66-filter-thompson-sampling-and-multi-session-learning)). S1, Ditto-Mew baseline, and Big Relays values are genuine. The hybrid S2+ flat pattern (identical S2-S5 values) is a cache artifact — genuine convergence pattern unknown at 1yr.*
-
-| Profile (follows) | Ditto-Mew baseline | Big Relays | Hybrid S1 | Hybrid S5 | Welshman+Thompson S5 |
-|---|:---:|:---:|:---:|:---:|:---:|
-| fiatjaf (194) | 5.3% | 4.1% | 40.8% | ⚠️ **91.9%** | ⚠️ 93.3% |
-| Gato (399) | 7.4% | 6.5% | 24.3% | ⚠️ **86.0%** | ⚠️ 95.6% |
-| ODELL (1,779) | 7.1% | 6.2% | 32.7% | ⚠️ **87.2%** | ⚠️ 89.2% |
-| Telluride (2,784) | 5.0% | 3.6% | 23.7% | ⚠️ **92.5%** | ⚠️ 97.7% |
-| **4-profile mean** | **6.2%** [5–7] | **5.1%** [4–7] | **30.4%** [24–41] | ⚠️ **89.4%** [86–93] | ⚠️ **93.9%** [89–98] |
-
-**Hybrid outbox session progression (1yr event recall):**
-
-*⚠️ S2+ values inflated by cache bug. S1 values are genuine.*
-
-| Profile (follows) | S1 | S2 | S3 | S4 | S5 |
-|---|:---:|:---:|:---:|:---:|:---:|
-| fiatjaf (194) | 40.8% | ⚠️ 91.9% | ⚠️ 91.9% | ⚠️ 91.9% | ⚠️ 91.9% |
-| Gato (399) | 24.3% | ⚠️ 86.0% | ⚠️ 86.0% | ⚠️ 86.0% | ⚠️ 86.0% |
-| ODELL (1,779) | 32.7% | ⚠️ 87.2% | ⚠️ 87.2% | ⚠️ 87.2% | ⚠️ 87.2% |
-| Telluride (2,784) | 23.7% | ⚠️ 92.5% | ⚠️ 92.5% | ⚠️ 92.5% | ⚠️ 92.5% |
-
-**Welshman+Thompson session progression for comparison (1yr event recall):**
-
-*⚠️ S2+ values inflated by cache bug. S1 values are genuine.*
-
-| Profile (follows) | S1 | S2 | S3 | S4 | S5 |
-|---|:---:|:---:|:---:|:---:|:---:|
-| fiatjaf (194) | 14.9% | ⚠️ 86.3% | ⚠️ 89.7% | ⚠️ 91.9% | ⚠️ 93.3% |
-| Gato (399) | 31.2% | ⚠️ 93.7% | ⚠️ 95.7% | ⚠️ 95.6% | ⚠️ 95.6% |
-| ODELL (1,779) | 29.1% | ⚠️ 87.1% | ⚠️ 89.2% | ⚠️ 89.2% | ⚠️ 89.2% |
-| Telluride (2,784) | 17.5% | ⚠️ 97.5% | ⚠️ 97.7% | ⚠️ 97.7% | ⚠️ 97.7% |
+| Profile (follows) | Ditto-Mew baseline | Big Relays | Hybrid S1 | Welshman+Thompson S1 |
+|---|:---:|:---:|:---:|:---:|
+| fiatjaf (194) | 5.3% | 4.1% | 40.8% | 14.9% |
+| Gato (399) | 7.4% | 6.5% | 24.3% | 31.2% |
+| ODELL (1,779) | 7.1% | 6.2% | 32.7% | 29.1% |
+| Telluride (2,784) | 5.0% | 3.6% | 23.7% | 17.5% |
+| **4-profile mean** | **6.2%** [5–7] | **5.1%** [4–7] | **30.4%** [24–41] | **23.2%** [15–31] |
 
 **Key findings:**
 
-1. **Hybrid outbox converges faster than full outbox.** Hybrid reaches its ceiling by session 2 on all profiles — the app relay floor provides a strong starting signal for Thompson to learn from. Welshman+Thompson takes 3-4 sessions to converge because it starts from a purely stochastic baseline. *Note: The session 2 convergence and absolute recall values are inflated by the cache bug. The relative finding (hybrid converges faster than full outbox) is likely still valid due to the app relay floor advantage, but the magnitude needs re-benchmarking.*
+1. **Hybrid outbox beats full outbox on cold start.** Hybrid (30.4% mean) outperforms Welshman+Thompson (23.2% mean) at session 1 because the 4 app relays provide a guaranteed floor.
 
-2. **The gap to full outbox needs re-measurement.** The reported 4.5pp gap (89.4% vs 93.9%) is from cache-inflated data. The gap is directionally valid (full outbox has more relay diversity), but the absolute values need re-benchmarking.
+2. **The Ditto-Mew baseline (4 app relays, no outbox) averages 6.2% at 1yr.** This is comparable to Big Relays (5.1%) — 4 major relays capture roughly the same fraction of 1yr-old events as 2 major relays. The value of app relays is latency and reliability, not historical recall.
 
-3. **Hybrid outbox beats Welshman+Thompson at session 1 (genuine).** On cold start, hybrid (30.4% mean) outperforms Welshman+Thompson (23.2% mean) because the 4 app relays provide a guaranteed floor.
+3. **Multi-session hybrid results (6 EN profiles × 5 sessions, no NIP-66 filter):**
 
-4. **The Ditto-Mew baseline (4 app relays, no outbox) averages 6.2% at 1yr (genuine).** This is comparable to Big Relays (5.1%) — 4 major relays capture roughly the same fraction of 1yr-old events as 2 major relays. The value of app relays is latency and reliability, not historical recall.
+| Window | Ditto-Mew (app relays only) | Ditto+Outbox Thompson (S5 mean) | Gain |
+|:---:|:---:|:---:|:---:|
+| **1yr** | 10.1% [7–12] | 22.8% [14–30] | **+12.6pp (+125%)** |
+| **3yr** | 6.9% [4–10] | 15.4% [7–23] | **+8.5pp (+123%)** |
 
-5. **Hybrid outbox is a viable ship-first strategy.** For clients with hardcoded app relays, hybrid outbox + Thompson is ~80 LOC with no routing layer changes. *The previously claimed 89% 1yr recall is from cache-inflated data — genuine 1yr recall under re-benchmarking.*
+Hybrid outbox roughly doubles event recall vs app-relay-only across both time windows. ODELL shows the largest 1yr gain (+19pp) due to many follows publishing on niche relays. Full outbox Welshman+Thompson still leads (39% at 1yr) because it has no app-relay floor diluting the relay budget.
 
 See [bench/src/algorithms/ditto-outbox.ts](bench/src/algorithms/ditto-outbox.ts) for the benchmark implementation and [bench/src/algorithms/ditto-mew.ts](bench/src/algorithms/ditto-mew.ts) for the baseline.
+
+### 8.5b Greedy+Thompson
+
+**Question:** Does Thompson Sampling help global-optimization algorithms (greedy set-cover) as much as per-author algorithms (Welshman, FD)?
+
+**Result: No — gains are modest (+3pp mean at S5 1yr, 6 EN profiles).** Greedy set-cover's deterministic coverage-maximization leaves little room for Thompson to improve. The greedy loop picks relays by uncovered-pubkey count; multiplying by a Beta sample occasionally reranks candidates but rarely changes which relay gets selected because coverage count dominates.
+
+**1yr EN (6 profiles × 5 sessions with learning, NIP-66 liveness, cap@20, S5 shown):**
+
+| Profile (follows) | Greedy | Greedy+Thompson S5 | Gain |
+|---|:---:|:---:|:---:|
+| fiatjaf (194) | 27.7% | 33.4% | +5.7pp |
+| Gato (399) | 14.6% | 20.1% | +5.5pp |
+| hodlbod (442) | 16.3% | 19.9% | +3.6pp |
+| jb55 (943) | 20.3% | 24.0% | +3.7pp |
+| ODELL (1,779) | 16.7% | 16.8% | +0.1pp |
+| Telluride (2,784) | 22.7% | 24.0% | +1.3pp |
+| **6-profile mean** | **19.7%** | **23.0%** | **+3.3pp** |
+
+*Mean across all 30 sessions (S1-S5): +2.4pp. Learning adds ~1pp over cold-start. ODELL is a near-zero responder — greedy already captures his relay graph optimally.*
+
+At 3yr, Greedy+Thompson shows near-zero or negative gains (fiatjaf -4.4pp, mean +0.7pp across 6 profiles). The greedy algorithm's strength — deterministic optimal coverage — is also its weakness for Thompson: there isn't enough stochasticity for learning to exploit.
+
+**Recommendation:** For greedy set-cover users (Gossip, Applesauce), Thompson Sampling is not the right upgrade path. Consider switching to a stochastic algorithm (Welshman) first, then adding Thompson, or adding NDK+Thompson integration which preserves deterministic priorities while allowing Thompson to influence the exploration tier.
+
+### 8.5c NDK+Thompson 3yr
+
+**3yr NDK+Thompson (6 EN profiles × 5 sessions, NIP-66 liveness, cap@20):**
+
+| Profile (follows) | NDK baseline | NDK+Thompson | Gain |
+|---|:---:|:---:|:---:|
+| fiatjaf (194) | 17.9% | 9.0% ± 0.6 | -8.9pp |
+| hodlbod (442) | 9.8% | 14.3% ± 1.5 | +4.5pp |
+| jb55 (943) | 14.2% | 23.3% ± 1.6 | +9.1pp |
+| ODELL (1,779) | 93.1% | 96.7% ± 1.2 | +3.6pp |
+| Gato (399) | 10.6% | 16.4% ± 4.1 | +5.8pp |
+| Telluride (2,784) | 17.4% ± 0.7 | 26.1% ± 2.4 | +8.8pp |
+
+ODELL's unusually high 3yr baseline (93%) is due to relay.damus.io retaining a large fraction of events — NDK's priority cascade concentrates on this relay. fiatjaf shows regression (-8.9pp) at 3yr, consistent with the 1yr pattern where Thompson exploration disrupts NDK's fortuitous concentration on relay.damus.io.
+
+### 8.5c′ NDK+Thompson Neutral Cold Start
+
+**Question:** Does the fiatjaf regression come from Thompson's random cold start (Beta(1,1) = uniform noise), or from the learning itself? A neutral variant replaces cold-start randomness with a deterministic prior of 1.0 — unobserved relays get the same score as popularity alone.
+
+**Result: Neutral does NOT fix the fiatjaf regression.** The neutral prior only helps at S1 (exactly matches base NDK by design). Once learning begins, Neutral converges to the same destructive relay weights within 2-3 sessions.
+
+**1yr EN (6 profiles × 5 sessions, NIP-66 liveness, cap@20, S5 shown):**
+
+| Profile (follows) | NDK base | NDK+T | NDK+T Neutral | T delta | Neutral delta |
+|---|:---:|:---:|:---:|:---:|:---:|
+| fiatjaf (194) | 39.1% | 16.1% | 19.0% | -23.0pp | -20.1pp |
+| hodlbod (442) | 14.6% | 42.9% | 35.6% | +28.3pp | +21.0pp |
+| jb55 (943) | 20.1% | 35.3% | 34.4% | +15.2pp | +14.3pp |
+| ODELL (1,779) | 18.1% | 34.7% | 33.4% | +16.6pp | +15.3pp |
+| Gato (399) | 16.5% | 51.4% | 46.2% | +34.9pp | +29.7pp |
+| Telluride (2,784) | 22.6% | 41.2% | 34.1% | +18.6pp | +11.5pp |
+| **6-profile mean** | **21.8%** | **36.9%** | **33.8%** | **+15.1pp** | **+12.0pp** |
+
+**3yr EN (6 profiles × 5 sessions, S5 shown):**
+
+| Profile (follows) | NDK base | NDK+T | NDK+T Neutral | T delta | Neutral delta |
+|---|:---:|:---:|:---:|:---:|:---:|
+| fiatjaf (194) | 17.8% | 8.7% | 8.6% | -9.1pp | -9.2pp |
+| hodlbod (442) | 8.8% | 23.7% | 35.4% | +14.9pp | +26.6pp |
+| jb55 (943) | 12.5% | 23.0% | 23.2% | +10.5pp | +10.7pp |
+| ODELL (1,779) | 14.0% | 26.4% | 26.0% | +12.4pp | +12.0pp |
+| Gato (399) | 11.0% | 35.5% | 37.2% | +24.5pp | +26.2pp |
+| Telluride (2,784) | 17.7% | 35.0% | 34.5% | +17.3pp | +16.8pp |
+| **6-profile mean** | **13.6%** | **25.4%** | **27.5%** | **+11.8pp** | **+13.9pp** |
+
+At 1yr, regular Thompson leads by +3pp in the mean (driven by Gato and Telluride). At 3yr, Neutral leads by +2pp (driven by hodlbod +26.6pp vs +14.9pp). Both variants regress fiatjaf by ~20pp at 1yr and ~9pp at 3yr — confirming the regression is caused by Thompson's learned relay scores, not cold-start noise.
+
+**Root cause:** Thompson scores are per-relay aggregates across all followed authors. When relay.damus.io delivers only 20-30% of 1yr-old events (a retention issue, not quality), Thompson down-weights it. But for fiatjaf's small concentrated graph, relay.damus.io IS the coverage — no alternative relay covers those pubkeys. Thompson conflates relay retention with relay quality, and for small concentrated graphs there are no alternative relays to recover coverage. See Section 8.6 for discussion and Section 8.5c″ for the Coverage Guarantee mitigation.
+
+**This regression is NDK-specific.** Other Thompson variants do not regress fiatjaf:
+
+| Algorithm | fiatjaf baseline | fiatjaf +Thompson | Delta |
+|---|:---:|:---:|:---:|
+| **NDK** | 31.2% | 13.6% | **-17.6pp** |
+| **Welshman** | 39.2% | 40.7% | +1.5pp |
+| **FD** | 19.3% | 40.7% | +21.4pp |
+| **Greedy** | 27.4% | 28.8% | +1.4pp |
+| **Ditto→Outbox** | 7.7% | 14.1% | +6.4pp |
+
+*Session means, 1yr, 5 sessions each. NDK's priority cascade fortuitously concentrates on relay.damus.io for fiatjaf's small graph. Thompson disrupts that specific concentration. FD's per-author decomposition keeps relay.damus.io selected for the pubkeys that need it. Welshman's stochasticity means Thompson's perturbation is additive noise. Greedy optimizes globally and doesn't depend on a single relay.*
+
+### 8.5c″ NDK+Thompson Coverage Guarantee (CG)
+
+**Question:** Can we fix the fiatjaf regression without giving up Thompson's gains on other profiles?
+
+**Approach:** Two complementary mechanisms (`ndk-thompson-cg`):
+1. **Coverage Guarantee** — pre-pass before relay selection: force-include relays that are the sole source for any pubkey. Prevents the death spiral where a low-scored relay never gets selected, so sole-source pubkeys get zero coverage.
+2. **Sole-Source Exclusion (SE)** — scoring change: skip alpha/beta updates for pubkeys where the relay is the only option. Scores reflect contested-pubkey performance only, so relays aren't penalized for retention limits on pubkeys with no alternative.
+
+**1yr EN (6 profiles × 5 sessions, NIP-66 liveness, cap@20):**
+
+| Profile (follows) | NDK | NDK+Thompson | NDK+Thompson CG | CG vs NDK | CG vs NDK+T |
+|---|:---:|:---:|:---:|:---:|:---:|
+| fiatjaf (194) | 31.2% | 13.6% | 40.4% | **+9.2pp** | **+26.8pp** |
+| hodlbod (442) | 14.9% | 32.4% | 30.3% | +15.4pp | -2.1pp |
+| jb55 (943) | 20.4% | 34.8% | 31.5% | +11.1pp | -3.3pp |
+| ODELL (1,779) | 16.7% | 32.2% | 23.3% | +6.6pp | -8.9pp |
+| Gato (399) | 15.4% | 27.5% | 20.6% | +5.2pp | -6.9pp |
+| Telluride (2,784) | 23.1% | 31.6% | 26.4% | +3.3pp | -5.2pp |
+| **6-profile mean** | **20.3%** | **28.7%** | **28.8%** | **+8.5pp** | **+0.1pp** |
+
+*62 runs (6 EN × 2 windows × 5 sessions), 55 with data. Gato 1yr S4 returned network failure. Telluride S4-S5 returned 0 follows.*
+
+**CG is always positive vs raw NDK** (+3 to +15pp). But it gives back Thompson gains on larger graphs — the net across 6 profiles is a wash (28.8% vs 28.7%). The fiatjaf regression swings from -17.6pp to +9.2pp, a 27pp improvement.
+
+**The cause: budget saturation.** CG force-includes every sole-source relay without a budget cap. The number of sole-source relays scales with follow count:
+
+| Profile (follows) | Forced relays | Budget remaining | CG trajectory |
+|---|:---:|:---:|---|
+| fiatjaf (194) | 9 | 11 of 20 | Stable 39-42% across S1-S5 |
+| Gato (399) | ~10 | ~10 of 20 | Volatile 18-24% |
+| hodlbod (442) | ~12 | ~8 of 20 | Learning: 17% → 36% |
+| jb55 (943) | ~14 | ~6 of 20 | Learning: 22% → 36% |
+| ODELL (1,779) | 18→20 | 2→0 of 20 | Rises S1-S2 (32%), collapses S4-S5 (18%) |
+| Telluride (2,784) | 29 | **exceeds budget** | Declining: 29% → 23% |
+
+For ODELL, the entire 20-relay budget is consumed by forced sole-source relays at S4-S5 (NIP-66 monitor data expansion surfaces more sole-source relays between sessions). Thompson's scoring loop has zero remaining slots to pick high-performing relays. For Telluride, 29 forced relays exceed the 20-relay budget entirely.
+
+**Quality displacement:** Forced relays are selected for coverage (sole-source), not delivery quality. They displace high-performing relays that regular Thompson discovers:
+- Displaced: nostr-pub.wellorder.net (59% delivery), theforest.nostr1.com (75% delivery)
+- Forced instead: relay.coinos.io (0-15% delivery), sendit.nosflare.com (0% delivery)
+
+**A secondary factor: score signal degradation.** Sole-Source Exclusion removes observations from the scoring loop. CG's Thompson scores are based on fewer relays (24 observed vs 41 for regular Thompson) with lower signal quality. This explains why Gato (~10 forced, 10 remaining) still regresses -6.9pp — the SE scoring is noisier even when budget isn't saturated.
+
+**Known limitation and future work:** The current CG implementation needs a budget cap — force at most `floor(maxConnections × 0.5)` sole-source relays, prioritized by coverage value (how many pubkeys each sole-source relay uniquely covers). This preserves the fiatjaf fix while leaving budget room for Thompson on large graphs. The SE scoring may also need tuning — consider making sole-source exclusion conditional on having sufficient contested observations.
+
+### 8.5c‴ NDK+Thompson CG3: Conditional CG + Partial-Weight SE
+
+**Question:** Can we fix both the budget saturation problem (large graphs) and the SE scoring degradation (Gato) simultaneously?
+
+**Approach:** Two complementary mechanisms combined in `ndk-thompson-cg3`:
+
+1. **Conditional CG (Q1)** — skip CG entirely when sole-source count ≥ `floor(maxConnections × 0.5)` = 10. When skipped, CG3 degrades cleanly to plain Thompson. When enabled (sole-source < 10), all sole-source relays are force-included as in CG.
+
+2. **Partial-Weight Sole-Source scoring (Q2)** — replace full exclusion (0× weight) with 0.3× weight for sole-source observations. The learning signal is dampened but not eliminated, preventing the compounding score degradation observed in CG's SE scoring across sessions.
+
+**1yr EN (6 profiles × 5 sessions, NIP-66 liveness, cap@20):**
+
+| Profile (follows) | NDK+Thompson | CG | CG3 | CG3 vs T | CG3 vs CG | CG behavior |
+|---|:---:|:---:|:---:|:---:|:---:|---|
+| fiatjaf (194) | 13.1% | 38.8% | 38.7% | **+25.6pp** | -0.1pp | ENABLED (8 ss < 10 cap) |
+| hodlbod (855) | 18.1% | 16.8% | 18.5% | +0.4pp | +1.7pp | SKIPPED (13 ss ≥ 10) |
+| jb55 (1,218) | 28.8% | 28.4% | 29.4% | +0.6pp | +1.0pp | SKIPPED (13 ss ≥ 10) |
+| ODELL (1,562) | 25.4% | 18.9% | 25.6% | +0.2pp | **+6.7pp** | SKIPPED (18 ss ≥ 10) |
+| Gato (399) | 19.4% | 26.5% | 21.8% | +2.4pp | -4.7pp | ENABLED (8 ss < 10) |
+| Telluride (2,784) | 27.2% | 28.0% | 27.5% | +0.3pp | -0.5pp | SKIPPED (30 ss ≥ 10) |
+| **6-profile mean** | **22.0%** | **26.2%** | **26.9%** | **+4.9pp** | **+0.7pp** | |
+
+*30 runs (6 EN × 5 sessions), all with data. Algorithms ran together in each invocation: ndk-thompson, ndk-thompson-cg, ndk-thompson-cg3.*
+
+**Per-session trajectories:**
+
+| Profile | S1 | S2 | S3 | S4 | S5 |
+|---|:---:|:---:|:---:|:---:|:---:|
+| fiatjaf T / CG / CG3 | 12.2 / 33.7 / 33.7 | 10.6 / 39.5 / 38.8 | 12.0 / 39.7 / 39.7 | 15.3 / 39.6 / 39.8 | 15.5 / 41.8 / 41.8 |
+| hodlbod T / CG / CG3 | 15.8 / 16.8 / 15.8 | 18.8 / 18.3 / 19.0 | 16.1 / 16.2 / 16.4 | 15.6 / 16.3 / 17.0 | 24.5 / 16.6 / 24.5 |
+| jb55 T / CG / CG3 | 27.6 / 22.9 / 27.6 | 21.5 / 20.1 / 22.5 | 37.6 / 39.7 / 39.3 | 28.5 / 29.5 / 29.3 | 28.9 / 30.1 / 28.6 |
+| ODELL T / CG / CG3 | 27.2 / 21.1 / 27.2 | 19.4 / 17.6 / 19.3 | 29.4 / 19.1 / 30.0 | 26.1 / 18.4 / 26.3 | 25.1 / 18.7 / 25.4 |
+| Gato T / CG / CG3 | 19.3 / 19.8 / 19.8 | 19.7 / 23.9 / 23.9 | 21.9 / 26.9 / 21.9 | 13.5 / 40.1 / 19.5 | 22.6 / 22.0 / 24.3 |
+| Telluride T / CG / CG3 | 30.0 / 28.6 / 30.0 | 17.5 / 29.4 / 17.9 | 31.1 / 25.3 / 31.7 | 28.9 / 28.0 / 29.2 | 28.8 / 28.9 / 29.1 |
+
+**Key findings:**
+
+1. **CG3 is Pareto-superior on grand mean.** 26.9% beats both T (22.0%, +4.9pp) and CG (26.2%, +0.7pp). No profile is worse than T by more than noise. The best of both worlds.
+
+2. **Conditional CG skip works as designed.** The 4 large-graph profiles (hodlbod 13ss, jb55 13ss, ODELL 18ss, Telluride 30ss) correctly skip CG, reverting to plain Thompson behavior. The 2 small-graph profiles (fiatjaf 8ss, Gato 8ss) correctly enable CG. The 50% budget threshold cleanly separates the two regimes.
+
+3. **fiatjaf fix preserved.** CG3 at 38.7% matches CG (38.8%), both +25.6pp vs T (13.1%). The per-session trajectories are nearly identical — S1 cold start parity (33.7%), stable improvement to S5 (41.8%).
+
+4. **ODELL regression eliminated.** CG regressed to 18.9% (-6.5pp vs T's 25.4%). CG3 at 25.6% matches T. The per-session data confirms: CG3 tracks T exactly when CG is skipped (S1: 27.2/27.2, S3: 29.4/30.0, S5: 25.1/25.4).
+
+5. **hodlbod regression eliminated.** CG was 16.8% (below T's 18.1%, -1.3pp regression). CG3 at 18.5% slightly exceeds T. The S5 session is telling: T and CG3 both hit 24.5% while CG stalls at 16.6% — CG's SE scoring degradation compounding across sessions.
+
+6. **Gato is a partial success.** CG3 at 21.8% beats T (19.4%, +2.4pp) but trails CG (26.5%, -4.7pp). Partial-weight scoring helps vs T but doesn't recover CG's full gains. The S4 session reveals the mechanism: CG hit 40.1% while CG3 only got 19.5% — CG's forced relays happened to align with high-value relays that session, but CG3's partial-weight priors led to different (worse) selections in the non-forced slots.
+
+**Mechanism analysis:**
+
+- **When CG is SKIPPED:** CG3 ≈ T (as designed). PW scoring is effectively a no-op because Thompson doesn't select low-scoring sole-source relays, so there are no sole-source observations to weight differently. Small divergence (0-1.7pp) emerges by S3-S5 as PW scoring accumulates slightly different priors than default scoring.
+
+- **When CG is ENABLED + PW scoring (fiatjaf):** Nearly identical to CG. The 8 forced relays are well within budget (10 remaining for Thompson), and fiatjaf's sole-source relays deliver well — PW vs SE scoring makes negligible difference when the underlying signal is strong.
+
+- **When CG is ENABLED + PW scoring (Gato):** PW scoring reduces SE degradation (+2.4pp vs T) but CG3 still trails CG by 4.7pp. The divergence comes from the non-forced relay selections: PW and SE scoring learn different priors across sessions, and for Gato's relay topology, SE's more aggressive exclusion (0×) happens to produce better non-forced relay picks than PW's dampened signal (0.3×).
+
+**The Gato puzzle — contingency assessment:**
+
+CG3's Gato result (+2.4pp vs T, -4.7pp vs CG) suggests the problem is partly **relay-set anchoring** (forcing 8 sole-source relays locks the algorithm into a suboptimal set regardless of scoring quality) and partly **scoring signal quality** (PW and SE produce different priors that lead to different non-forced selections). Three contingency paths:
+
+- **Path A:** Narrow CG to only very small sole-source counts (< 5). This limits CG to fiatjaf-type profiles only.
+- **Path B:** Accept CG3 as the best available tradeoff. The +2.4pp vs T on Gato is still positive, and the overall Pareto improvement makes CG3 the recommended NDK variant.
+- **Path C:** Replace forced inclusion with a softer mechanism — boost sole-source relays' Thompson scores instead of forcing them. Avoids anchoring while still biasing toward coverage.
+
+**Path C tested: Score Boost (SB) — result: rejected.** SB replaces CG's hard forcing with a soft 5× score multiplier for sole-source relays, using standard Thompson scoring (not partial-weight or sole-source exclusion). 30-run benchmark (6 EN × 5 sessions, 1yr, NIP-66 liveness, cap@20):
+
+| Profile | T (S5) | CG3 (S5) | SB (S5) | SB vs CG3 |
+|---|:---:|:---:|:---:|:---:|
+| fiatjaf | 15.2% | 40.6% | 38.8% | −1.8pp |
+| hodlbod | 30.5% | 27.2% | 20.3% | −6.9pp |
+| jb55 | 26.9% | 27.3% | 27.3% | ±0.0pp |
+| ODELL | 26.3% | 26.1% | 19.9% | −6.2pp |
+| Gato | 21.9% | 21.9% | 19.7% | −2.2pp |
+| Telluride | 30.0% | 29.9% | 28.8% | −1.1pp |
+| **Grand mean** | **25.1%** | **28.8%** | **25.8%** | **−3.0pp** |
+
+SB regresses on every profile except jb55 (tie). The root cause: SB lacks CG3's conditional skip. On large graphs (ODELL: 18 SS relays, hodlbod: 12, Telluride: 29), SB's priority re-sorting pushes sole-source pubkeys to the front of the processing queue, consuming most of the 20-relay budget on boosted sole-source relays before high-value multi-relay pubkeys are processed. The 5× boost overcomes Thompson's learned priors — even a relay with E=0.15 scores competitively when boosted. Adding a conditional skip to SB would fix the large-graph regression but leave SB worse than CG3 on the remaining profiles (fiatjaf −1.8pp, Gato −2.2pp). There is no configuration of SB that beats CG3.
+
+**Recommendation:** CG3 (`ndk-thompson-cg3`) is the recommended NDK+Thompson variant. It's Pareto-superior to both plain Thompson, CG, and Score Boost on grand mean, preserves the critical fiatjaf fix, and eliminates all large-graph regressions. The Gato tradeoff (-4.7pp vs CG) is acceptable given that CG3 still beats plain T by +2.4pp on that profile.
+
+### 8.5d FD/NDK+Thompson JP Expansion
+
+**Question:** Do FD+Thompson and NDK+Thompson help JP profiles as much as EN?
+
+**FD+Thompson JP (6 JP profiles × 5 sessions, no NIP-66, cap@20):**
+
+| Profile (follows) | FD baseline | FD+Thompson | FD+T Gain | NDK baseline | NDK+Thompson | NDK+T Gain |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| tanakei (84) | 53.1% | 39.1% | **-14.0pp** | 13.2% | 47.7% | **+34.5pp** |
+| yutaro (240) | 20.5% | 16.7% | -3.9pp | 11.1% | 17.9% | +6.8pp |
+| shion (1,746) | 26.0% | 25.6% | -0.4pp | 19.9% | 22.5% | +2.6pp |
+| rokuyo (898) | 24.9% | 25.2% | +0.3pp | 14.1% | 16.6% | +2.6pp |
+| darashi (353) | 16.7% | 11.7% | -5.0pp | 8.1% | 10.2% | +2.2pp |
+| kojira (1,017) | 26.7% | 21.2% | -5.5pp | 15.2% | 21.1% | +5.9pp |
+| **6-profile mean** | **28.0%** | **23.3%** | **-4.8pp** | **13.6%** | **22.7%** | **+9.1pp** |
+
+**Critical finding: FD+Thompson hurts JP profiles (-4.8pp mean) while NDK+Thompson helps them (+9.1pp mean).** The FD per-author structure selects top-N relays per followed pubkey — in the JP relay ecosystem, where relay configurations are highly fragmented, Thompson's stochastic ranking of per-author relay sets is less effective than NDK's global priority approach. tanakei is the most dramatic: FD+T loses 14pp while NDK+T gains 34.5pp.
+
+At 3yr, the same pattern holds: FD+T mean = -3.5pp, NDK+T mean = +6.4pp across JP profiles.
+
+**Recommendation for JP/non-EN ecosystems:** Use NDK+Thompson or Welshman+Thompson, not FD+Thompson. The per-author relay selection in FD is poorly suited to fragmented relay graphs where delivery history per-relay-per-author is too sparse for Thompson to learn from.
+
+### 8.5e JP NIP-66 Comparison
+
+**JP profiles with NIP-66 liveness filter (6 JP profiles × 5 sessions, cap@20, S5 shown):**
+
+| Profile (follows) | Greedy | Welshman | Welshman+Thompson | WT Gain |
+|---|:---:|:---:|:---:|:---:|
+| tanakei (84) | 23.0% | 55.4% | 74.7% | +19.3pp |
+| yutaro (240) | 13.6% | 17.7% | 18.5% | +0.8pp |
+| shion (1,746) | 28.7% | 36.6% | 32.3% | −4.3pp |
+| rokuyo (898) | 26.7% | 30.5% | 28.7% | −1.8pp |
+| darashi (353) | 15.8% | 20.4% | 24.7% | +4.3pp |
+| kojira (1,017) | 23.7% | 31.4% | 30.9% | −0.5pp |
+| **6-profile mean** | **21.9%** | **32.0%** | **35.0%** | **+3.0pp** |
+
+JP Welshman+Thompson gains (+3.0pp mean at 1yr) are concentrated in tanakei (+19pp) and darashi (+4pp). Other JP profiles show negligible or negative Thompson gains. At 3yr, tanakei dominates even more (+26pp) while most other profiles regress or stay flat. Thompson's effectiveness in JP is profile-specific, not community-wide. NIP-66 coverage for JP relays is lower (~47% vs ~60% for EN), which reduces the candidate relay pool.
+
+### 8.5f Adaptive Connection Limits
+
+**Question:** At what relay budget does recall plateau for different follow graph sizes?
+
+**Welshman+Thompson at cap@10, cap@15, cap@30 (tanakei=84, Gato=399, Telluride=2,784 follows; 5 sessions each, 1yr, NIP-66 liveness, S5 shown):**
+
+| Profile (follows) | cap@10 | cap@15 | cap@20* | cap@30 | Δ(10→30) |
+|---|:---:|:---:|:---:|:---:|:---:|
+| tanakei (84) | 60.0% | 66.6% | ~75%* | 67.0% | +7.0pp |
+| Gato (399) | 17.5% | 21.2% | ~26%* | 34.8% | +17.3pp |
+| Telluride (2,784) | 33.0% | 35.4% | ~39%* | 34.1% | +1.1pp |
+
+\*cap@20 values from separate benchmarks (different sessions/dates) — not directly comparable.
+
+Session-to-session variance is high (S1–S5 Evt Recall ranges: tanakei cap@10 35–69%, cap@15 50–67%, cap@30 44–67%; Gato cap@10 17–26%, cap@15 19–24%, cap@30 24–35%; Telluride cap@10 19–33%, cap@15 32–35%, cap@30 34–40%). With only 5 sessions, per-profile Δ(10→30) is noisy.
+
+**Key findings:**
+
+1. **More connections generally help, but gains are profile-specific and noisy.** Aggregate Δ(10→30) is positive for all profiles, but the magnitude varies dramatically by session. At 5 sessions, individual scaling claims should be treated as tentative.
+
+2. **Small graphs saturate quickly.** tanakei (84 follows) reaches 60% at cap@10 — adding 20 more relays gains only +7pp at S5 (and as little as +1pp at S3–S5 mean). The relay graph is simple enough that 10–15 relays cover most paths.
+
+3. **Medium graphs benefit most reliably from more connections.** Gato (399 follows) shows the most consistent scaling: +17pp at S5, +11pp at S3–S5 mean.
+
+4. **Large graphs show high variance.** Telluride (2,784 follows) ranges from +1pp to +13pp depending on metric. More budget doesn't guarantee proportionally more recall — session-to-session noise dominates.
+
+**Recommendation for adaptive budgets:** Default to cap@20. Profiles with <200 follows can reduce to cap@10–15. Profiles with 300–500 follows benefit from cap@20–30. For >1000 follows, more connections help on average but gains are variable.
 
 ### 8.6 Latency-Aware Thompson Sampling
 
@@ -1170,6 +1371,20 @@ Big Relays reaches full completeness at +0ms on most profiles (only 1-2 relays w
 Telluride's slow convergence (89% at @5s, 100% only at @15s) is driven by timeout overhead: 35 timed-out relays in a 20-concurrency pool means some batches wait the full 15s EOSE timeout.
 
 *Latency simulation uses per-relay timing from baseline queries. It models parallel WebSocket connections with the same concurrency as the live benchmark (20 concurrent). Timing includes connection establishment (DNS+TCP+TLS+WS upgrade) and query execution through EOSE. See [`bench/src/phase2/verify.ts`](bench/src/phase2/verify.ts) for the simulation code and [`bench/src/phase2/probe.ts`](bench/src/phase2/probe.ts) for the standalone relay latency probe.*
+
+### 8.6 Thompson regression analysis: coverage vs delivery rate
+
+Thompson Sampling scores relays by aggregate delivery rate — for each relay, it tracks what fraction of baseline events the relay delivered across all assigned pubkeys (see `relay-scores.ts`). This works well when delivery rate and coverage are correlated (large diverse follow graphs), but fails when they diverge.
+
+**The misalignment:** At 1yr, relay.damus.io might deliver only 20-30% of baseline events (a retention policy issue — events older than 6-12 months get pruned). Thompson learns low α/β → low Beta samples → low score. But for fiatjaf's 194 follows, relay.damus.io covers ~50 of them — no other relay comes close. Thompson demotes the most irreplaceable relay and substitutes smaller relays with higher delivery rates but far less coverage.
+
+**Why it only hurts small concentrated graphs:** For hodlbod (2,784 follows), demoting one relay merely shifts queries to other relays covering the same pubkeys. For fiatjaf (194 follows on a few popular relays), demoting relay.damus.io leaves pubkeys with no alternative coverage.
+
+**Neutral cold start does not help** because the problem is not cold-start randomness — it's that Thompson's learning objective (delivery rate) diverges from the algorithm's need (pubkey coverage) for this profile shape.
+
+**Tested mitigation — Coverage Guarantee CG3 (Section 8.5c‴):** The recommended fix combines conditional CG (skip when sole-source ≥ 50% of budget) with partial-weight scoring (0.3× for sole-source observations). CG3 is Pareto-superior: 26.9% grand mean beats both T (22.0%) and CG (26.2%). Preserves the fiatjaf fix (+25.6pp), eliminates ODELL/hodlbod regressions, and gains +2.4pp vs T on Gato. This regression is NDK-specific — Welshman+Thompson, FD+Thompson, and Greedy+Thompson do not regress fiatjaf (see the cross-algorithm comparison in Section 8.5c′).
+
+**Untested mitigations:** (1) Coverage-weighted scoring — weight Thompson updates by how irreplaceable a relay is for the profile, so high-coverage relays resist demotion. (2) Per-author scoring — track (relay, pubkey-cluster) pairs instead of global relay scores, so fiatjaf's relays aren't penalized by delivery rates from unrelated authors.
 
 ---
 
