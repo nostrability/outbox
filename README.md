@@ -29,14 +29,14 @@ If you're building on an existing library, here's where you stand and what to do
 
 | If you use… | You're at step… | Next upgrade | Details |
 |---|:---:|---|---|
-| **Welshman/Coracle** | 2 (stochastic) | Add Thompson Sampling — replace `random()` with `sampleBeta()` | [analysis/clients/welshman-coracle.md](analysis/clients/welshman-coracle.md) |
-| **NDK** | 1 (priority-based) | Add Thompson Sampling — +11pp mean event recall (10-run mean, high variance, 6 profiles) | [analysis/clients/ndk-applesauce-nostrudel.md](analysis/clients/ndk-applesauce-nostrudel.md) |
-| **Applesauce/noStrudel** | 1 (greedy set-cover) | Add stochastic factor, then Thompson | [analysis/clients/ndk-applesauce-nostrudel.md](analysis/clients/ndk-applesauce-nostrudel.md) |
-| **Gossip** | 1 (greedy set-cover) | Add stochastic factor or Thompson | [analysis/clients/gossip.md](analysis/clients/gossip.md) |
-| **rust-nostr** | 1 (filter decomp) | Add FD+Thompson — same per-author structure, learns from delivery | [analysis/clients/rust-nostr-voyage-nosotros-wisp-shopstr.md](analysis/clients/rust-nostr-voyage-nosotros-wisp-shopstr.md) |
+| **Welshman/Coracle** | 2 (stochastic) | Add Thompson Sampling — +9pp mean (30% → 39%), strongest single upgrade. Replace `random()` with `sampleBeta()`. | [analysis/clients/welshman-coracle.md](analysis/clients/welshman-coracle.md) |
+| **NDK** | 1 (priority-based) | Add NDK+Thompson — +11pp over NDK baseline (19.9% → 30.8%, 10-run mean). Use the **[CG3](OUTBOX-REPORT.md#85c-ndkthompson-cg3-conditional-cg--partial-weight-se)** variant: +4.9pp over plain Thompson (26.9% vs 22.0%), fixes fiatjaf regression, Pareto-superior. | [analysis/clients/ndk-applesauce-nostrudel.md](analysis/clients/ndk-applesauce-nostrudel.md) |
+| **Applesauce/noStrudel** | 1 (greedy set-cover) | Switch to stochastic scoring (+8pp), then add Thompson (+9pp more). Greedy+Thompson alone is only +3pp — not worth it without the stochastic base. | [analysis/clients/ndk-applesauce-nostrudel.md](analysis/clients/ndk-applesauce-nostrudel.md) |
+| **Gossip** | 1 (greedy set-cover) | Switch to stochastic scoring first (+8pp), then add Thompson (+9pp more). Greedy+Thompson alone is only +3pp. | [analysis/clients/gossip.md](analysis/clients/gossip.md) |
+| **rust-nostr** | 1 (filter decomp) | Add FD+Thompson — +12pp mean (EN). Same per-author structure, learns from delivery. **Hurts JP profiles** (−4.8pp); use Welshman+Thompson for JP. | [analysis/clients/rust-nostr-voyage-nosotros-wisp-shopstr.md](analysis/clients/rust-nostr-voyage-nosotros-wisp-shopstr.md) |
 | **Amethyst** | 1 (direct mapping) | Add NIP-66 filtering — unlimited connections already give high recall | [analysis/clients/amethyst.md](analysis/clients/amethyst.md) |
-| **Nostur** | 1 (coverage sort) | Remove skipTopRelays, add stochastic factor | [analysis/clients/nostur-yakihonne-notedeck.md](analysis/clients/nostur-yakihonne-notedeck.md) |
-| **Ditto-Mew** | 0 (4 app relays) | Add hybrid outbox — keep app relays, add author write relays for profiles/threads | [details below](#two-ways-to-add-outbox) |
+| **Nostur** | 1 (coverage sort) | Remove skipTopRelays (costs 5-12% coverage), add stochastic factor | [analysis/clients/nostur-yakihonne-notedeck.md](analysis/clients/nostur-yakihonne-notedeck.md) |
+| **Ditto-Mew** | 0 (4 app relays) | Add hybrid outbox — 10% → 23% (+12pp), no routing layer changes, ~80 LOC | [details below](#two-ways-to-add-outbox) |
 | **Nothing yet** | 0 | Start with hybrid outbox or big relays, then add full outbox when ready | [IMPLEMENTATION-GUIDE.md](IMPLEMENTATION-GUIDE.md) |
 
 *Each link goes to a per-client cheat sheet with specific code paths, current behavior, and upgrade recommendations.*
