@@ -13,7 +13,7 @@
 # 3 profiles × 5 RPU × 5 sessions = 75 runs
 set -uo pipefail
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit 1
 
 SESSIONS=5
 WINDOW=31536000

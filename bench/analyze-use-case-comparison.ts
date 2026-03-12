@@ -275,9 +275,10 @@ for (let s = 1; s <= 5; s++) {
 console.log(`\n\n─── Rule 2: Traceability (3 values → source files) ───\n`);
 
 // Pick 3 specific data points to trace
+const midIdx = Math.min(12, results.length - 1);
 const traces = [
-  { file: results[0].file, label: "fiatjaf S1" },
-  { file: results[12].file, label: "jb55 S3" },
+  { file: results[0].file, label: `${results[0].profile} S${results[0].session}` },
+  { file: results[midIdx].file, label: `${results[midIdx].profile} S${results[midIdx].session}` },
   { file: results[results.length - 1].file, label: `${results[results.length - 1].profile} S${results[results.length - 1].session}` },
 ];
 

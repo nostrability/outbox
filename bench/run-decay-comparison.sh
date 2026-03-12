@@ -25,7 +25,7 @@
 #   Rule 5: default config (no flags) must match hardcoded 0.95/session behavior
 set -uo pipefail
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit 1
 
 SESSIONS=5
 WINDOW=31536000
@@ -80,7 +80,7 @@ for config_entry in "${DECAY_CONFIGS[@]}"; do
   echo
 
   # Check if this entire config is already complete
-  config_done=$(grep -c "decay_${config_name}_" "$PROGRESS_FILE" 2>/dev/null || echo 0)
+  config_done=$(grep -c "decay_${config_name}_" "$PROGRESS_FILE" 2>/dev/null) || config_done=0
   expected=$((3 * $SESSIONS))
   if [ "$config_done" -ge "$expected" ]; then
     echo "SKIP config $config_name: all $expected runs complete"

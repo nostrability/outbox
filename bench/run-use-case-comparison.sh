@@ -11,7 +11,7 @@
 # 6 EN profiles × 5 sessions × 1yr = 30 runs (both algos in each run)
 set -uo pipefail
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit 1
 
 # Include base algorithms for delta measurement
 ALGOS="rust-nostr,fd-thompson,welshman,welshman-thompson"
@@ -46,6 +46,9 @@ echo
 MARKER=".cache/use_case_${WINDOW}_scores_cleared"
 if [ ! -f "$MARKER" ]; then
   echo "Clearing fd-thompson and welshman-thompson scores for window=$WINDOW..."
+  echo "Score files to clear:"
+  ls -la .cache/relay_scores_*_${WINDOW}_liveness_fd-thompson.json 2>&1 || echo "(none found)"
+  ls -la .cache/relay_scores_*_${WINDOW}_liveness_welshman-thompson.json 2>&1 || echo "(none found)"
   rm -f .cache/relay_scores_*_${WINDOW}_liveness_fd-thompson.json
   rm -f .cache/relay_scores_*_${WINDOW}_liveness_welshman-thompson.json
   touch "$MARKER"

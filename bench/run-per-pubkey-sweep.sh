@@ -12,7 +12,7 @@
 # the distribution of declared write relay counts for each profile.
 set -uo pipefail
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit 1
 
 SESSIONS=5
 WINDOW=31536000
@@ -35,6 +35,7 @@ PHASE1_RPUS="1 3 5"
 # Phase 2 full sweep
 PHASE2_RPUS="2 4"
 
+mkdir -p .cache
 PROGRESS_FILE=".cache/rpu_sweep_progress.log"
 touch "$PROGRESS_FILE"
 
@@ -56,9 +57,11 @@ run_rpu_set() {
     if [ ! -f "$MARKER" ]; then
       echo "Clearing Thompson scores for rpu=$rpu ($algos)..."
       if echo "$algos" | grep -q "fd-thompson"; then
+        ls -la .cache/relay_scores_*_${WINDOW}_liveness_fd-thompson.json 2>&1 || echo "(none found)"
         rm -f .cache/relay_scores_*_${WINDOW}_liveness_fd-thompson.json
       fi
       if echo "$algos" | grep -q "greedy-thompson"; then
+        ls -la .cache/relay_scores_*_${WINDOW}_liveness_greedy-thompson.json 2>&1 || echo "(none found)"
         rm -f .cache/relay_scores_*_${WINDOW}_liveness_greedy-thompson.json
       fi
       touch "$MARKER"
