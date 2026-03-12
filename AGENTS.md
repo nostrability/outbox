@@ -25,6 +25,7 @@ Score files are saved as `relay_scores_{pubkey.slice(0,16)}_{window}_{filter}_{a
 - Always use `--no-phase2-cache` for benchmarks measuring recall across sessions.
 - When a script clears scores for a fresh campaign, verify the clearing glob matches the actual filename pattern by testing it.
 - If a script has a canary stage, document that the canary profile is warm-started in subsequent stages.
+- **Marker files must be scoped to everything they guard.** If a score-clearing step should run once per (RPU value × profile group), the marker filename must include both the RPU value AND the profile group (or phase label). A marker scoped only to RPU will silently skip clearing when a second profile group reuses the same RPU value. Before committing any marker-gated `rm`, trace through all phases/loops that share the marker namespace and verify each group gets its own clearing pass.
 
 ### 5. Code and docs must agree on semantics
 
@@ -39,6 +40,8 @@ These are resolved bugs that recur in new code. Check for them when writing benc
 2. **Filter suffix.** `scorePath()` adds `_${filterMode}` only when filterMode is truthy. No filter = no suffix. Scripts targeting `*_none_*` miss all files. Previously affected: `run-stage1-hybrid.sh`, `run-stage4a-jp-fdndk.sh`.
 
 3. **Phase 2 cache inflation.** Schema v1 stored union counts instead of per-relay event IDs, inflating sessions 2+. Fixed in schema v2. Always use `--no-phase2-cache`.
+
+4. **Marker scope too narrow.** `run-per-pubkey-sweep.sh` used markers scoped to RPU value only (`rpu_sweep_${WINDOW}_rpu${rpu}_scores_cleared`). Phase 1 created markers for rpu=1,3,5. Phase 2a created markers for rpu=2,4. When Phase 2b ran different profiles at the same RPU values, the existing markers prevented score clearing — Thompson priors leaked across RPU values for Phase 2b profiles. Fix: scope markers to (RPU × phase) or (RPU × profile-set), or clear per-profile scores explicitly with `${pk:0:16}` in the glob instead of wildcards.
 
 ## Session End Checklist
 
