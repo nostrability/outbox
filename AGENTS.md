@@ -31,6 +31,20 @@ Score files are saved as `relay_scores_{pubkey.slice(0,16)}_{window}_{filter}_{a
 
 When code uses a variable name like `alternatives` or `count`, verify the doc/comment formula matches what the code actually computes. Common bug: code counts "all items including self" but docs say "alternatives" (implying excluding self). Fix whichever is wrong immediately; do not leave the mismatch.
 
+### 6. Indexer cache poisoning must be detected and prevented
+
+The benchmark caches contact list fetches (kind-3 + kind-10002) with a 1-hour TTL. If an indexer relay (e.g., purplepag.es) intermittently returns 0 events, the "0 follows" result is cached and poisons all subsequent runs for that profile until the TTL expires. Large follow graphs (2000+) are most vulnerable.
+
+**Prevention:**
+- Before any campaign, delete the target profile's cache file and do a standalone test fetch to verify the indexer returns the expected follow count. Do not start benchmark runs until verified.
+- After each run, check for "0 follows found" in the log. If detected, halt, delete the bad cache, wait for rate-limit cooldown, re-fetch, and only resume once the cache is verified good.
+- Scripts must NOT mark "0 follows" runs as complete in progress files. The benchmark tool exits 0 on "0 follows" — scripts must grep for this string and treat it as a failure.
+- Use longer cooldowns for large profiles (90s+/profile, 180s+/session) to avoid triggering indexer rate limits.
+
+**Detection after the fact:**
+- Cache files under 10KB for profiles with 100+ follows are almost certainly bad (a good cache for a 2000-follow profile is ~2MB).
+- A "0 follows" run that is marked complete in the progress file will be silently skipped on resume — the gap becomes invisible unless you cross-check progress entries against actual log content.
+
 ## Known Bugs (reference)
 
 These are resolved bugs that recur in new code. Check for them when writing benchmark scripts:
