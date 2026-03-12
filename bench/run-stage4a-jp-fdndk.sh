@@ -38,8 +38,8 @@ for WINDOW in $WINDOWS; do
   MARKER=".cache/stage4a_${WINDOW}_scores_cleared"
   if [ ! -f "$MARKER" ]; then
     echo "Clearing fd-thompson and ndk-thompson scores for window=$WINDOW (JP, no NIP-66)..."
-    rm -f .cache/relay_scores_*_${WINDOW}_none_fd-thompson.json
-    rm -f .cache/relay_scores_*_${WINDOW}_none_ndk-thompson.json
+    rm -f .cache/relay_scores_*_${WINDOW}_fd-thompson.json
+    rm -f .cache/relay_scores_*_${WINDOW}_ndk-thompson.json
     touch "$MARKER"
   fi
 

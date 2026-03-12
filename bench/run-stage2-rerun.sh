@@ -43,7 +43,7 @@ for name in $NAMES; do
   # Clear greedy-thompson scores for fresh learning sequence
   MARKER=".cache/stage2_rerun_${WINDOW}_${name}_scores_cleared"
   if [ ! -f "$MARKER" ]; then
-    rm -f ".cache/relay_scores_${pk}_${WINDOW}_liveness_greedy-thompson.json"
+    rm -f ".cache/relay_scores_${pk:0:16}_${WINDOW}_liveness_greedy-thompson.json"
     touch "$MARKER"
     echo "Cleared greedy-thompson scores for $name"
   fi
