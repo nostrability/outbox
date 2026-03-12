@@ -9,7 +9,7 @@ set -uo pipefail
 # Total: 11 + (2 optional Stage 1 3yr) = 11 runs
 
 BENCHDIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$BENCHDIR"
+cd "$BENCHDIR" || exit 1
 
 PUBKEY="2c65940725bbf10b452197fba41c6cb14afd41e28e0be22aab49bf246b0c84e3"
 COOLDOWN=60
@@ -52,7 +52,7 @@ echo "=== Telluride Re-run: 11 corrupted benchmarks ==="
 echo "Started: $(date)"
 
 # --- Stage 1: Hybrid 1yr (s4, s5) ---
-# No NIP-66 filter, no Thompson scores to clear (ditto-outbox uses none_ filter key)
+# No NIP-66 filter, no Thompson scores to clear (ditto-outbox has no filter suffix)
 echo ""
 echo "--- Stage 1: Hybrid 1yr (s4, s5) ---"
 for s in 4 5; do
