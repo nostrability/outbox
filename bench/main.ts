@@ -41,6 +41,8 @@ import type {
   AlgorithmResult,
   BenchmarkInput,
   CliOptions,
+  DecayConfig,
+  DecayUnit,
   FilterProfile,
   Nip66RelayData,
   Phase2Result,
@@ -78,6 +80,8 @@ Options:
   --enrich-hints            Enrich relay sets with p-tag relay hints from kind-1 events
   --nip66-filter <mode>     NIP-66 liveness filter: liveness (default), strict
   --nip66-ttl <ms>          NIP-66 cache TTL override in ms
+  --decay-factor <n>        Thompson decay factor (default: 0.95)
+  --decay-unit <unit>       Decay unit: session (default) or hour
   --no-cache                Skip cache
   --no-phase2-cache         Skip Phase 2 baseline disk cache
   --verbose                 Per-relay details, raw vs post-processed metrics
@@ -102,6 +106,8 @@ function parseCliOptions(): CliOptions {
       "verify-concurrency",
       "nip66-filter",
       "nip66-ttl",
+      "decay-factor",
+      "decay-unit",
     ],
     boolean: ["sweep", "fast", "full-assignments", "no-cache", "no-phase2-cache", "verbose", "verify", "enrich-hints", "help"],
     default: {
@@ -164,6 +170,8 @@ function parseCliOptions(): CliOptions {
     verifyConcurrency: parseInt(args["verify-concurrency"]!, 10),
     nip66Filter: parseNip66FilterArg(args["nip66-filter"]),
     nip66TtlMs: args["nip66-ttl"] ? parseInt(args["nip66-ttl"], 10) : undefined,
+    decayFactor: args["decay-factor"] ? parseFloat(args["decay-factor"]) : undefined,
+    decayUnit: args["decay-unit"] as DecayUnit | undefined,
   };
 }
 
@@ -487,6 +495,10 @@ async function runDefault(
 
     // Thompson Sampling learning: update relay scores from Phase 2 results (per-algorithm)
     if (hasThompson && phase2Result._baselines && phase2Result._cache) {
+      const decayConfig: DecayConfig | undefined = opts.decayFactor !== undefined || opts.decayUnit !== undefined
+        ? { factor: opts.decayFactor ?? 0.95, unit: opts.decayUnit ?? "session" }
+        : undefined;
+
       for (let i = 0; i < algorithms.length; i++) {
         const entry = algorithms[i];
         if (!THOMPSON_IDS.has(entry.id)) continue;
@@ -506,6 +518,7 @@ async function runDefault(
             phase2Result._cache as QueryCache,
             phase2Result._relayOutcomes,
             input.writerToRelays,
+            decayConfig,
           );
         } else {
           db = updateRelayScores(
@@ -516,7 +529,13 @@ async function runDefault(
             phase2Result._baselines,
             phase2Result._cache as QueryCache,
             phase2Result._relayOutcomes,
+            undefined,
+            decayConfig,
           );
+        }
+        if (decayConfig) {
+          db.decayFactor = decayConfig.factor;
+          db.decayUnit = decayConfig.unit;
         }
         thompsonDBs.set(entry.id, db);
         await saveRelayScores(db, opts.nip66Filter || undefined, entry.id);
