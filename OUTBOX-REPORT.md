@@ -1254,22 +1254,26 @@ S5 spread: 3.9pp (40.6%–44.5%). Grand mean spread (all sessions): 2.2pp (35.3%
 
 **Question:** Does FD+Thompson (per-author relay selection) outperform Welshman+Thompson (global scoring) for any use case, justifying a hybrid architecture?
 
-**Setup:** 30 runs planned (6 profiles × 5 sessions), 27 completed. FD+Thompson and Welshman+Thompson run side-by-side in each run. 1yr, cap@20, NIP-66 liveness, `--no-phase2-cache`. Telluride S3–S5 lost to 0-follows indexer cache poisoning (see AGENTS.md Known Bug #5).
+**Setup:** 30 runs (6 profiles × 5 sessions). FD+Thompson and Welshman+Thompson run side-by-side in each run. 1yr, cap@20, NIP-66 liveness, `--no-phase2-cache`. Telluride S3–S5 originally lost to 0-follows indexer cache poisoning (AGENTS.md Known Bug #5); re-run with `--cache-ttl 86400000` after the fix.
 
 Source: `bench/.cache/use_case_comparison_logs/31536000/`
 
-**S5 event recall (5 complete profiles):**
+**S5 event recall (6 profiles, converged Thompson):**
 
-| Profile (follows) | FD+Thompson | Welshman+Thompson | Δ |
-|---|:---:|:---:|:---:|
-| fiatjaf (196) | 15.2% | 39.1% | +23.9pp |
-| hodlbod (907) | 46.9% | 47.3% | +0.4pp |
-| jb55 (455) | 43.8% | 45.5% | +1.7pp |
-| ODELL (1,886) | 44.4% | 41.2% | −3.2pp |
-| Gato (399) | 29.6% | 27.4% | −2.2pp |
-| **Mean** | **35.9%** | **40.1%** | **+4.2pp** |
+| Profile (follows) | FD+Thompson | Welshman+Thompson | Δ (W+T − FD+T) | Winner |
+|---|:---:|:---:|:---:|:---:|
+| fiatjaf (196) | 15.2% | 39.1% | +23.9pp | W+T |
+| hodlbod (907) | 46.9% | 47.3% | +0.4pp | W+T |
+| jb55 (455) | 43.8% | 45.5% | +1.8pp | W+T |
+| ODELL (1,886) | 44.4% | 41.2% | −3.2pp | FD+T |
+| Gato (399) | 29.6% | 27.4% | −2.2pp | FD+T |
+| Telluride (2,784) | 42.4% | 42.0% | −0.4pp | FD+T |
+| **6-profile mean** | **37.0%** | **40.4%** | **+3.4pp** | **W+T** |
+| **Excl. fiatjaf (5)** | **41.4%** | **40.7%** | **−0.7pp** | **FD+T** |
 
-Grand mean (27 runs, 5 profiles + Telluride S1–S2): FD+T 31.8%, W+T 37.3%, gap +5.5pp.
+Grand mean (30 runs): FD+T 32.9%, W+T 37.8%, gap +4.9pp.
+
+**fiatjaf anomaly:** Thompson actively hurts FD on fiatjaf (FD+T 5-session mean 15.7% vs FD baseline 19.8% = −4.1pp regression). With only 120 testable authors from 196 follows, FD's per-author decomposition gives Thompson too few relay alternatives per author. Thompson's stochastic perturbation of these small per-author sets is destructive rather than exploratory. Welshman's global pool is unaffected because popularity weighting operates across all relays at once. This is the same small-graph Thompson regression documented for NDK in §8.5c‴.
 
 **Profile-view latency (algorithm-independent):**
 
@@ -1282,16 +1286,15 @@ Profile-view TTFE is 681–872ms median across profiles, independent of which al
 | jb55 | 872ms | 1.1s | 1.7s |
 | ODELL | 798ms | 1.1s | 1.7s |
 | Gato | 804ms | 1.1s | 1.8s |
+| Telluride | 870ms | 946ms | 1.6s |
 
 **Key findings:**
 
-1. **W+T outperforms FD+T for feed recall by ~4–6pp on average.** The gap is driven primarily by fiatjaf (+23.9pp for W+T), where FD's per-author decomposition fragments relay budget across too many small relays. For medium-large profiles (hodlbod, jb55, ODELL), the algorithms are within ~3pp of each other.
+1. **W+T and FD+T are effectively equivalent for medium-to-large profiles.** At S5, the two algorithms split 3-3 across 6 profiles (W+T wins fiatjaf, hodlbod, jb55; FD+T wins ODELL, Gato, Telluride). The per-profile gaps outside fiatjaf are small (0.4–3.2pp). Excluding fiatjaf, FD+T leads by 0.7pp (41.4% vs 40.7%). The 6-profile W+T advantage (+3.4pp) is almost entirely driven by fiatjaf's +23.9pp gap — the same small-graph Thompson regression that affects NDK (§8.5c‴).
 
-2. **Profile-view latency is algorithm-independent.** Both algorithms achieve ~750–870ms median TTFE for profile views. This is expected: profile-view queries use the viewed user's own relay list, not the feed algorithm's relay selection.
+2. **Profile-view latency is algorithm-independent.** Both algorithms achieve ~680–870ms median TTFE for profile views. This is expected: profile-view queries use the viewed user's own relay list, not the feed algorithm's relay selection.
 
-3. **Hybrid architecture is not justified.** FD+T does not outperform W+T for any measured use case. The original hypothesis — FD+T for feed, W+T for profile views — assumed FD's per-author granularity would help feed recall. It doesn't: W+T's global popularity weighting consistently matches or beats FD+T. A single W+T implementation covers both use cases.
-
-**Data gap:** Telluride (2,784 follows) S3–S5 lost to indexer fetch failure (Known Bug #5, now fixed). The 2 available Telluride sessions (S1: FD+T 32.8% / W+T 34.2%, S2: FD+T 38.5% / W+T 41.0%) show the same W+T advantage. A re-run would strengthen confidence but is unlikely to change the conclusion.
+3. **Hybrid architecture is not justified, but the reason differs from the original hypothesis.** The original hypothesis assumed FD+T would win on feed recall and W+T on profile views, justifying two implementations. In practice, (a) profile-view latency is algorithm-independent, and (b) excluding fiatjaf's small-graph anomaly (196 follows), FD+T and W+T converge to equivalent feed recall (0.7pp gap across the remaining 5 profiles). A single implementation of either algorithm suffices. For rust-nostr clients already using Filter Decomposition, adding Thompson Sampling to the existing per-author structure achieves the same converged recall as switching to Welshman+Thompson — no architectural change needed.
 
 ### 8.6 Latency-Aware Thompson Sampling
 
