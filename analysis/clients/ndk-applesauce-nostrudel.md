@@ -53,10 +53,10 @@ NDK+Thompson integrates Thompson scoring into NDK's priority cascade, replacing 
 
 **Key findings:**
 
-1. **Thompson works in NDK's architecture** — the priority cascade does NOT neutralize it. Mean gain: +10pp (6-profile, 1yr). High variance: -19pp (fiatjaf) to +30pp (hodlbod).
+1. **Thompson works in NDK's architecture** — the priority cascade does NOT neutralize it. CG3 gains +5pp over plain NDK+Thompson (6-profile 30-run CG3 study, 1yr). Per-profile range: +0.2pp (ODELL) to +25.6pp (fiatjaf, where CG fixes the regression).
 2. **NDK baseline stays flat** — deterministic, no learning. NDK+Thompson improves over sessions while baseline stays at ~14-32%.
 3. **Priority variant is more stable** than Unified. The Unified variant (1.5x bonus replacing hard cascade) shows inconsistent results (Telluride S2: 22% vs 34.5% for Priority).
-4. **Welshman+Thompson outperforms NDK+Thompson by ~12pp mean** (42% vs 30% at 1yr). This gap is structural — Welshman's per-user relay budgeting gives Thompson full scoring control vs NDK's cascade constraining it to the third tier.
+4. **Welshman+Thompson outperforms NDK+Thompson by ~8pp** (39% vs 31%, 10-run study at 1yr). This gap is structural — Welshman's per-user relay budgeting gives Thompson full scoring control vs NDK's cascade constraining it to the third tier.
 5. **High per-profile variance** — fiatjaf regresses because NDK's cascade concentrates on relay.damus.io, which happens to work well for that follow graph. Thompson's exploration disrupts this alignment.
 6. **Concentration improves** — NDK+Thompson distributes load more evenly (Gini: 0.82→0.77, HHI: 0.299→0.234 for Telluride).
 
