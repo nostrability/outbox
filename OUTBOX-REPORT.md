@@ -1284,7 +1284,7 @@ Source: `bench/.cache/use_case_comparison_logs/31536000/`
 
 Grand mean (30 runs): FD+T 32.9%, W+T 37.8%, gap +4.9pp.
 
-**fiatjaf anomaly:** Thompson actively hurts FD on fiatjaf (FD+T 5-session mean 15.7% vs FD baseline 19.8% = −4.1pp regression). With only 120 testable authors from 196 follows, FD's per-author decomposition gives Thompson too few relay alternatives per author. Thompson's stochastic perturbation of these small per-author sets is destructive rather than exploratory. Welshman's global pool is unaffected because popularity weighting operates across all relays at once. This is the same small-graph Thompson regression documented for NDK in §8.10.
+**fiatjaf anomaly:** Thompson actively hurts FD on fiatjaf (FD+T 5-session mean 15.7% vs FD baseline 19.8% = −4.1pp regression). With only 120 testable authors from 196 follows, FD's per-author decomposition gives Thompson too few relay alternatives per author. Thompson's stochastic perturbation of these small per-author sets is destructive rather than exploratory. Welshman's global pool is unaffected because popularity weighting operates across all relays at once. This is the same small-graph Thompson regression documented for NDK in §8.8.
 
 **Profile-view latency (algorithm-independent):**
 
