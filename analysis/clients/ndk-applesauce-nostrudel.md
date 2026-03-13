@@ -29,6 +29,8 @@ Outbox is enabled by default — any app calling `ndk.subscribe()` with author f
 
 ### Benchmark Results: NDK+Thompson Sampling
 
+*Methodology: cold start Beta(1,1), NIP-66 liveness filter, cap@20, 1yr verify-window, testable-reliable authors as recall denominator. See [OUTBOX-REPORT.md § 8](../../OUTBOX-REPORT.md#8-benchmark-results) for full definitions.*
+
 NDK+Thompson integrates Thompson scoring into NDK's priority cascade, replacing the popularity-based ranking in the third tier. Two variants were tested (1yr, NIP-66 liveness, cap@20, 5 learning sessions):
 
 **Gato (399 follows, 106 testable-reliable authors):**
