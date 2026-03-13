@@ -494,6 +494,17 @@ Full DM relay routing: **Gossip**, **rust-nostr**, **Welshman**, **Amethyst** (4
 
 We built a benchmark tool ([`bench/`](bench/)) that simulates relay selection algorithms against identical real-world data. Each algorithm receives the same input (follow list + NIP-65 relay lists from indexer relays) and produces relay-to-pubkey assignments under the same connection budget. See [`bench/phase-1-findings.md`](bench/phase-1-findings.md) for full methodology.
 
+**Shared benchmark conditions (§8.3 onward unless noted):**
+
+- **Cold start:** No prior Thompson scores; uniform Beta(1,1) priors for all relays.
+- **NIP-66 liveness filter:** Exclude relays not seen online by nostr.watch monitors in the last 30 days. Sections that disable this note "no NIP-66."
+- **cap@N:** Maximum relay connections per subscription (typically cap@20).
+- **Verify-window:** Time window for event verification (e.g., 1yr = events from the last 365 days). Shorter windows favor relay retention; longer windows test archival depth.
+- **Testable-reliable authors:** Followed authors with ≥1 verified event in the window *and* ≥50% of declared relays responding, used as the recall denominator.
+- **Session (S1–S5):** One Thompson learning round: fetch events → score relay delivery → persist updated Beta priors. S1 is always cold start. Multi-session results show learning convergence.
+
+Individual subsections note only deviations from these defaults (different cap, window, filter, or profile set).
+
 ### 8.1 Academic: Assignment Coverage
 
 **What this measures:** Given NIP-65 relay lists, how many of your follows get assigned to at least one relay? This never connects to any relay — it measures the quality of the mapping on paper, not whether events actually exist there. Not a guarantee of event delivery.
