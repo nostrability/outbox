@@ -159,6 +159,9 @@ export interface CliOptions {
   nip66TtlMs?: number;
   noPhase2Cache: boolean;
   enrichHints: boolean;
+  decayFactor?: number;
+  decayUnit?: DecayUnit;
+  cacheTtlMs?: number;
 }
 
 export interface SerializedAlgorithmResult {
@@ -510,6 +513,15 @@ export interface Nip66RelayDataSerialized {
   monitorPubkey: string;
 }
 
+// --- Decay configuration ---
+
+export type DecayUnit = "session" | "hour";
+
+export interface DecayConfig {
+  factor: number;
+  unit: DecayUnit;
+}
+
 // --- Relay Score DB (Thompson Sampling persistence) ---
 
 export interface RelayScoreEntry {
@@ -535,4 +547,7 @@ export interface RelayScoreDB {
   updatedAt: number;
   sessionCount: number;
   relays: Record<RelayUrl, RelayScoreEntry>;
+  /** Decay configuration used for this score file. */
+  decayFactor?: number;
+  decayUnit?: DecayUnit;
 }

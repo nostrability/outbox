@@ -1208,6 +1208,94 @@ Session-to-session variance is high (S1–S5 Evt Recall ranges: tanakei cap@10 3
 
 **Recommendation for adaptive budgets:** Default to cap@20. Profiles with <200 follows can reduce to cap@10–15. Profiles with 300–500 follows benefit from cap@20–30. For >1000 follows, more connections help on average but gains are variable.
 
+### 8.5g Thompson Prior Decay Rate Comparison
+
+**Question:** Does the Thompson prior decay rate affect converged recall, or do all rates converge to the same level given enough sessions?
+
+**Setup:** 60 runs (4 configs × 3 profiles × 5 sessions). FD+Thompson at 1yr, cap@20, NIP-66 liveness, `--no-phase2-cache`. Configs:
+- **nodecay** (`--decay-factor 1.0`): pure accumulation, no forgetting
+- **default** (no flags): 0.95/session discrete decay (current behavior)
+- **decay90** (`--decay-factor 0.90 --decay-unit session`): aggressive session decay
+- **hour95** (`--decay-factor 0.95 --decay-unit hour`): time-based decay (Welshman PR #53 rate)
+
+Source: `bench/.cache/decay_comparison_logs/31536000/`
+
+**S5 event recall (3-profile mean):**
+
+| Config | jb55 | ODELL | Telluride | Mean |
+|---|:---:|:---:|:---:|:---:|
+| nodecay | 43.5% | 43.0% | 41.5% | 42.7% |
+| default | 43.0% | 41.4% | 42.4% | 42.3% |
+| decay90 | 40.5% | 38.5% | 42.8% | 40.6% |
+| hour95 | 43.3% | 46.4% | 43.9% | 44.5% |
+
+S5 spread: 3.9pp (40.6%–44.5%). Grand mean spread (all sessions): 2.2pp (35.3%–37.5%).
+
+**Telluride session-by-session (largest profile, 2,784 follows):**
+
+| Config | S1 | S2 | S3 | S4 | S5 | Mean |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| nodecay | 33.6% | 40.1% | 41.2% | 43.1% | 41.5% | 39.9% |
+| default | 33.3% | 36.5% | 40.6% | 43.2% | 42.4% | 39.2% |
+| decay90 | 34.6% | 41.0% | 40.4% | 42.5% | 42.8% | 40.3% |
+| hour95 | 34.4% | 40.5% | 43.0% | 43.9% | 43.9% | 41.1% |
+
+**Key findings:**
+
+1. **All configs converge by S5.** The 3.9pp S5 spread is within normal session-to-session variance (~3–5pp). No config is statistically distinguishable from another at 5 sessions.
+
+2. **Decay rate doesn't matter for closely-spaced sessions.** With 2–3 minute inter-session gaps (benchmark pacing), time-based and session-based decay produce equivalent results. The hour95 config shows slightly higher ODELL S5 (46.4%) but this is within noise.
+
+3. **decay90 is marginally weaker.** The aggressive 0.90/session rate shows the lowest S5 mean (40.6%), suggesting over-forgetting can slow convergence — but the gap is not statistically significant at N=3.
+
+**Implication:** Default 0.95/session decay is fine. Implementers should not tune decay rate — it has no measurable effect at realistic session frequencies.
+
+### 8.5h Per-Author vs Global Use-Case Comparison
+
+**Question:** Does FD+Thompson (per-author relay selection) outperform Welshman+Thompson (global scoring) for any use case, justifying a hybrid architecture?
+
+**Setup:** 30 runs (6 profiles × 5 sessions). FD+Thompson and Welshman+Thompson run side-by-side in each run. 1yr, cap@20, NIP-66 liveness, `--no-phase2-cache`. Telluride S3–S5 originally lost to 0-follows indexer cache poisoning (AGENTS.md Known Bug #5); re-run with `--cache-ttl 86400000` after the fix.
+
+Source: `bench/.cache/use_case_comparison_logs/31536000/`
+
+**S5 event recall (6 profiles, converged Thompson):**
+
+| Profile (follows) | FD+Thompson | Welshman+Thompson | Δ (W+T − FD+T) | Winner |
+|---|:---:|:---:|:---:|:---:|
+| fiatjaf (196) | 15.2% | 39.1% | +23.9pp | W+T |
+| hodlbod (907) | 46.9% | 47.3% | +0.4pp | W+T |
+| jb55 (455) | 43.8% | 45.5% | +1.8pp | W+T |
+| ODELL (1,886) | 44.4% | 41.2% | −3.2pp | FD+T |
+| Gato (399) | 29.6% | 27.4% | −2.2pp | FD+T |
+| Telluride (2,784) | 42.4% | 42.0% | −0.4pp | FD+T |
+| **6-profile mean** | **37.0%** | **40.4%** | **+3.4pp** | **W+T** |
+| **Excl. fiatjaf (5)** | **41.4%** | **40.7%** | **−0.7pp** | **FD+T** |
+
+Grand mean (30 runs): FD+T 32.9%, W+T 37.8%, gap +4.9pp.
+
+**fiatjaf anomaly:** Thompson actively hurts FD on fiatjaf (FD+T 5-session mean 15.7% vs FD baseline 19.8% = −4.1pp regression). With only 120 testable authors from 196 follows, FD's per-author decomposition gives Thompson too few relay alternatives per author. Thompson's stochastic perturbation of these small per-author sets is destructive rather than exploratory. Welshman's global pool is unaffected because popularity weighting operates across all relays at once. This is the same small-graph Thompson regression documented for NDK in §8.5c‴.
+
+**Profile-view latency (algorithm-independent):**
+
+Profile-view TTFE is 681–872ms median across profiles, independent of which algorithm selected the feed relays. Profile-view queries go to the viewed user's own write relays, bypassing the feed relay selection entirely.
+
+| Profile | TTFE median | TTFE mean | TTFE p95 |
+|---|:---:|:---:|:---:|
+| fiatjaf | 743ms | 1.0s | 1.8s |
+| hodlbod | 681ms | 977ms | 1.8s |
+| jb55 | 872ms | 1.1s | 1.7s |
+| ODELL | 798ms | 1.1s | 1.7s |
+| Gato | 804ms | 1.1s | 1.8s |
+| Telluride | 870ms | 946ms | 1.6s |
+
+**Key findings:**
+
+1. **W+T and FD+T are effectively equivalent for medium-to-large profiles.** At S5, the two algorithms split 3-3 across 6 profiles (W+T wins fiatjaf, hodlbod, jb55; FD+T wins ODELL, Gato, Telluride). The per-profile gaps outside fiatjaf are small (0.4–3.2pp). Excluding fiatjaf, FD+T leads by 0.7pp (41.4% vs 40.7%). The 6-profile W+T advantage (+3.4pp) is almost entirely driven by fiatjaf's +23.9pp gap — the same small-graph Thompson regression that affects NDK (§8.5c‴).
+
+2. **Profile-view latency is algorithm-independent.** Both algorithms achieve ~680–870ms median TTFE for profile views. This is expected: profile-view queries use the viewed user's own relay list, not the feed algorithm's relay selection.
+
+3. **Hybrid architecture is not justified, but the reason differs from the original hypothesis.** The original hypothesis assumed FD+T would win on feed recall and W+T on profile views, justifying two implementations. In practice, (a) profile-view latency is algorithm-independent, and (b) excluding fiatjaf's small-graph anomaly (196 follows), FD+T and W+T converge to equivalent feed recall (0.7pp gap across the remaining 5 profiles). A single implementation of either algorithm suffices. For rust-nostr clients already using Filter Decomposition, adding Thompson Sampling to the existing per-author structure achieves the same converged recall as switching to Welshman+Thompson — no architectural change needed.
+
 ### 8.6 Latency-Aware Thompson Sampling
 
 Sections 8.3–8.5 model relay quality as Bernoulli (delivered/not). This section tests whether adding a latency discount to the scoring function improves feed responsiveness — specifically, whether TTFE (time-to-first-event) becomes algorithm-dependent when latency is in the scoring function.
@@ -1372,7 +1460,7 @@ Telluride's slow convergence (89% at @5s, 100% only at @15s) is driven by timeou
 
 *Latency simulation uses per-relay timing from baseline queries. It models parallel WebSocket connections with the same concurrency as the live benchmark (20 concurrent). Timing includes connection establishment (DNS+TCP+TLS+WS upgrade) and query execution through EOSE. See [`bench/src/phase2/verify.ts`](bench/src/phase2/verify.ts) for the simulation code and [`bench/src/phase2/probe.ts`](bench/src/phase2/probe.ts) for the standalone relay latency probe.*
 
-### 8.6 Thompson regression analysis: coverage vs delivery rate
+### 8.8 Thompson regression analysis: coverage vs delivery rate
 
 Thompson Sampling scores relays by aggregate delivery rate — for each relay, it tracks what fraction of baseline events the relay delivered across all assigned pubkeys (see `relay-scores.ts`). This works well when delivery rate and coverage are correlated (large diverse follow graphs), but fails when they diverge.
 

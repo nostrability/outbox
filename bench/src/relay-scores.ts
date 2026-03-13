@@ -7,6 +7,7 @@
  */
 
 import type {
+  DecayConfig,
   PubkeyBaseline,
   Pubkey,
   RelayUrl,
@@ -17,9 +18,23 @@ import type { QueryCache, RelayOutcome } from "./relay-pool.ts";
 
 const CACHE_DIR = ".cache";
 const SCHEMA_VERSION = 1;
-const DECAY_FACTOR = 0.95; // exponential decay per session
+const DEFAULT_DECAY_FACTOR = 0.95; // exponential decay per session
 const MAX_SESSION_HISTORY = 10; // keep last N session rates for trend
 const TREND_MIN_SESSIONS = 3; // minimum sessions before computing trend
+
+/** Compute effective decay multiplier based on config.
+ *  "session" unit: factor^1 per call (unchanged from original).
+ *  "hour" unit: factor^(elapsed_hours) since last update.   */
+function computeDecay(db: RelayScoreDB, config?: DecayConfig): number {
+  const factor = config?.factor ?? DEFAULT_DECAY_FACTOR;
+  if (!config || config.unit === "session") {
+    return factor;
+  }
+  // hour-based: compute elapsed hours since last session
+  const elapsedMs = Date.now() - db.updatedAt;
+  const elapsedHours = Math.max(elapsedMs / 3_600_000, 0);
+  return Math.pow(factor, elapsedHours);
+}
 
 /** Minimum beta dampening factor for coverage-weighted scoring.
  *  Lower = more protection for sole-source relays (0 = no penalty, 1 = full penalty). */
@@ -79,11 +94,13 @@ export function updateRelayScores(
   cache: QueryCache,
   relayOutcomes?: ReadonlyMap<RelayUrl, RelayOutcome>,
   _writerToRelays?: ReadonlyMap<Pubkey, Set<RelayUrl>>,
+  decayConfig?: DecayConfig,
 ): RelayScoreDB {
   // Apply decay to existing scores
+  const decay = computeDecay(db, decayConfig);
   for (const entry of Object.values(db.relays)) {
-    entry.alpha = 1 + (entry.alpha - 1) * DECAY_FACTOR;
-    entry.beta = 1 + (entry.beta - 1) * DECAY_FACTOR;
+    entry.alpha = 1 + (entry.alpha - 1) * decay;
+    entry.beta = 1 + (entry.beta - 1) * decay;
   }
 
   // Compute new observations from this session
@@ -187,11 +204,13 @@ export function updateRelayScoresCW(
   cache: QueryCache,
   relayOutcomes?: ReadonlyMap<RelayUrl, RelayOutcome>,
   _writerToRelays?: ReadonlyMap<Pubkey, Set<RelayUrl>>,
+  decayConfig?: DecayConfig,
 ): RelayScoreDB {
   // Apply decay to existing scores
+  const decay = computeDecay(db, decayConfig);
   for (const entry of Object.values(db.relays)) {
-    entry.alpha = 1 + (entry.alpha - 1) * DECAY_FACTOR;
-    entry.beta = 1 + (entry.beta - 1) * DECAY_FACTOR;
+    entry.alpha = 1 + (entry.alpha - 1) * decay;
+    entry.beta = 1 + (entry.beta - 1) * decay;
   }
 
   // Compute new observations from this session
@@ -309,11 +328,13 @@ export function updateRelayScoresSE(
   cache: QueryCache,
   relayOutcomes?: ReadonlyMap<RelayUrl, RelayOutcome>,
   writerToRelays?: ReadonlyMap<Pubkey, Set<RelayUrl>>,
+  decayConfig?: DecayConfig,
 ): RelayScoreDB {
   // Apply decay to existing scores
+  const decay = computeDecay(db, decayConfig);
   for (const entry of Object.values(db.relays)) {
-    entry.alpha = 1 + (entry.alpha - 1) * DECAY_FACTOR;
-    entry.beta = 1 + (entry.beta - 1) * DECAY_FACTOR;
+    entry.alpha = 1 + (entry.alpha - 1) * decay;
+    entry.beta = 1 + (entry.beta - 1) * decay;
   }
 
   // Compute new observations from this session
@@ -481,13 +502,15 @@ export function updateRelayScoresPW(
   cache: QueryCache,
   relayOutcomes?: ReadonlyMap<RelayUrl, RelayOutcome>,
   writerToRelays?: ReadonlyMap<Pubkey, Set<RelayUrl>>,
+  decayConfig?: DecayConfig,
 ): RelayScoreDB {
   const SOLE_SOURCE_WEIGHT = 0.3;
 
   // Apply decay to existing scores
+  const decay = computeDecay(db, decayConfig);
   for (const entry of Object.values(db.relays)) {
-    entry.alpha = 1 + (entry.alpha - 1) * DECAY_FACTOR;
-    entry.beta = 1 + (entry.beta - 1) * DECAY_FACTOR;
+    entry.alpha = 1 + (entry.alpha - 1) * decay;
+    entry.beta = 1 + (entry.beta - 1) * decay;
   }
 
   // Compute new observations from this session

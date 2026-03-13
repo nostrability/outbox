@@ -8,11 +8,11 @@ The relay that "should" have the event often doesn't — due to retention, downt
 
 | If you use… | You're at step… | Next upgrade | Details |
 |---|:---:|---|---|
-| **Welshman/Coracle** | Stochastic scoring | Add Thompson Sampling — +9pp at 1yr (~30% → ~39%, paired) | [cheat sheet](analysis/clients/welshman-coracle.md) |
-| **NDK** | Priority-based | Add NDK+Thompson CG3 — ~16% → ~27% (69% increase), fixes fiatjaf regression | [cheat sheet](analysis/clients/ndk-applesauce-nostrudel.md) |
-| **Applesauce/noStrudel** | Greedy set-cover | Stochastic scoring then Thompson — ~16% → ~40% (150% increase), two steps | [cheat sheet](analysis/clients/ndk-applesauce-nostrudel.md) |
-| **Gossip** | Greedy set-cover | Stochastic scoring then Thompson — ~16% → ~40% (150% increase), two steps | [cheat sheet](analysis/clients/gossip.md) |
-| **rust-nostr** | Filter decomposition | Add FD+Thompson — ~25% → ~37% (48% increase) | [cheat sheet](analysis/clients/rust-nostr-voyage-nosotros-wisp-shopstr.md) |
+| **Welshman/Coracle** | Stochastic scoring | Add Thompson Sampling — +9pp at 1yr (paired); cross-profile baseline ~24% | [cheat sheet](analysis/clients/welshman-coracle.md) |
+| **NDK** | Priority-based | Add NDK+Thompson CG3 — ~16% → ~27% (65% increase), fixes fiatjaf regression | [cheat sheet](analysis/clients/ndk-applesauce-nostrudel.md) |
+| **Applesauce/noStrudel** | Greedy set-cover | Stochastic scoring then Thompson — ~16% → ~40% (140% increase), two steps | [cheat sheet](analysis/clients/ndk-applesauce-nostrudel.md) |
+| **Gossip** | Greedy set-cover | Stochastic scoring then Thompson — ~16% → ~40% (140% increase), two steps | [cheat sheet](analysis/clients/gossip.md) |
+| **rust-nostr** | Filter decomposition | Add FD+Thompson — ~25% → ~37% (50% increase) | [cheat sheet](analysis/clients/rust-nostr-voyage-nosotros-wisp-shopstr.md) |
 | **Amethyst** | Direct mapping | Add NIP-66 filtering — cuts load time by ~45% | [cheat sheet](analysis/clients/amethyst.md) |
 | **Nostur** | Coverage sort | Remove skipTopRelays, add stochastic factor — recovers 5–12% lost coverage | [cheat sheet](analysis/clients/nostur-yakihonne-notedeck.md) |
 | **Ditto-Mew** | 4 app relays | Add hybrid outbox — ~10% → ~23% (130% increase), ~80 LOC | [details below](#full-outbox-vs-hybrid-outbox) |
@@ -81,7 +81,7 @@ Do you have a routing layer that selects relays per-author?
 | Algorithm | Used by | 1yr recall | 7d recall | Verdict |
 |---|---|:---:|:---:|---|
 | **Welshman+Thompson** | *not yet deployed* | ~40% | ~83% | Upgrade path for Coracle — learns from delivery |
-| **FD+Thompson** | *not yet deployed* | ~37% | ~85% | Upgrade path for rust-nostr — learns from delivery |
+| **FD+Thompson** | *not yet deployed* | ~37% | ~84% | Upgrade path for rust-nostr — learns from delivery |
 | **Hybrid+Thompson** | *not yet deployed* | ~23% | — | Upgrade path for app-relay clients |
 | **Filter Decomposition** | rust-nostr | ~25% | ~77% | Per-author top-N write relays |
 | **Welshman Stochastic** | Coracle | ~24% | ~83% | Best stateless deployed algorithm |
