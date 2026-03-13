@@ -82,6 +82,7 @@ Options:
   --nip66-ttl <ms>          NIP-66 cache TTL override in ms
   --decay-factor <n>        Thompson decay factor (default: 0.95)
   --decay-unit <unit>       Decay unit: session (default) or hour
+  --cache-ttl <ms>          Input data cache TTL in ms (default: 3600000 = 1hr)
   --no-cache                Skip cache
   --no-phase2-cache         Skip Phase 2 baseline disk cache
   --verbose                 Per-relay details, raw vs post-processed metrics
@@ -108,6 +109,7 @@ function parseCliOptions(): CliOptions {
       "nip66-ttl",
       "decay-factor",
       "decay-unit",
+      "cache-ttl",
     ],
     boolean: ["sweep", "fast", "full-assignments", "no-cache", "no-phase2-cache", "verbose", "verify", "enrich-hints", "help"],
     default: {
@@ -140,6 +142,10 @@ function parseCliOptions(): CliOptions {
     ? args["verify-windows"].split(",").map((s: string) => parseInt(s.trim(), 10))
     : [];
 
+  const decayFactor = parseDecayFactor(args["decay-factor"]);
+  const decayUnit = parseDecayUnit(args["decay-unit"]);
+  const cacheTtlMs = parseCacheTtlMs(args["cache-ttl"]);
+
   return {
     target,
     algorithms: args.algorithms!.split(",").map((s: string) => s.trim()),
@@ -170,9 +176,39 @@ function parseCliOptions(): CliOptions {
     verifyConcurrency: parseInt(args["verify-concurrency"]!, 10),
     nip66Filter: parseNip66FilterArg(args["nip66-filter"]),
     nip66TtlMs: args["nip66-ttl"] ? parseInt(args["nip66-ttl"], 10) : undefined,
-    decayFactor: args["decay-factor"] ? parseFloat(args["decay-factor"]) : undefined,
-    decayUnit: args["decay-unit"] as DecayUnit | undefined,
+    decayFactor,
+    decayUnit,
+    cacheTtlMs,
   };
+}
+
+function parseDecayFactor(raw: string | undefined): number | undefined {
+  if (!raw) return undefined;
+  const v = parseFloat(raw);
+  if (!Number.isFinite(v) || v < 0 || v > 1) {
+    console.error(`Invalid --decay-factor: ${raw} (must be a number in [0, 1])`);
+    Deno.exit(1);
+  }
+  return v;
+}
+
+function parseDecayUnit(raw: string | undefined): DecayUnit | undefined {
+  if (!raw) return undefined;
+  if (raw !== "session" && raw !== "hour") {
+    console.error(`Invalid --decay-unit: ${raw} (must be "session" or "hour")`);
+    Deno.exit(1);
+  }
+  return raw;
+}
+
+function parseCacheTtlMs(raw: string | undefined): number | undefined {
+  if (!raw) return undefined;
+  const v = parseInt(raw, 10);
+  if (!Number.isFinite(v) || v <= 0) {
+    console.error(`Invalid --cache-ttl: ${raw} (must be a positive integer in ms)`);
+    Deno.exit(1);
+  }
+  return v;
 }
 
 async function main(): Promise<void> {
@@ -200,8 +236,12 @@ async function main(): Promise<void> {
       targetPubkey,
       opts.filterProfile,
       opts.indexers.length ? opts.indexers : ["wss://purplepag.es", "wss://relay.damus.io", "wss://nos.lol"],
+      opts.cacheTtlMs,
     );
-    if (input) {
+    if (input && input.follows.length === 0) {
+      console.log("Cached data has 0 follows — treating as stale, re-fetching...");
+      input = null;
+    } else if (input) {
       console.log(`Using cached data (fetched ${new Date(input.fetchedAt).toISOString()})`);
     }
   }
@@ -545,10 +585,8 @@ async function runDefault(
             decayConfig,
           );
         }
-        if (decayConfig) {
-          db.decayFactor = decayConfig.factor;
-          db.decayUnit = decayConfig.unit;
-        }
+        db.decayFactor = decayConfig?.factor ?? 0.95;
+        db.decayUnit = decayConfig?.unit ?? "session";
         thompsonDBs.set(entry.id, db);
         await saveRelayScores(db, opts.nip66Filter || undefined, entry.id);
 

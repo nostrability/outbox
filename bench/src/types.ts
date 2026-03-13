@@ -161,6 +161,7 @@ export interface CliOptions {
   enrichHints: boolean;
   decayFactor?: number;
   decayUnit?: DecayUnit;
+  cacheTtlMs?: number;
 }
 
 export interface SerializedAlgorithmResult {

@@ -33,12 +33,13 @@ When code uses a variable name like `alternatives` or `count`, verify the doc/co
 
 ### 6. Indexer cache poisoning must be detected and prevented
 
-The benchmark caches contact list fetches (kind-3 + kind-10002) with a 1-hour TTL. If an indexer relay (e.g., purplepag.es) intermittently returns 0 events, the "0 follows" result is cached and poisons all subsequent runs for that profile until the TTL expires. Large follow graphs (2000+) are most vulnerable.
+The benchmark caches contact list fetches (kind-3 + kind-10002) with a default 1-hour TTL. If an indexer relay (e.g., purplepag.es) intermittently returns 0 events, the empty result was historically cached and poisoned all subsequent runs. This is now mitigated: the tool retries once on 0 follows, never caches 0-follows results, and exits with code 1 on failure. But defense-in-depth is still required for large profiles.
 
 **Prevention:**
+- **Use `--cache-ttl` for campaigns.** Set `--cache-ttl 86400000` (24h) so the input data cache survives the entire campaign. This ensures all sessions use identical follow/relay-list data (also improves Rule 1 apples-to-apples consistency). Pre-warm the cache with a standalone fetch before starting.
 - Before any campaign, delete the target profile's cache file and do a standalone test fetch to verify the indexer returns the expected follow count. Do not start benchmark runs until verified.
 - After each run, check for "0 follows found" in the log. If detected, halt, delete the bad cache, wait for rate-limit cooldown, re-fetch, and only resume once the cache is verified good.
-- Scripts must NOT mark "0 follows" runs as complete in progress files. The benchmark tool exits 0 on "0 follows" — scripts must grep for this string and treat it as a failure.
+- The benchmark tool now exits with code 1 on "0 follows" and retries once before giving up. Campaign scripts using `PIPESTATUS[0]` will correctly detect failure. Legacy scripts that don't check exit codes should also grep for "0 follows" as a safety net.
 - Use longer cooldowns for large profiles (90s+/profile, 180s+/session) to avoid triggering indexer rate limits.
 
 **Detection after the fact:**
