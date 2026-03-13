@@ -111,11 +111,11 @@ All values are 6-profile means. See [OUTBOX-REPORT.md § 8](OUTBOX-REPORT.md#8-b
 
 **3. Per-author relay diversity beats popularity.** Algorithms that give each author their own relay picks (Filter Decomposition, Welshman stochastic) find 1.5× more events at 1yr than popularity-based selection. [Report § 8.2](OUTBOX-REPORT.md#82-approximating-real-world-conditions-event-verification)
 
-**4. EOSE-race with 2s grace is the latency sweet spot.** First event arrives in 530–670ms regardless of algorithm. At +2s grace, you have 86–99% of events. [Report § 8.7](OUTBOX-REPORT.md#87-latency-simulation)
+**4. EOSE-race with 2s grace is the latency sweet spot.** First event arrives in 530–670ms regardless of algorithm. At +2s grace, you have 86–99% of events. [Report § 8.17](OUTBOX-REPORT.md#817-latency-simulation)
 
-**5. Latency-aware scoring helps small follow graphs.** A 1-line latency discount gives +10pp completeness at 2s for <500 follows, with negligible recall cost. Steep tradeoff for 1000+ follows. [Report § 8.6](OUTBOX-REPORT.md#86-latency-aware-thompson-sampling)
+**5. Latency-aware scoring helps small follow graphs.** A 1-line latency discount gives +10pp completeness at 2s for <500 follows, with negligible recall cost. Steep tradeoff for 1000+ follows. [Report § 8.16](OUTBOX-REPORT.md#816-latency-aware-thompson-sampling)
 
-**6. 20 relay connections is enough for most users.** Small graphs saturate at 10–15 relays. Medium graphs benefit from 20. Beyond 20 shows diminishing returns. [Report § 8.5f](OUTBOX-REPORT.md#85f-adaptive-connection-limits)
+**6. 20 relay connections is enough for most users.** Small graphs saturate at 10–15 relays. Medium graphs benefit from 20. Beyond 20 shows diminishing returns. [Report § 8.13](OUTBOX-REPORT.md#813-adaptive-connection-limits)
 
 </details>
 
