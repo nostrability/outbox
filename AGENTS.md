@@ -57,6 +57,8 @@ These are resolved bugs that recur in new code. Check for them when writing benc
 
 4. **Marker scope too narrow.** `run-per-pubkey-sweep.sh` used markers scoped to RPU value only (`rpu_sweep_${WINDOW}_rpu${rpu}_scores_cleared`). Phase 1 created markers for rpu=1,3,5. Phase 2a created markers for rpu=2,4. When Phase 2b ran different profiles at the same RPU values, the existing markers prevented score clearing — Thompson priors leaked across RPU values for Phase 2b profiles. Fix: scope markers to (RPU × phase) or (RPU × profile-set), or clear per-profile scores explicitly with `${pk:0:16}` in the glob instead of wildcards.
 
+5. **0-follows cache poisoning.** `main.ts` cached fetch results before checking `follows.length === 0`. When a fresh fetch returned 0 follows (indexer timeout on large contact lists like Telluride's 2,747 follows), the empty result was cached for 1 hour. All subsequent sessions within the TTL silently used the bad cache. Affected: Telluride (23 failures), Gato (19), ODELL (11). Additionally, `fetchBenchmarkInput` returned successfully with 0 follows (exit code 0), so campaign scripts marked the run as complete. Fix: only cache results with >0 follows, retry once with 5s backoff on 0 follows, exit with code 1 on 0 follows so scripts detect failure.
+
 ## Session End Checklist
 
 Work is NOT done until pushed to remote.

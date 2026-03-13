@@ -214,7 +214,19 @@ async function main(): Promise<void> {
       filterProfile: opts.filterProfile,
     });
 
-    if (!opts.noCache) {
+    // Retry once on 0 follows — indexers intermittently fail for large contact lists
+    if (input.follows.length === 0 && !opts.followsFile) {
+      console.log("0 follows found. Retrying in 5s...");
+      await new Promise((r) => setTimeout(r, 5000));
+      input = await fetchBenchmarkInput({
+        targetPubkey,
+        indexerRelays: opts.indexers.length ? opts.indexers : undefined,
+        filterProfile: opts.filterProfile,
+      });
+    }
+
+    // Only cache successful fetches (never cache 0-follows results)
+    if (!opts.noCache && input.follows.length > 0) {
       await writeCachedInput(
         input,
         opts.filterProfile,
@@ -225,7 +237,7 @@ async function main(): Promise<void> {
 
   if (input.follows.length === 0) {
     console.log("0 follows found. Nothing to analyze.");
-    return;
+    Deno.exit(1);
   }
 
   // Print fetch quality
