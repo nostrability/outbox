@@ -154,7 +154,7 @@ partial-weight scoring reduces score degradation from sole-source exclusion but 
 relay-set anchoring from forced relays. A softer alternative (Score Boost: 5× score multiplier instead
 of hard forcing) was benchmarked and rejected — Score Boost grand mean 25.8% vs CG3 28.8% (−3.0pp),
 regressing on 5 of 6 profiles.
-See OUTBOX-REPORT Section 8.10 for the full analysis.
+See [OUTBOX-REPORT.md § 8.10](OUTBOX-REPORT.md#810-ndkthompson-cg3-conditional-cg--partial-weight-se) for the full analysis.
 NDK's selected-first priority cascade short-circuits Thompson scoring — if
 already-connected relays satisfy the per-author target, the Thompson scorer is never
 consulted. Welshman's per-user relay budgeting gives Thompson full control over

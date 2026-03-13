@@ -1013,7 +1013,7 @@ ODELL's unusually high 3yr baseline (93%) is due to relay.damus.io retaining a l
 
 At 1yr, regular Thompson leads by +3pp in the mean (driven by Gato and Telluride). At 3yr, Neutral leads by +2pp (driven by hodlbod +26.6pp vs +14.9pp). Both variants regress fiatjaf by ~20pp at 1yr and ~9pp at 3yr — confirming the regression is caused by Thompson's learned relay scores, not cold-start noise.
 
-**Root cause:** Thompson scores are per-relay aggregates across all followed authors. When relay.damus.io delivers only 20-30% of 1yr-old events (a retention issue, not quality), Thompson down-weights it. But for fiatjaf's small concentrated graph, relay.damus.io IS the coverage — no alternative relay covers those pubkeys. Thompson conflates relay retention with relay quality, and for small concentrated graphs there are no alternative relays to recover coverage. See Section 8.16 for discussion and Section 8.9 for the Coverage Guarantee mitigation.
+**Root cause:** Thompson scores are per-relay aggregates across all followed authors. When relay.damus.io delivers only 20-30% of 1yr-old events (a retention issue, not quality), Thompson down-weights it. But for fiatjaf's small concentrated graph, relay.damus.io IS the coverage — no alternative relay covers those pubkeys. Thompson conflates relay retention with relay quality, and for small concentrated graphs there are no alternative relays to recover coverage. See Section 8.18 for discussion and Section 8.9 for the Coverage Guarantee mitigation.
 
 **This regression is NDK-specific.** Other Thompson variants do not regress fiatjaf:
 
