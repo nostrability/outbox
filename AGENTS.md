@@ -73,3 +73,4 @@ git pull --rebase && git push && git status
 - File issues for remaining work before ending
 - Close finished issues, update in-progress items
 - Never stop before `git push` succeeds
+- **Force-push policy:** `git push --force` is allowed only on feature branches you own. Never force-push to `main` or `master` — rebase and push normally instead. If rebase fails on main, stop and ask.

@@ -154,7 +154,7 @@ partial-weight scoring reduces score degradation from sole-source exclusion but 
 relay-set anchoring from forced relays. A softer alternative (Score Boost: 5× score multiplier instead
 of hard forcing) was benchmarked and rejected — Score Boost grand mean 25.8% vs CG3 28.8% (−3.0pp),
 regressing on 5 of 6 profiles.
-See OUTBOX-REPORT Section 8.5c‴ for the full analysis.
+See [OUTBOX-REPORT.md § 8.10](OUTBOX-REPORT.md#810-ndkthompson-cg3-conditional-cg--partial-weight-se) for the full analysis.
 NDK's selected-first priority cascade short-circuits Thompson scoring — if
 already-connected relays satisfy the per-author target, the Thompson scorer is never
 consulted. Welshman's per-user relay budgeting gives Thompson full control over
@@ -215,7 +215,7 @@ The discount shape is hyperbolic: 200ms → 0.83, 500ms → 0.67, 1s → 0.50, 2
 
 **When to use it:** For apps targeting typical users (< 500 follows), add it unconditionally — +10-11pp completeness @2s at < 1pp recall cost. For power users (1000+ follows), the recall cost is steeper (−11 to −14pp) — consider making the discount tunable or skipping it. The Welshman variant (with popularity weight) has roughly half the recall cost of FD+Thompson at every profile size.
 
-Persist the EWMA in your relay stats table (one extra column). See [README.md § 5](README.md#5-make-your-feed-fill-in-faster-by-learning-relay-speed) for the cross-profile data and [OUTBOX-REPORT.md § 8.6](OUTBOX-REPORT.md#86-latency-aware-thompson-sampling) for the full benchmark results.
+Persist the EWMA in your relay stats table (one extra column). See [README.md § 5](README.md#5-make-your-feed-fill-in-faster-by-learning-relay-speed) for the cross-profile data and [OUTBOX-REPORT.md § 8.16](OUTBOX-REPORT.md#816-latency-aware-thompson-sampling) for the full benchmark results.
 
 ### 2. Pre-filter relays with NIP-66
 
@@ -358,7 +358,7 @@ Two relays finish instantly but miss half the events. Twenty relays find nearly 
 
 The 0–62% range at +0ms means: if your algorithm queries 20 relays, the first EOSE arrives from the fastest relay but 19 others haven't reported yet. Waiting 2s lets most of them finish. For the largest profiles (2,700+ follows), +2s gets 86-87% — consider +5s for completeness-critical use cases.
 
-*Data: 7 cross-profile benchmarks (194–2,784 follows). See [README.md § Latency](README.md#4-latency-when-to-stop-waiting-for-relays) for the summary and [OUTBOX-REPORT.md § 8.7](OUTBOX-REPORT.md#87-latency-simulation) for full data.*
+*Data: 7 cross-profile benchmarks (194–2,784 follows). See [README.md § Latency](README.md#4-latency-when-to-stop-waiting-for-relays) for the summary and [OUTBOX-REPORT.md § 8.17](OUTBOX-REPORT.md#817-latency-simulation) for full data.*
 
 #### Showing late-arriving events in the UI
 
