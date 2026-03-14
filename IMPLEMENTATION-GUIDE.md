@@ -307,20 +307,28 @@ through unfiltered because clearnet monitors cannot reach them. This is
 enforced in `bench/src/nip66/filter.ts`, `ndk/core/src/outbox/nip66.ts`, and
 `applesauce/packages/core/src/helpers/relay-liveness-filter.ts`.
 
-**2. Clearnet relays accessed through Tor** — known gap. NIP-66 monitors
-operate from clearnet. For clients that route all connections through Tor
-(e.g. Amethyst's default), the liveness signal reflects clearnet
-reachability, not Tor exit-node reachability. A relay marked "alive" from
-clearnet may be unreachable via Tor (exit nodes get blocked or rate-limited),
-and vice versa.
+**2. Clearnet relays accessed through Tor** — NIP-66 filtering is still
+valuable, and likely *more* valuable than on clearnet. NIP-66 monitors
+operate from clearnet, but the majority of filtered relays (~50% of declared
+relays) are truly dead — server offline, domain expired, relay shut down.
+A dead relay is dead regardless of network path. By filtering them before
+connection, Tor-default clients avoid waiting for Tor-routed timeouts to
+dead servers. Since Tor clients typically use 2-3× longer timeouts (e.g.
+Amethyst triples its timeout for Tor connections: 10s → 30s on WiFi,
+30s → 90s on mobile), the latency savings from NIP-66 filtering are
+**larger** for Tor users than our clearnet benchmarks measured.
 
-The NIP-66 spec supports `["n", "tor"]` network tags on kind `30166` events,
-so a Tor-based monitor could publish Tor-specific liveness data — but none
-exists today.
+**Partial blind spot:** relays that are alive on clearnet but block Tor exit
+nodes. NIP-66 will mark these "alive," but the Tor client can't reach them.
+The size of this population is unknown. The NIP-66 spec supports
+`["n", "tor"]` network tags on kind `30166` events, so a Tor-based monitor
+could publish Tor-specific liveness data — but none exists today.
 
-**Recommendation for Tor-default clients:** skip NIP-66 filtering entirely
-when in Tor-only mode, or apply it only to connections that will use
-clearnet.
+**Recommendation for Tor-default clients (e.g. Amethyst):** apply NIP-66
+filtering unconditionally. Dead relays are dead on any network path, and the
+timeout savings are amplified by Tor's longer timeouts. Local health
+tracking (exponential backoff on connection failure) handles the Tor-specific
+blind spot at runtime.
 
 #### What safety guardrails exist?
 
