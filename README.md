@@ -36,6 +36,7 @@ The relay that "should" have the event often doesn't — due to retention, downt
 | 3 | **Filter dead relays** (NIP-66 liveness) | neutral recall, −45% latency | Low — ~30 LOC |
 | 4 | **Learn from delivery** (Thompson Sampling) | ~40% | Low — ~80 LOC + DB table |
 | 4+ | **Learn relay speed** (latency discount) | same recall, faster feed fill | 1 line on top of Step 4 |
+| — | **Use NIP-77 as quality signal** (tiebreaker) | neutral recall, fewer timeouts | Zero — 1 field check on NIP-66 data |
 
 Steps 1a/1b are alternative entry points. 1a replaces your routing layer, 1b augments it. Steps 2–4 are incremental on the 1a (full outbox) path. The 1b (hybrid) path gets Thompson Sampling directly — see [Hybrid+Thompson](OUTBOX-REPORT.md#85-hybrid-outbox-app-relay-broadcast--per-author-thompson) for gains on that path. See [OUTBOX-REPORT.md](OUTBOX-REPORT.md) for per-profile data and methodology.
 
@@ -117,6 +118,8 @@ All values are 6-profile means. See [OUTBOX-REPORT.md § 8](OUTBOX-REPORT.md#8-b
 
 **6. 20 relay connections is enough for most users.** Small graphs saturate at 10–15 relays. Medium graphs benefit from 20. Beyond 20 shows diminishing returns. [Report § 8.13](OUTBOX-REPORT.md#813-adaptive-connection-limits)
 
+**7. NIP-77 support is the best free relay quality signal.** Relays that support negentropy (NIP-77) show 99% connection success (vs 83%), 2× event delivery, 7.5× fewer timeouts, and 9× more stored events — not because NIP-77 causes this, but because serious operators who adopt NIP-77 also run better infrastructure. Use `supported_nips.includes(77)` from NIP-66 data as a tiebreaker. [NIP-77 findings](bench/NIP77-CORRELATION-FINDINGS.md)
+
 </details>
 
 ## How to implement
@@ -141,6 +144,9 @@ deno task bench <npub_or_hex> --verify --nip66-filter liveness
 
 # Multi-session Thompson Sampling (5 learning sessions)
 bash run-benchmark-batch.sh
+
+# NIP-77 correlation + live NEG-OPEN probe
+deno task bench <npub_or_hex> --verify --nip66-filter liveness --nip77-probe
 ```
 
 Run `deno task bench --help` for all options. See [Benchmark-recreation.md](Benchmark-recreation.md) for full reproduction instructions.
@@ -172,7 +178,9 @@ bench/                        Benchmark tool (Deno/TypeScript)
   main.ts                     CLI entry point
   src/algorithms/             25 algorithm implementations (+2 latency-aware variants)
   src/phase2/                 Event verification + baseline cache
+  src/phase2/nip77-*.ts       NIP-77 correlation, probe, reconciliation
   src/nip66/                  NIP-66 relay liveness filter
+  NIP77-CORRELATION-FINDINGS.md  NIP-77 relay quality signal analysis
   src/relay-scores.ts         Thompson Sampling score persistence
   probe-nip11.ts              NIP-11 relay classification probe
   run-benchmark-batch.sh      Multi-session batch runner
@@ -190,6 +198,7 @@ analysis/
 - [Implementation Guide](IMPLEMENTATION-GUIDE.md) — Detailed recommendations with code examples
 - [Cross-Client Comparison](analysis/cross-client-comparison.md) — How 15 clients make each decision
 - [Benchmark Recreation](Benchmark-recreation.md) — Reproduce all results
+- [NIP-77 Correlation Findings](bench/NIP77-CORRELATION-FINDINGS.md) — NIP-77 as relay quality signal + live probe accuracy
 - [nostrability#69](https://github.com/nostrability/nostrability/issues/69) — Parent issue
 - [NIP-65](https://github.com/nostr-protocol/nips/blob/master/65.md) — Relay List Metadata specification
 - [Building Nostr](https://building-nostr.coracle.social) — Protocol architecture guide

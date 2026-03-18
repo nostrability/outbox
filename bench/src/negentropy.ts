@@ -99,13 +99,15 @@ class Accumulator {
   constructor() {
     this.setToZero()
 
-    if (typeof window === "undefined") {
+    if (typeof globalThis.crypto?.subtle?.digest === "function") {
+      // Deno / browser — Web Crypto API
+      this.sha256 = async slice => new Uint8Array(await crypto.subtle.digest("SHA-256", slice))
+    } else if (typeof globalThis.crypto?.createHash === "function") {
       // node.js
       this.sha256 = async slice =>
         new Uint8Array(crypto.createHash("sha256").update(slice).digest())
     } else {
-      // browser
-      this.sha256 = async slice => new Uint8Array(await crypto.subtle.digest("SHA-256", slice))
+      throw new Error("No SHA-256 implementation available")
     }
   }
 

@@ -346,6 +346,40 @@ All reference implementations enforce graceful degradation:
 The NIP-66 spec requires: "Clients MUST NOT require `30166` events to
 function. Absence of monitoring data MUST NOT prevent relay connections."
 
+### 2b. Use NIP-77 support as a relay quality tiebreaker
+
+**Impact: zero additional cost if you already fetch NIP-66 data**
+
+If you're fetching NIP-66 data for liveness filtering (recommendation 2 above), checking `supported_nips.includes(77)` costs nothing extra — and it's the strongest single-bit quality predictor we've found:
+
+| Metric | NIP-77 relays (n=146) | Non-NIP-77 (n=420) |
+|---|:---:|:---:|
+| Connection success | 99% | 83% |
+| Event delivery rate | 47% | 26% |
+| Timeout rate | 1.4% | 10.5% |
+| Mean events/author | 95 | 11 |
+
+This is a selection effect, not causation: operators who adopt negentropy also run better infrastructure. But the correlation is strong enough to use as a tiebreaker when two relays cover similar pubkeys, or as a weight in relay scoring.
+
+**What NOT to do:** Don't filter out non-NIP-77 relays — many good relays don't support it yet. Don't assume NIP-66 claims are always right — 13% of claimed NIP-77 relays failed a live `NEG-OPEN` probe. If you need to actually use negentropy sync, do a 1-RTT probe first.
+
+```typescript
+// In your relay scoring, after NIP-66 liveness filter:
+function scoreRelay(relay, nip66Data) {
+  let score = baseScore(relay);
+
+  // NIP-77 tiebreaker — free if you already have NIP-66 data
+  const monitorData = nip66Data.get(relay.url);
+  if (monitorData?.supportedNips?.includes(77)) {
+    score *= 1.2;  // 20% bonus — enough to break ties, not enough to override other signals
+  }
+
+  return score;
+}
+```
+
+See [bench/NIP77-CORRELATION-FINDINGS.md](bench/NIP77-CORRELATION-FINDINGS.md) for full data, probe accuracy analysis, and per-app-type recommendations.
+
 ### 3. Measure actual delivery
 
 **Impact: catches systematic gaps invisible to relay health checks**
@@ -362,7 +396,11 @@ syncing) makes this efficient: instead of downloading all events to compare,
 a client can run a set-reconciliation handshake to learn which events a relay
 has without transferring them. This is the same protocol
 [replicatr](https://github.com/coracle-social/replicatr) uses for relay
-migration — it works equally well for delivery verification.
+migration — it works equally well for delivery verification. NIP-77 is most
+valuable for returning users syncing cached feeds (90%+ overlap = ~10× fewer
+bytes than REQ); for cold starts or one-off profile views, traditional REQ is
+fine. See [NIP-77 findings](bench/NIP77-CORRELATION-FINDINGS.md) for the
+relay quality correlation and app-type-specific recommendations.
 
 See [README.md § Delivery check](README.md#delivery-check-self-healing) for code.
 
