@@ -114,84 +114,114 @@ deno task bench <pubkey> --verify --nip66-filter liveness --nip77-reconcile \
   --nip77-concurrency 5 --verify-concurrency 15 --algorithms greedy --fast --output table
 ```
 
-### Results
+### Results: Three time windows
 
-**Same profile | 2026-03-18 | 1d window | 142 NIP-77 relays probed**
+Tested at 1 day, 7 days, and 1 year to understand how event set size affects NIP-77 efficiency.
 
-139 of 142 relays completed reconciliation (3 timed out, including relay.damus.io).
+#### Headline: savings scale dramatically with time window
 
-**Aggregate savings: -186.5%** — negentropy costs more than REQ overall. But this headline is misleading.
+| Window | Relays | Aggregate Savings | Relays with Positive Savings | Failed |
+|---|---:|---:|---:|---:|
+| **1 day** | 139 | **-186.5%** (negative) | ~17 | 3 |
+| **7 days** | 136 | **mixed** | ~55 | 4 |
+| **1 year** | 138 | **+88.5%** | ~100+ | 3 |
 
-#### The data is bimodal
+At 1 day, negentropy costs more than REQ on aggregate. At 1 year, it saves 88.5% of all bytes transferred.
 
-| Overlap Bucket | Relays | Mean Savings | What's happening |
-|---|---:|---:|---|
-| 0-25% (cold start) | 67 | 0.0% | No local events → nothing to reconcile → no savings |
-| 50-75% | 1 | -1,590% | Protocol overhead dominates small event set |
-| 75-100% (warm cache) | 71 | -1,621% | See breakdown below |
+#### 1-day window: protocol overhead dominates small event sets
 
-The 75-100% bucket average is dominated by relays with tiny event sets. Breaking it down by REQ size tells the real story:
+139 of 142 relays completed (3 timed out including relay.damus.io).
 
-#### Relays with large event sets: NIP-77 saves 10-97%
+The data is bimodal. Relays with large event sets save 10-97%, but relays with tiny event sets (1-3 events) see the negentropy handshake (~500-800 bytes) dwarf the REQ data:
+
+| Relay | Overlap | Savings | NEG bytes | REQ bytes |
+|---|---:|---:|---:|---:|
+| relay.letsfo.com | 100% | **97.5%** | 1.1 KB | 46.9 KB |
+| spatia-arcana.com | 88% | **91.8%** | 11.9 KB | 144.8 KB |
+| pyramid.fiatjaf.com | 100% | **82.9%** | 23.1 KB | 135.2 KB |
+| premium.primal.net | 97% | **66.4%** | 200 KB | 596 KB |
+| strfry.openhoofd.nl | 100% | **-17,069%** | ~500 B | ~3 B |
+| relay.fundstr.me | 100% | **-12,142%** | ~500 B | ~4 B |
+
+The 1-day window produces mostly small event sets per relay — the wrong scenario for negentropy.
+
+#### 7-day window: the transition zone
+
+136 of 140 relays completed. Many more relays now have enough events for positive savings:
 
 | Relay | Overlap | Savings | NEG bytes | REQ bytes | Rounds |
 |---|---:|---:|---:|---:|---:|
-| relay.letsfo.com | 100% | **97.5%** | 1.1 KB | 46.9 KB | 1 |
-| spatia-arcana.com | 88% | **91.8%** | 11.9 KB | 144.8 KB | 1 |
-| basspistol.org | 100% | **84.4%** | 4.9 KB | 31.4 KB | 1 |
-| pyramid.fiatjaf.com | 100% | **82.9%** | 23.1 KB | 135.2 KB | 2 |
-| nostr.vps.satsnode.xyz | 100% | **82.6%** | 807 B | 4.5 KB | 1 |
-| herbstmeister.com | 100% | **75.9%** | 1.2 KB | 4.8 KB | 1 |
-| pyramid.aaro.cc | 100% | **74.6%** | 1.2 KB | 4.8 KB | 1 |
-| relay.nostrzh.org | 100% | **68.5%** | 4.3 KB | 13.6 KB | 1 |
-| premium.primal.net | 97% | **66.4%** | 200 KB | 596 KB | 2 |
-| chadf.nostr1.com | 100% | **62.5%** | 1.7 KB | 4.6 KB | 1 |
-| relay.noderunners.network | 100% | **54.7%** | 25.0 KB | 55.3 KB | 2 |
-| relay.spacetomatoes.net | 100% | **49.3%** | 552 B | 1.1 KB | 1 |
-| nostr.land | 99% | **38.4%** | 71.3 KB | 115.8 KB | 2 |
-| theforest.nostr1.com | 99% | **18.3%** | 161.5 KB | 197.6 KB | 2 |
-| relay.mostr.pub | 100% | **12.2%** | 319.2 KB | 363.6 KB | 2 |
-| nostr21.com | 99% | **11.5%** | 180.1 KB | 203.5 KB | 2 |
-| offchain.pub | 100% | **9.1%** | 272.4 KB | 299.8 KB | 2 |
+| relay.letsfo.com | 100% | **98.5%** | 3.7 KB | 238.7 KB | 1 |
+| spatia-arcana.com | 91% | **96.0%** | 18.1 KB | 457.0 KB | 2 |
+| herbstmeister.com | 100% | **96.5%** | 940 B | 26.1 KB | 1 |
+| pyramid.aaro.cc | 100% | **95.8%** | 1.1 KB | 26.7 KB | 1 |
+| nostr.land | 97% | **93.0%** | 81.2 KB | 1.1 MB | 2 |
+| premium.primal.net | 95% | **91.5%** | 187.1 KB | 2.1 MB | 2 |
+| relay.noderunners.network | 100% | **89.7%** | 31.3 KB | 304.4 KB | 2 |
+| theforest.nostr1.com | 93% | **89.7%** | 150.7 KB | 1.4 MB | 3 |
+| nostr21.com | 100% | **85.3%** | 168.2 KB | 1.1 MB | 2 |
+| relay.mostr.pub | 98% | **84.3%** | 306.4 KB | 1.9 MB | 3 |
 
-#### Relays with tiny event sets: NIP-77 costs 100-17,000x more
+At 7 days, relays with >5 KB of REQ data consistently save 80-98%. Relays with tiny event sets still show negative savings.
 
-| Relay | Savings | NEG overhead | REQ data | Why |
-|---|---:|---|---|---|
-| strfry.openhoofd.nl | **-17,069%** | ~500 B protocol | ~3 B | 1 event = a few bytes via REQ |
-| relay.fundstr.me | **-12,142%** | fingerprint msg | tiny | Protocol framing > event data |
-| relay-rpi.edufeed.org | **-12,664%** | same | same | Fixed overhead, near-zero payload |
+#### 1-year window: NIP-77 saves 88.5% aggregate
 
-### The crossover point
+138 of 141 relays completed. **This is the returning-user scenario** — large event sets, high overlap.
 
-Negentropy has a **fixed protocol overhead** of ~500-800 bytes per handshake (initial fingerprint message + framing). When a relay returned ≤3 events via REQ (a few hundred bytes total), the fingerprint alone is larger than the data.
+| Relay | Overlap | Savings | NEG bytes | REQ bytes | Rounds |
+|---|---:|---:|---:|---:|---:|
+| chorus.mikedilger.com | 1% | **99.9%** | 615 B | 918 KB | 1 |
+| chadf.nostr1.com | 4% | **99.9%** | 2.2 KB | 2.8 MB | 1 |
+| no.str.cr | 41% | **99.9%** | 1.0 KB | 859 KB | 1 |
+| relay.letsfo.com | 100% | **99.7%** | 3.2 KB | 973 KB | 2 |
+| noornode.nostr1.com | 10% | **99.6%** | 8.7 KB | 2.2 MB | 2 |
+| nostr.land | 39% | **99.5%** | 43.7 KB | 8.5 MB | 2 |
+| eden.nostr.land | 69% | **99.3%** | 47.2 KB | 7.0 MB | 2 |
+| theforest.nostr1.com | 31% | **99.2%** | 135.5 KB | 17.6 MB | 3 |
+| relay.azzamo.net | 62% | **99.0%** | 11.2 KB | 1.1 MB | 2 |
+| 140.f7z.io | 9% | **98.9%** | 35.9 KB | 3.2 MB | 2 |
+| basspistol.org | 39% | **98.8%** | 5.6 KB | 466 KB | 1 |
+| atlas.nostr.land | 100% | **98.4%** | — | — | — |
+| puravida.nostr.land | 59% | **98.4%** | — | — | — |
+| nostr21.com | 74% | **98.2%** | — | — | — |
+| pyramid.fiatjaf.com | 79% | **96.0%** | 46.4 KB | — | 2 |
+| herbstmeister.com | 100% | **95.4%** | — | — | — |
+| premium.primal.net | 88% | **94.4%** | 187 KB | 2.1 MB | 2 |
+| relay.noderunners.network | 98% | **93.3%** | — | — | — |
 
-From the data, the crossover where NIP-77 starts saving bytes is approximately:
+Key observations at 1 year:
 
-- **<1 KB REQ data** (1-3 events): NIP-77 costs 2-170× more. Always use REQ.
-- **1-5 KB** (5-20 events): Marginal. Some relays save, some don't. Depends on fingerprint efficiency.
-- **>5 KB** (20+ events): NIP-77 consistently saves 50-97%. Use negentropy.
-- **>50 KB** (100+ events): NIP-77 saves 60-97%. No-brainer.
+1. **Even low-overlap relays save 99%+.** chadf.nostr1.com has only 4% overlap but saves 99.9% — because the relay holds 2.8 MB of events, and the negentropy fingerprint is 2.2 KB regardless of overlap. The protocol overhead is negligible at scale.
 
-### Key observation: relay.damus.io timed out
+2. **nostr.land: 43.7 KB NEG vs 8.5 MB REQ (99.5% savings).** This is a real hub relay. A client would transfer 195× less data using negentropy.
 
-The largest relay in the dataset — which would have been the most interesting data point — timed out during reconciliation. This relay serves the most authors and events, so the local set is huge. The timeout may be due to:
+3. **theforest.nostr1.com: 135.5 KB NEG vs 17.6 MB REQ (99.2% savings).** The largest successful reconciliation — 130× reduction.
 
-- Server-side processing time for a large negentropy fingerprint
-- Rate limiting or resource limits on the relay
-- Network timeout sensitivity with large payloads
+4. **relay.damus.io still timed out** across all three windows. The largest relay can't complete reconciliation. This needs investigation — it's the relay that would benefit most.
 
-This needs investigation. If damus times out, the relay that would benefit most from negentropy can't use it.
+### The crossover: when does NIP-77 start saving?
+
+Comparing across windows, the crossover where NIP-77 beats REQ is driven by **REQ data size**, not overlap:
+
+| REQ data per relay | 1d savings | 7d savings | 1yr savings |
+|---|---|---|---|
+| **<1 KB** (1-3 events) | -170× to -2× | -170× to -2× | Still negative for a few |
+| **1-5 KB** (5-20 events) | Marginal | 50-90% | 90-99% |
+| **5-50 KB** (20-100 events) | 50-97% | 80-98% | 95-99% |
+| **>50 KB** (100+ events) | 60-97% | 85-99% | 98-99.9% |
+
+At 1 year, most relays hold enough events that the protocol overhead is negligible. The few remaining negative-savings relays are those with both tiny event sets AND tiny REQ responses.
 
 ### Interpretation
 
-**NIP-77 reconciliation is not a general-purpose optimization.** It's a targeted optimization for a specific scenario:
+**NIP-77 reconciliation is not a general-purpose optimization.** It's a targeted optimization whose value scales with event set size:
 
-1. **Large local cache + few missing events** = massive savings (60-97%). This is the returning-user feed-sync use case.
-2. **Small or empty local cache** = net negative. This is the cold-start or per-author-query use case.
-3. **The outbox benchmark's 1-day window queries per-relay** = mostly small event sets per relay = wrong scenario for negentropy.
+1. **Returning user syncing cached feeds** (1yr+ of events) = **88-99% savings**. This is the killer use case.
+2. **Weekly catch-up** (7d) = **80-98% savings** for active relays, still negative for near-empty ones.
+3. **Daily feed refresh** (1d, per-relay queries) = **mostly negative**. Protocol overhead dominates small event sets.
+4. **Cold start** (no local events) = **no savings**. Use REQ.
 
-The right scenario for NIP-77: a client that's been running for weeks, has thousands of cached events, and wants to catch up on the delta from its regular relays. In that case, NIP-77 would save 60-97% of bandwidth compared to `REQ since:last_seen`.
+The right mental model: negentropy is like `rsync` for events. Syncing a nearly-identical directory is almost free. Syncing from scratch is the same cost as a full copy. The "almost identical" scenario gets more common as the client runs longer.
 
 ## Why app developers should care
 
@@ -215,21 +245,26 @@ The outbox model's main UX cost is the long tail: slow or dead relays that block
 
 NIP-77 relays timeout at 1.4% vs 10.5%. Preferring them in your relay selection directly reduces the timeout tax. In our benchmark, the greedy algorithm at 20 connections had a 15s timeout tax from a single dead relay. If selection had favored NIP-77 relays, that slot would more likely have been productive.
 
-### 3. NIP-77 enables efficient sync — but only for the right use case
+### 3. NIP-77 enables efficient sync — and the savings are massive for returning users
 
-Phase 3 data shows NIP-77 saves 60-97% bandwidth **when you have a large local cache** (>20 events overlap with the relay). For cold starts or small per-author queries, it costs more than REQ.
+Phase 3 data across three time windows (1d, 7d, 1yr) shows NIP-77 savings scale dramatically with event set size:
+
+- **1 year of events: 88.5% aggregate savings.** Top relays save 99%+ (nostr.land: 43.7 KB vs 8.5 MB).
+- **7 days: 80-98% savings** for relays with >5 KB of events.
+- **1 day: mostly negative.** Protocol overhead dominates when relays have 1-3 events.
 
 **When to use negentropy sync:**
-- Returning user syncing their feed cache → yes (large overlap, massive savings)
-- Background refresh of relays you've been using → yes (high overlap)
-- First visit to a new profile → no (no local events, use REQ)
-- Per-author queries during feed construction → no (small event sets per relay)
+- Returning user syncing their feed cache → **yes** (88-99% savings at 1yr)
+- Weekly catch-up from regular relays → **yes** (80-98% savings at 7d)
+- Background refresh of relays you've been using → **yes**
+- First visit to a new profile → **no** (no local events, use REQ)
+- Per-author queries during feed construction (1d window) → **no** (small event sets per relay)
 
 **The crossover:**
 - <1 KB REQ data: always use REQ
-- 1-5 KB: marginal, probably not worth the complexity
-- >5 KB: NIP-77 wins consistently
-- >50 KB: NIP-77 saves 60-97%
+- 1-5 KB: 50-90% savings at 7d+, marginal at 1d
+- >5 KB: NIP-77 wins consistently (80-99%)
+- >50 KB: NIP-77 saves 95-99.9%
 
 ### 4. Concrete recommendations by app type
 
@@ -258,7 +293,7 @@ Phase 3 data shows NIP-77 saves 60-97% bandwidth **when you have a large local c
 - **Don't filter out non-NIP-77 relays.** Many good relays don't support it yet. Use it as a tiebreaker, not a gate.
 - **Don't assume NIP-66 claims are always right.** 13% of claimed-NIP-77 relays failed our probe. If you need to actually use negentropy, do a quick NEG-OPEN probe first (1 RTT, ~100ms).
 - **Don't use NIP-77 sync for cold starts.** No local events = no overlap = no savings. Use REQ for first load, NIP-77 for subsequent syncs.
-- **Don't use NIP-77 for small per-relay queries.** If a relay will return <20 events, REQ is cheaper. The protocol overhead outweighs the savings.
+- **Don't use NIP-77 for small per-relay queries.** If a relay will return <5 KB of events (~20 events at 1d), REQ is cheaper. At 7d+ time windows, the crossover drops significantly.
 
 ## Limitations
 
@@ -266,14 +301,13 @@ Phase 3 data shows NIP-77 saves 60-97% bandwidth **when you have a large local c
 - **Survivorship bias.** The NIP-66 liveness filter already removed ~1,068 dead relays before this analysis. The non-NIP-77 group still includes many weak relays that passed liveness but are marginal.
 - **Correlation, not causation.** See interpretation above.
 - **Probe coverage.** 75 of 566 relays couldn't be probed (failed WS connect). These are likely the weakest relays and disproportionately non-NIP-77.
-- **1-day window underweights NIP-77 savings.** A 1-day window produces small event sets per relay. A 7-day or 30-day window (or a persistent local cache) would produce much larger overlap sets where negentropy shines. Phase 3 results are a lower bound on real-world NIP-77 savings for returning users.
-- **relay.damus.io timeout.** The largest relay couldn't complete reconciliation. This is a significant gap — it's the relay most likely to show large savings.
+- **relay.damus.io timeout.** The largest relay couldn't complete reconciliation at any time window (1d, 7d, 1yr). This is a significant gap — it's the relay most likely to show large savings. Needs investigation (server-side processing limits, rate limiting, or protocol timeout sensitivity).
 
 ## Next steps
 
-- **Longer time windows.** Re-run Phase 3 with 7d and 30d windows to measure savings at higher overlap levels.
-- **relay.damus.io investigation.** Debug the timeout — increase per-round timeout, check for rate limiting, try smaller filters.
+- **relay.damus.io investigation.** Debug the timeout — increase per-round timeout, check for rate limiting, try smaller filters. This relay timed out at all three windows.
 - **Multi-profile runs.** Run across 5+ profiles to validate the correlation holds.
+- **30-day window.** Fill in the gap between 7d and 1yr.
 - **Spin-off repo.** Phase 3 reconciliation findings belong in [nostrability/negentropy](https://github.com/nostrability/negentropy), not outbox. The quality signal (Phases 1-2) stays here.
 
 ## Reproducibility
@@ -288,12 +322,20 @@ deno task bench 2c65940725bbf10b452197fba41c6cb14afd41e28e0be22aab49bf246b0c84e3
   --verify --nip66-filter liveness --nip77-probe \
   --verify-concurrency 15 --no-phase2-cache --algorithms greedy --fast --output table
 
-# Phase 3 (full reconciliation benchmark)
+# Phase 3 (full reconciliation benchmark — 1d, 7d, 1yr)
 deno task bench 2c65940725bbf10b452197fba41c6cb14afd41e28e0be22aab49bf246b0c84e3 \
-  --verify --nip66-filter liveness --nip77-reconcile \
-  --nip77-concurrency 5 --verify-concurrency 15 --algorithms greedy --fast --output table
+  --verify --verify-window 86400 --nip66-filter liveness --nip77-reconcile \
+  --nip77-concurrency 3 --verify-concurrency 10 --algorithms greedy --fast --output table
+
+deno task bench 2c65940725bbf10b452197fba41c6cb14afd41e28e0be22aab49bf246b0c84e3 \
+  --verify --verify-window 604800 --nip66-filter liveness --nip77-reconcile \
+  --nip77-concurrency 3 --verify-concurrency 10 --algorithms greedy --fast --output table
+
+deno task bench 2c65940725bbf10b452197fba41c6cb14afd41e28e0be22aab49bf246b0c84e3 \
+  --verify --verify-window 31536000 --nip66-filter liveness --nip77-reconcile \
+  --nip77-concurrency 3 --verify-concurrency 10 --algorithms greedy --fast --output table
 ```
 
 Phase 1 runs automatically when `--verify` + NIP-66 data are available. Phase 2 adds `--nip77-probe`. Phase 3 adds `--nip77-reconcile` (implies `--nip77-probe` + `--no-phase2-cache`).
 
-Full run logs saved to `.cache/nip77-phase2-run.log` and `.cache/nip77-phase3-run2.log`.
+Full run logs saved to `.cache/nip77-phase2-run.log`, `.cache/nip77-phase3-run2.log`, `.cache/nip77-phase3-7d.log`, and `.cache/nip77-phase3-1yr.log`.
