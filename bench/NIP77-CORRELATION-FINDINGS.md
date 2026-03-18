@@ -96,6 +96,71 @@ For relay selection, NIP-66 `supported_nips` is a **useful but imperfect signal*
 - If you need certainty (e.g., to decide whether to use negentropy sync), a live NEG-OPEN probe is cheap (~1 RTT) and definitive.
 - The 19 false-negatives mean relying solely on NIP-66 for NIP-77 detection will miss ~12% of capable relays.
 
+## Why app developers should care
+
+NIP-77 is a sync protocol. Relay selection is a routing problem. They seem unrelated — but the data shows they're deeply connected, and there are concrete things app devs can do today.
+
+### 1. NIP-77 support is the best free relay quality signal available
+
+Your outbox implementation already has to choose which relays to connect to. The hard part is knowing which relays are reliable *before* connecting. Today most clients either treat all declared write relays equally (wasteful) or use NIP-66 uptime data (requires fetching monitor events).
+
+NIP-77 support in NIP-66 data is a single bit that predicts:
+- 99% connection success (vs 83% for non-NIP-77 relays)
+- 2x event delivery rate
+- 7.5x fewer timeouts
+- 9x more stored events per author
+
+If you're already fetching NIP-66 data for liveness filtering (and you should be — it cuts dead relay connections by 40-60%), checking `supported_nips.includes(77)` costs nothing extra. Use it as a tiebreaker when two relays cover similar pubkeys, or as a weight in scoring.
+
+### 2. Fewer wasted connections = faster feed loads
+
+The outbox model's main UX cost is the long tail: slow or dead relays that block connection slots. With 20 relay connections, even 2-3 timeouts (15s each) can add 15-30s of wall-clock delay (timeout tax).
+
+NIP-77 relays timeout at 1.4% vs 10.5%. Preferring them in your relay selection directly reduces the timeout tax. In our benchmark, the greedy algorithm at 20 connections had a 15s timeout tax from a single dead relay. If selection had favored NIP-77 relays, that slot would more likely have been productive.
+
+### 3. NIP-77 enables efficient sync — but only if you pick the right relays first
+
+Negentropy sync is most valuable when you already have most of the data and need to catch up on the delta. The savings scale with overlap:
+- 90%+ overlap: negentropy uses ~10x fewer bytes than re-downloading via REQ
+- 50% overlap: moderate savings
+- 0% overlap (cold start): no savings, same as REQ
+
+This means NIP-77 sync is most useful for **returning users** syncing their existing feed, not for initial load. For a client with a local event cache:
+
+**Feed sync (background):** Open negentropy reconciliation with your top relays. Get only the events you're missing. Much less bandwidth than `REQ since:last_seen`.
+
+**Profile view (interactive):** User taps on someone's profile. You don't have their events cached. Traditional REQ is fine here — there's no local set to reconcile against.
+
+**Hybrid approach:** Use NIP-77 for relays where you have high overlap (your regular feed relays), fall back to REQ for one-off profile views.
+
+### 4. Concrete recommendations by app type
+
+**Feed-first apps (Damus, Amethyst, Primal):**
+- Use NIP-77 support as a relay selection tiebreaker today — zero implementation cost beyond checking one field
+- Implement negentropy sync for feed catch-up (biggest bandwidth win for returning users)
+- Priority: high. Feed sync is the most common operation and NIP-77 relays are the most reliable
+
+**Social browser apps (noStrudel, Coracle):**
+- NIP-77 tiebreaker gives immediate benefit for relay selection
+- Negentropy sync less critical since these apps do more ad-hoc profile browsing
+- Priority: medium. The quality signal alone justifies checking
+
+**Relay-light apps (Voyage, clients with <10 connections):**
+- NIP-77 quality signal is *more* valuable here — every connection slot matters
+- With 5-8 connections, picking a relay that times out costs 12-20% of your budget
+- Priority: high for selection signal. Lower for sync (fewer relays = less need for efficient sync)
+
+**SDK/library authors (NDK, Welshman, rust-nostr):**
+- Expose NIP-77 support in relay scoring APIs so app devs don't have to parse NIP-66 themselves
+- Consider adding negentropy reconciliation as a sync strategy option alongside REQ
+- Priority: high. This is infrastructure that benefits all downstream apps
+
+### 5. What NOT to do
+
+- **Don't filter out non-NIP-77 relays.** Many good relays don't support it yet. Use it as a tiebreaker, not a gate.
+- **Don't assume NIP-66 claims are always right.** 13% of claimed-NIP-77 relays failed our probe. If you need to actually use negentropy, do a quick NEG-OPEN probe first (1 RTT, ~100ms).
+- **Don't use NIP-77 sync for cold starts.** No local events = no overlap = no savings. Use REQ for first load, NIP-77 for subsequent syncs.
+
 ## Limitations
 
 - **Single profile.** n=1. The correlation could differ for profiles with different follow-graph characteristics.
