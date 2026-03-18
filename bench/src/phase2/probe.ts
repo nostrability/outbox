@@ -11,6 +11,8 @@
  */
 
 import type { RelayUrl } from "../types.ts";
+// @ts-ignore vendored negentropy is @ts-nocheck
+import { Negentropy, NegentropyStorageVector } from "../negentropy.ts";
 
 // --- Interfaces ---
 
@@ -39,6 +41,11 @@ export interface ProbeResult {
   latencyMs: number | null;
   /** Geo-inference from RTT */
   geoHint?: "local" | "regional" | "continental" | "intercontinental";
+  /** NIP-77 probe results (only when probeNip77 enabled) */
+  nip77Probed?: boolean;
+  nip77Supported?: boolean;
+  nip77ErrorCategory?: "unsupported" | "blocked" | "closed" | "timeout";
+  negRttMs?: number;
   error?: string;
 }
 
@@ -53,6 +60,10 @@ export interface ProbeOptions {
   rttTimeoutMs?: number;
   /** Skip WebSocket probing (NIP-11 only). Default false. */
   nip11Only?: boolean;
+  /** Probe NIP-77 support via NEG-OPEN. Default false. */
+  probeNip77?: boolean;
+  /** Timeout for NEG-OPEN probe. Default 5000ms. */
+  negTimeoutMs?: number;
 }
 
 // --- Constants ---
@@ -61,6 +72,7 @@ const DEFAULT_CONCURRENCY = 15;
 const DEFAULT_NIP11_TIMEOUT_MS = 5_000;
 const DEFAULT_CONNECT_TIMEOUT_MS = 10_000;
 const DEFAULT_RTT_TIMEOUT_MS = 5_000;
+const DEFAULT_NEG_TIMEOUT_MS = 5_000;
 
 // --- Helpers ---
 
@@ -215,6 +227,103 @@ function probeRtt(
   });
 }
 
+/**
+ * Categorize a NEG-ERR message.
+ * NIP-77 spec: error prefixes like "CLOSED:", "BLOCKED:" etc.
+ */
+function categorizeNegError(reason: string): "unsupported" | "blocked" | "closed" {
+  const lower = reason.toLowerCase();
+  if (lower.includes("blocked") || lower.includes("rate") || lower.includes("too")) {
+    return "blocked";
+  }
+  if (lower.includes("closed") || lower.includes("stale")) {
+    return "closed";
+  }
+  return "unsupported";
+}
+
+/** Probe 4: NIP-77 NEG-OPEN support test */
+function probeNeg(
+  ws: WebSocket,
+  timeoutMs: number,
+): Promise<{
+  supported: boolean;
+  errored: boolean;
+  errorCategory?: "unsupported" | "blocked" | "closed" | "timeout";
+  rttMs: number | null;
+}> {
+  return new Promise((resolve) => {
+    if (ws.readyState !== WebSocket.OPEN) {
+      resolve({ supported: false, errored: true, errorCategory: "closed", rttMs: null });
+      return;
+    }
+
+    const subId = `probe-neg-${Date.now()}`;
+
+    // Build empty negentropy storage and initiate
+    const storage = new NegentropyStorageVector();
+    storage.seal();
+    const neg = new Negentropy(storage, 0);
+
+    // initiate() is async (SHA-256 inside), handle it
+    neg.initiate().then((initialMsg: string) => {
+      const start = performance.now();
+
+      const timeout = setTimeout(() => {
+        ws.removeEventListener("message", handler);
+        try { ws.send(JSON.stringify(["NEG-CLOSE", subId])); } catch { /* ignore */ }
+        resolve({ supported: false, errored: true, errorCategory: "timeout", rttMs: null });
+      }, timeoutMs);
+
+      const handler = (msg: MessageEvent) => {
+        try {
+          const data = JSON.parse(msg.data);
+          if (!Array.isArray(data)) return;
+
+          if (data[0] === "NEG-MSG" && data[1] === subId) {
+            // Relay supports NIP-77
+            clearTimeout(timeout);
+            ws.removeEventListener("message", handler);
+            try { ws.send(JSON.stringify(["NEG-CLOSE", subId])); } catch { /* ignore */ }
+            resolve({ supported: true, errored: false, rttMs: performance.now() - start });
+          } else if (data[0] === "NEG-ERR" && data[1] === subId) {
+            // Relay knows NEG-OPEN but rejected it
+            clearTimeout(timeout);
+            ws.removeEventListener("message", handler);
+            const reason = String(data[2] ?? "");
+            resolve({
+              supported: false,
+              errored: true,
+              errorCategory: categorizeNegError(reason),
+              rttMs: performance.now() - start,
+            });
+          } else if (data[0] === "NOTICE") {
+            // Some relays send NOTICE for unknown message types
+            const notice = String(data[1] ?? "");
+            if (/unknown|unrecognized|invalid|neg/i.test(notice)) {
+              clearTimeout(timeout);
+              ws.removeEventListener("message", handler);
+              try { ws.send(JSON.stringify(["NEG-CLOSE", subId])); } catch { /* ignore */ }
+              resolve({
+                supported: false,
+                errored: true,
+                errorCategory: "unsupported",
+                rttMs: performance.now() - start,
+              });
+            }
+          }
+        } catch { /* ignore parse errors */ }
+      };
+
+      ws.addEventListener("message", handler);
+      // NEG-OPEN: [tag, subId, filter, hex_msg]
+      ws.send(JSON.stringify(["NEG-OPEN", subId, { kinds: [1], limit: 1 }, initialMsg]));
+    }).catch(() => {
+      resolve({ supported: false, errored: true, errorCategory: "unsupported", rttMs: null });
+    });
+  });
+}
+
 // --- Main probe function ---
 
 /**
@@ -265,6 +374,17 @@ export async function probeRelay(
   const rtt = await probeRtt(conn.ws, rttTimeout);
   result.rttMs = rtt.rttMs;
   if (rtt.error) result.error = rtt.error;
+
+  // 4. NIP-77 probe (reuse the open WebSocket, before closing)
+  const probeNip77 = opts?.probeNip77 ?? false;
+  const negTimeout = opts?.negTimeoutMs ?? DEFAULT_NEG_TIMEOUT_MS;
+  if (probeNip77 && conn.ws.readyState === WebSocket.OPEN) {
+    result.nip77Probed = true;
+    const neg = await probeNeg(conn.ws, negTimeout);
+    result.nip77Supported = neg.supported;
+    if (neg.errorCategory) result.nip77ErrorCategory = neg.errorCategory;
+    if (neg.rttMs != null) result.negRttMs = neg.rttMs;
+  }
 
   // Close the WebSocket
   try { conn.ws.close(); } catch { /* ignore */ }

@@ -19,12 +19,14 @@ export interface RelayOutcome {
   firstEventMs?: number;
   /** Total events received across all batches for this relay. */
   eventCount?: number;
+  /** Total bytes received for EVENT messages from this relay. */
+  bytesReceived?: number;
   error?: string;
 }
 
 // --- Semaphore for concurrency control ---
 
-class Semaphore {
+export class Semaphore {
   private queue: (() => void)[] = [];
   private active = 0;
 
@@ -53,9 +55,22 @@ class Semaphore {
 export class QueryCache {
   private cache = new Map<string, Set<string>>();
   private _totalEventIds = 0;
+  private timestamps = new Map<string, number>();
 
   private key(relay: RelayUrl, pubkey: Pubkey): string {
     return `${relay}\0${pubkey}`;
+  }
+
+  setTimestamp(eventId: string, createdAt: number): void {
+    this.timestamps.set(eventId, createdAt);
+  }
+
+  getTimestamp(eventId: string): number {
+    return this.timestamps.get(eventId) ?? 0;
+  }
+
+  get allTimestamps(): ReadonlyMap<string, number> {
+    return this.timestamps;
   }
 
   set(relay: RelayUrl, pubkey: Pubkey, eventIds: Set<string>): void {
@@ -144,6 +159,7 @@ export class RelayPool {
     let anyTimedOut = false;
     let firstEventMs: number | undefined;
     let totalEventCount = 0;
+    let totalBytesReceived = 0;
     // Collect full events per pubkey for proper capping
     const eventsPerPubkey = new Map<Pubkey, NostrEvent[]>();
     for (const pk of pubkeys) eventsPerPubkey.set(pk, []);
@@ -178,11 +194,17 @@ export class RelayPool {
           firstEventMs = events.firstEventAbsMs - queryStartMs;
         }
 
+        totalBytesReceived += events.bytesReceived ?? 0;
+
         for (const event of events.events) {
           totalEventCount++;
           const pk = event.pubkey as Pubkey;
           const arr = eventsPerPubkey.get(pk);
           if (arr) arr.push(event);
+          // Store timestamp for negentropy partitioning
+          if (event.created_at != null) {
+            cache.setTimestamp(event.id, event.created_at);
+          }
         }
 
         // Rate-limit backoff: if we got 5+ new rate-limit notices, pause
@@ -205,6 +227,7 @@ export class RelayPool {
         timedOut: anyTimedOut,
         firstEventMs,
         eventCount: totalEventCount,
+        bytesReceived: totalBytesReceived,
       });
 
     } catch (err) {
@@ -341,7 +364,7 @@ export class RelayPool {
     pooled: PooledConnection,
     subId: string,
     filter: Record<string, unknown>,
-  ): Promise<{ events: NostrEvent[]; eose: boolean; closed?: string; firstEventAbsMs?: number }> {
+  ): Promise<{ events: NostrEvent[]; eose: boolean; closed?: string; firstEventAbsMs?: number; bytesReceived?: number }> {
     return new Promise((resolve) => {
       if (pooled.ws.readyState !== WebSocket.OPEN) {
         resolve({ events: [], eose: false });
@@ -350,11 +373,12 @@ export class RelayPool {
 
       const events: NostrEvent[] = [];
       let firstEventAbsMs: number | undefined;
+      let bytesReceived = 0;
       const timeout = setTimeout(() => {
         pooled.ws.removeEventListener("message", handler);
         pooled.ws.send(JSON.stringify(["CLOSE", subId]));
         this._timeouts++;
-        resolve({ events, eose: false, firstEventAbsMs });
+        resolve({ events, eose: false, firstEventAbsMs, bytesReceived });
       }, this.eoseTimeoutMs);
 
       const handler = (msg: MessageEvent) => {
@@ -363,19 +387,21 @@ export class RelayPool {
           if (!Array.isArray(data)) return;
           if (data[0] === "EVENT" && data[1] === subId && data[2]) {
             if (firstEventAbsMs === undefined) firstEventAbsMs = performance.now();
+            // Track actual wire bytes for this EVENT message
+            if (typeof msg.data === "string") bytesReceived += msg.data.length;
             events.push(data[2] as NostrEvent);
           } else if (data[0] === "EOSE" && data[1] === subId) {
             clearTimeout(timeout);
             pooled.ws.removeEventListener("message", handler);
             pooled.ws.send(JSON.stringify(["CLOSE", subId]));
-            resolve({ events, eose: true, firstEventAbsMs });
+            resolve({ events, eose: true, firstEventAbsMs, bytesReceived });
           } else if (data[0] === "CLOSED" && data[1] === subId) {
             clearTimeout(timeout);
             pooled.ws.removeEventListener("message", handler);
             const reason = data[2] ?? "unknown";
             this._closedMessages.push({ relay: pooled.relay, reason: String(reason) });
             console.error(`[pool] CLOSED from ${pooled.relay}: ${reason}`);
-            resolve({ events, eose: false, closed: String(reason), firstEventAbsMs });
+            resolve({ events, eose: false, closed: String(reason), firstEventAbsMs, bytesReceived });
           } else if (data[0] === "NOTICE") {
             const notice = data[1] ?? "";
             if (/rate|limit|slow|too many|blocked/i.test(String(notice))) {

@@ -162,6 +162,12 @@ export interface CliOptions {
   decayFactor?: number;
   decayUnit?: DecayUnit;
   cacheTtlMs?: number;
+  /** Run live NEG-OPEN probe to test actual NIP-77 support. */
+  nip77Probe: boolean;
+  /** Run full NIP-77 reconciliation benchmark (implies --nip77-probe + --no-phase2-cache). */
+  nip77Reconcile: boolean;
+  /** Max concurrent reconciliation connections. Default 5. */
+  nip77Concurrency: number;
 }
 
 export interface SerializedAlgorithmResult {
@@ -434,6 +440,92 @@ export interface Nip66CorrelationResult {
   monitorPubkeys: string[];              // which monitors contributed
 }
 
+/** NIP-77 relay group performance stats. */
+export interface RelayGroupStats {
+  count: number;
+  connectMs: { median: number; mean: number; p95: number } | null;
+  queryMs: { median: number; mean: number; p95: number } | null;
+  successRate: number;
+  deliveryRate: number;
+  timeoutRate: number;
+  meanEventCount: number;
+}
+
+/** NIP-77 correlation: compares NIP-77-capable vs non-capable relays. */
+export interface Nip77CorrelationResult {
+  /** Total relays analyzed. */
+  totalRelays: number;
+  /** Relays detected as NIP-77 capable (from NIP-66 supportedNips). */
+  nip77Relays: number;
+  /** Relays NOT detected as NIP-77 capable. */
+  nonNip77Relays: number;
+  /** Source of NIP-77 detection. */
+  detectionSource: "nip66";
+  /** Performance stats for NIP-77 relays. */
+  nip77Stats: RelayGroupStats;
+  /** Performance stats for non-NIP-77 relays. */
+  nonNip77Stats: RelayGroupStats;
+  /** Probe accuracy stats (only when --nip77-probe is used). */
+  probeStats?: {
+    probed: number;
+    actuallySupported: number;
+    claimedButRejected: number;
+    unclaimedButSupported: number;
+  };
+}
+
+/** Per-relay NIP-77 reconciliation result. */
+export interface RelayReconcileResult {
+  relay: RelayUrl;
+  supported: boolean;
+  localSetSize: number;
+  /** Bytes sent in negentropy messages. */
+  bytesSent: number;
+  /** Bytes received in negentropy messages. */
+  bytesReceived: number;
+  /** Total negentropy protocol bytes (both directions). */
+  negBytesTotal: number;
+  /** Actual REQ bytes received from baseline for this relay. */
+  reqBytesReceived: number;
+  /** Number of negentropy rounds. */
+  roundCount: number;
+  /** Wall-clock time for reconciliation (ms). */
+  wallClockMs: number;
+  /** Event IDs the relay has that we don't. */
+  needCount: number;
+  /** Event IDs we have that the relay doesn't. */
+  haveCount: number;
+  /** Fraction of relay's events already in local set. */
+  overlapFraction: number;
+  /** Events published between baseline and reconciliation. */
+  newEventsBetweenPasses: number;
+  /** Savings ratio: 1 - negBytesTotal / reqBytesReceived. */
+  savingsRatio: number | null;
+  error?: string;
+  errorCategory?: "unsupported" | "blocked" | "closed" | "timeout";
+}
+
+/** NIP-77 reconciliation aggregate report. */
+export interface Nip77ReconcileReport {
+  /** Total relays attempted. */
+  totalRelays: number;
+  /** Relays that actually support NIP-77. */
+  supportedRelays: number;
+  /** Relays that failed (unsupported, blocked, etc.). */
+  failedRelays: number;
+  /** Per-relay detail. */
+  relays: RelayReconcileResult[];
+  /** Aggregate savings across all supported relays. */
+  aggregateSavingsRatio: number | null;
+  /** Overlap-bucketed breakdown. */
+  overlapBuckets: {
+    range: string;
+    relayCount: number;
+    meanSavingsRatio: number | null;
+    meanOverlap: number;
+  }[];
+}
+
 export interface Phase2Result {
   options: Phase2Options;
   since: number;
@@ -462,6 +554,10 @@ export interface Phase2Result {
   profileViewLatency?: ProfileViewLatencyStats;
   /** NIP-66 RTT vs measured latency correlation. Only for fresh runs with NIP-66 data. */
   nip66Correlation?: Nip66CorrelationResult;
+  /** NIP-77 capability correlation (NIP-77 vs non-NIP-77 relay performance). */
+  nip77Correlation?: Nip77CorrelationResult;
+  /** NIP-77 reconciliation report (when --nip77-reconcile is used). */
+  nip77Reconcile?: Nip77ReconcileReport;
   /** Baselines map, available for score persistence. Not serialized to JSON. */
   _baselines?: Map<Pubkey, PubkeyBaseline>;
   /** Query cache, available for score persistence. Not serialized to JSON. */

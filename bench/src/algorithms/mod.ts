@@ -29,7 +29,7 @@ import { spectralClustering } from "./spectral-clustering.ts";
 import { hybridGreedyExplore } from "./hybrid-greedy-explore.ts";
 import { greedyEpsilon } from "./greedy-epsilon.ts";
 import { welshmanThompson } from "./welshman-thompson.ts";
-import { jumbleCoveragePruning } from "./jumble.ts";
+// import { jumbleCoveragePruning } from "./jumble.ts"; // TODO: file missing
 import { bigRelaysBaseline } from "./big-relays.ts";
 import { fdThompson } from "./fd-thompson.ts";
 import { dittoMew } from "./ditto-mew.ts";
@@ -188,14 +188,14 @@ export const ALGORITHM_REGISTRY: AlgorithmEntry[] = [
     stochastic: true,
     defaults: { relayLimit: 3 },
   },
-  {
-    id: "jumble",
-    name: "Jumble Coverage Pruning",
-    fn: jumbleCoveragePruning,
-    nativeCap: false,
-    stochastic: false,
-    defaults: {},
-  },
+  // {
+  //   id: "jumble",
+  //   name: "Jumble Coverage Pruning",
+  //   fn: jumbleCoveragePruning,
+  //   nativeCap: false,
+  //   stochastic: false,
+  //   defaults: {},
+  // },
   {
     id: "fd-thompson",
     name: "FD+Thompson",

@@ -19,6 +19,16 @@ import {
 import { runPhase2 } from "./src/phase2/run.ts";
 import { printPhase2Table, printNip66Correlation } from "./src/phase2/report.ts";
 import { computeNip66Correlation } from "./src/phase2/nip66-correlation.ts";
+import {
+  computeNip77Correlation,
+  printNip77CorrelationTable,
+} from "./src/phase2/nip77-correlation.ts";
+import { probeRelays } from "./src/phase2/probe.ts";
+import type { ProbeResult } from "./src/phase2/probe.ts";
+import {
+  runNip77Reconciliation,
+  printNip77ReconcileReport,
+} from "./src/phase2/nip77-reconcile.ts";
 import { fetchNip66MonitorData } from "./src/nip66/fetch.ts";
 import { parseNip66FilterArg, classifyCandidates } from "./src/nip66/filter.ts";
 import {
@@ -46,6 +56,7 @@ import type {
   FilterProfile,
   Nip66RelayData,
   Phase2Result,
+  RelayUrl,
   SweepRow,
 } from "./src/types.ts";
 
@@ -83,6 +94,9 @@ Options:
   --decay-factor <n>        Thompson decay factor (default: 0.95)
   --decay-unit <unit>       Decay unit: session (default) or hour
   --cache-ttl <ms>          Input data cache TTL in ms (default: 3600000 = 1hr)
+  --nip77-probe             Test actual NIP-77 support via NEG-OPEN probe
+  --nip77-reconcile         Full NIP-77 reconciliation benchmark (implies --nip77-probe + --no-phase2-cache)
+  --nip77-concurrency <n>   Max concurrent reconciliation connections (default: 5)
   --no-cache                Skip cache
   --no-phase2-cache         Skip Phase 2 baseline disk cache
   --verbose                 Per-relay details, raw vs post-processed metrics
@@ -110,8 +124,9 @@ function parseCliOptions(): CliOptions {
       "decay-factor",
       "decay-unit",
       "cache-ttl",
+      "nip77-concurrency",
     ],
-    boolean: ["sweep", "fast", "full-assignments", "no-cache", "no-phase2-cache", "verbose", "verify", "enrich-hints", "help"],
+    boolean: ["sweep", "fast", "full-assignments", "no-cache", "no-phase2-cache", "verbose", "verify", "enrich-hints", "nip77-probe", "nip77-reconcile", "help"],
     default: {
       algorithms: "all",
       runs: "10",
@@ -179,6 +194,9 @@ function parseCliOptions(): CliOptions {
     decayFactor,
     decayUnit,
     cacheTtlMs,
+    nip77Probe: !!args["nip77-probe"] || !!args["nip77-reconcile"],
+    nip77Reconcile: !!args["nip77-reconcile"],
+    nip77Concurrency: args["nip77-concurrency"] ? parseInt(args["nip77-concurrency"], 10) : 5,
   };
 }
 
@@ -213,6 +231,15 @@ function parseCacheTtlMs(raw: string | undefined): number | undefined {
 
 async function main(): Promise<void> {
   const opts = parseCliOptions();
+
+  // --nip77-reconcile requires --verify and implies --no-phase2-cache
+  if (opts.nip77Reconcile) {
+    if (!opts.verify) {
+      console.error("Error: --nip77-reconcile requires --verify");
+      Deno.exit(1);
+    }
+    opts.noPhase2Cache = true;
+  }
 
   // Resolve target pubkey
   const targetPubkey = npubToHex(opts.target);
@@ -485,6 +512,20 @@ async function runDefault(
     }
   }
 
+  // NIP-77 probe: test actual NIP-77 support via NEG-OPEN
+  let nip77ProbeResults: ProbeResult[] | undefined;
+  if (opts.nip77Probe && opts.verify) {
+    const allRelays = [...input.relayToWriters.keys()];
+    console.error(`\n=== NIP-77 Probe: testing ${allRelays.length} relays ===`);
+    nip77ProbeResults = await probeRelays(allRelays, {
+      concurrency: 15,
+      probeNip77: true,
+    });
+    const supported = nip77ProbeResults.filter((r) => r.nip77Supported).length;
+    const errored = nip77ProbeResults.filter((r) => r.nip77Probed && !r.nip77Supported).length;
+    console.error(`  NIP-77 supported: ${supported} | Unsupported/errored: ${errored}`);
+  }
+
   // Phase 2: Event verification
   let phase2Result: Phase2Result | undefined;
   if (opts.verify) {
@@ -542,6 +583,73 @@ async function runDefault(
       );
       if (showTable && phase2Result.nip66Correlation.n > 0) {
         printNip66Correlation(phase2Result.nip66Correlation);
+      }
+    }
+
+    // NIP-77 capability correlation
+    if (nip66Data && phase2Result._relayOutcomes) {
+      phase2Result.nip77Correlation = computeNip77Correlation(
+        nip66Data, phase2Result._relayOutcomes,
+      );
+
+      // Enrich with probe accuracy if available
+      if (nip77ProbeResults && phase2Result.nip77Correlation) {
+        const nip66Claimed = new Set<RelayUrl>();
+        for (const [url, data] of nip66Data) {
+          if (data.supportedNips?.includes(77)) nip66Claimed.add(url);
+        }
+
+        let probed = 0;
+        let actuallySupported = 0;
+        let claimedButRejected = 0;
+        let unclaimedButSupported = 0;
+
+        for (const pr of nip77ProbeResults) {
+          if (!pr.nip77Probed) continue;
+          probed++;
+          const claimed = nip66Claimed.has(pr.relay);
+          if (pr.nip77Supported) {
+            actuallySupported++;
+            if (!claimed) unclaimedButSupported++;
+          } else if (claimed) {
+            claimedButRejected++;
+          }
+        }
+
+        phase2Result.nip77Correlation.probeStats = {
+          probed,
+          actuallySupported,
+          claimedButRejected,
+          unclaimedButSupported,
+        };
+      }
+
+      if (showTable && phase2Result.nip77Correlation.nip77Relays > 0) {
+        printNip77CorrelationTable(phase2Result.nip77Correlation);
+      }
+    }
+
+    // NIP-77 full reconciliation
+    if (opts.nip77Reconcile && phase2Result._relayOutcomes && phase2Result._cache) {
+      const probeMap = new Map<RelayUrl, boolean>();
+      if (nip77ProbeResults) {
+        for (const pr of nip77ProbeResults) {
+          if (pr.nip77Probed) probeMap.set(pr.relay, pr.nip77Supported ?? false);
+        }
+      }
+
+      phase2Result.nip77Reconcile = await runNip77Reconciliation(
+        input,
+        phase2Result._cache as QueryCache,
+        phase2Result._relayOutcomes,
+        {
+          concurrency: opts.nip77Concurrency,
+          probeResults: probeMap.size > 0 ? probeMap : undefined,
+        },
+      );
+
+      if (showTable) {
+        printNip77ReconcileReport(phase2Result.nip77Reconcile);
       }
     }
 
