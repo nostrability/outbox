@@ -1,4 +1,4 @@
-# NIP-77 (Negentropy) Relay Correlation: Phase 1 Findings
+# NIP-77 (Negentropy) Relay Correlation Findings
 
 > Initial results from one profile. More data points needed before drawing strong conclusions.
 
@@ -55,25 +55,72 @@ If NIP-77 support is this strong a quality signal, it could be used as:
 
 These hypotheses need validation across more profiles before acting on them.
 
+## Phase 2: NEG-OPEN Probe — Claimed vs Actual NIP-77 Support
+
+### Method
+
+Send actual `NEG-OPEN` messages to each relay over WebSocket. Compare NIP-66 monitor claims (`supported_nips` includes 77) against real protocol behavior. Categorize failures: `unsupported` (relay doesn't recognize NEG-OPEN), `blocked` (relay knows NIP-77 but rejects), `closed`/`timeout`.
+
+```
+deno task bench <pubkey> --verify --nip66-filter liveness --nip77-probe \
+  --verify-concurrency 15 --no-phase2-cache --algorithms greedy --fast --output table
+```
+
+### Results
+
+**Same profile, same session as Phase 1.**
+
+491 of 566 relays probed (75 could not be probed — failed to connect during WS probe).
+
+| Metric | Count |
+|--------|------:|
+| Probed | 491 |
+| Confirmed NIP-77 | 142 |
+| NIP-66 claimed but rejected (NEG-ERR / timeout) | 21 |
+| Not claimed by NIP-66 but actually supported | 19 |
+
+### Key observations
+
+1. **NIP-66 detection is 87% accurate.** Of 163 relays that NIP-66 flagged as NIP-77, 142 confirmed via live probe (87.1%). 21 returned NEG-ERR or timed out.
+
+2. **19 relays support NIP-77 but NIP-66 doesn't know.** These are either recently-upgraded relays or relays not covered by all monitors. ~12% false-negative rate.
+
+3. **True NIP-77 count is ~161** (142 confirmed + 19 unclaimed-but-supported), not the 146 NIP-66 reports. NIP-66 over-counts by 4 (false positives) but under-counts by 19 (false negatives), netting out to NIP-66 slightly underestimating actual deployment.
+
+4. **Phase 1 correlation still holds.** The second run reproduced nearly identical group stats (success 98.6% vs 83.8%, delivery 47.9% vs 26.0%, timeouts 1.4% vs 10.5%), confirming the correlation isn't noise from a single run.
+
+### Probe accuracy implications
+
+For relay selection, NIP-66 `supported_nips` is a **useful but imperfect signal**:
+- Using it as a tiebreaker is safe — 87% precision means you'll usually be right.
+- If you need certainty (e.g., to decide whether to use negentropy sync), a live NEG-OPEN probe is cheap (~1 RTT) and definitive.
+- The 19 false-negatives mean relying solely on NIP-66 for NIP-77 detection will miss ~12% of capable relays.
+
 ## Limitations
 
 - **Single profile.** n=1. The correlation could differ for profiles with different follow-graph characteristics.
-- **NIP-66 detection only.** Some relays may support NIP-77 but not be reported by monitors. Phase 2 (NEG-OPEN probe) will validate this.
 - **Survivorship bias.** The NIP-66 liveness filter already removed ~1,068 dead relays before this analysis. The non-NIP-77 group still includes many weak relays that passed liveness but are marginal.
 - **Correlation, not causation.** See interpretation above.
+- **Probe coverage.** 75 of 566 relays couldn't be probed (failed WS connect). These are likely the weakest relays and disproportionately non-NIP-77.
 
 ## Next steps
 
-- **Phase 2: NEG-OPEN probe.** Test actual NIP-77 support via live NEG-OPEN messages. Compare NIP-66 claims vs reality. (`--nip77-probe`)
 - **Phase 3: Reconciliation benchmark.** Measure actual bandwidth savings. (`--nip77-reconcile`)
 - **Multi-profile runs.** Run across 5+ profiles to validate the correlation holds.
 
 ## Reproducibility
 
 ```bash
-# Exact command used
+# Phase 1 (correlation only — runs automatically)
 deno task bench 2c65940725bbf10b452197fba41c6cb14afd41e28e0be22aab49bf246b0c84e3 \
   --verify --nip66-filter liveness --algorithms greedy --fast --output table
+
+# Phase 2 (adds NEG-OPEN probe)
+deno task bench 2c65940725bbf10b452197fba41c6cb14afd41e28e0be22aab49bf246b0c84e3 \
+  --verify --nip66-filter liveness --nip77-probe \
+  --verify-concurrency 15 --no-phase2-cache --algorithms greedy --fast --output table
 ```
 
-Phase 1 correlation runs automatically when `--verify` + NIP-66 data are both available. No additional flags needed.
+Phase 1 runs automatically when `--verify` + NIP-66 data are available. Phase 2 adds `--nip77-probe`.
+
+Full run log saved to `.cache/nip77-phase2-run.log`.

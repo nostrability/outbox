@@ -516,14 +516,34 @@ async function runDefault(
   let nip77ProbeResults: ProbeResult[] | undefined;
   if (opts.nip77Probe && opts.verify) {
     const allRelays = [...input.relayToWriters.keys()];
-    console.error(`\n=== NIP-77 Probe: testing ${allRelays.length} relays ===`);
+    console.error(`\n=== NIP-77 Probe: testing ${allRelays.length} relays (concurrency: 10) ===`);
     nip77ProbeResults = await probeRelays(allRelays, {
-      concurrency: 15,
+      concurrency: 10,
       probeNip77: true,
     });
     const supported = nip77ProbeResults.filter((r) => r.nip77Supported).length;
     const errored = nip77ProbeResults.filter((r) => r.nip77Probed && !r.nip77Supported).length;
     console.error(`  NIP-77 supported: ${supported} | Unsupported/errored: ${errored}`);
+
+    // Persist probe results so they survive a later crash during baseline collection
+    try {
+      const probeDir = ".cache";
+      await Deno.mkdir(probeDir, { recursive: true });
+      const probePath = `${probeDir}/nip77-probe_${input.targetPubkey.slice(0, 16)}.json`;
+      const probeSnapshot = nip77ProbeResults.map((r) => ({
+        relay: r.relay,
+        nip77Supported: r.nip77Supported ?? false,
+        nip77ErrorCategory: r.nip77ErrorCategory ?? null,
+        negRttMs: r.negRttMs ?? null,
+        connectable: r.connectable,
+        nip11Available: r.nip11Available,
+        nip11SupportedNips: r.nip11Info?.supportedNips ?? [],
+      }));
+      await Deno.writeTextFile(probePath, JSON.stringify(probeSnapshot, null, 2));
+      console.error(`  Probe results saved to ${probePath}`);
+    } catch (e) {
+      console.error(`  [warn] Could not save probe results: ${e}`);
+    }
   }
 
   // Phase 2: Event verification
