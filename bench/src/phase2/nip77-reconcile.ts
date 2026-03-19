@@ -33,6 +33,7 @@ export async function runNip77Reconciliation(
   relayOutcomes: ReadonlyMap<RelayUrl, RelayOutcome>,
   opts: {
     concurrency: number;
+    windowSeconds: number;
     probeResults?: ReadonlyMap<RelayUrl, boolean>;
   },
 ): Promise<Nip77ReconcileReport> {
@@ -53,7 +54,7 @@ export async function runNip77Reconciliation(
   const tasks = candidateRelays.map(async (relay) => {
     await sem.acquire();
     try {
-      const result = await reconcileRelay(relay, input, cache, relayOutcomes);
+      const result = await reconcileRelay(relay, input, cache, relayOutcomes, opts.windowSeconds);
       results.push(result);
       const status = result.supported
         ? `savings=${(result.savingsRatio ?? 0) * 100 | 0}% overlap=${(result.overlapFraction * 100) | 0}%`
@@ -138,6 +139,7 @@ async function reconcileRelay(
   input: BenchmarkInput,
   cache: QueryCache,
   relayOutcomes: ReadonlyMap<RelayUrl, RelayOutcome>,
+  windowSeconds: number,
 ): Promise<RelayReconcileResult> {
   const outcome = relayOutcomes.get(relay);
   const reqBytesReceived = outcome?.bytesReceived ?? 0;
@@ -203,7 +205,7 @@ async function reconcileRelay(
 
   try {
     // Build the filter matching baseline
-    const since = Math.floor(Date.now() / 1000) - 86400; // 1 day default
+    const since = Math.floor(Date.now() / 1000) - Math.floor(windowSeconds);
     const subId = `neg-rec-${Date.now()}`;
     const filter = { kinds: [1], since };
 
@@ -425,10 +427,30 @@ function waitForNegMessage(
       return;
     }
 
-    const timeout = setTimeout(() => {
+    let settled = false;
+    const cleanup = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
       ws.removeEventListener("message", handler);
+      ws.removeEventListener("close", onClose);
+      ws.removeEventListener("error", onError);
+    };
+
+    const timeout = setTimeout(() => {
+      cleanup();
       resolve({ type: "timeout", payload: "", reason: "timeout", rawLength: 0 });
     }, timeoutMs);
+
+    const onClose = () => {
+      cleanup();
+      resolve({ type: "timeout", payload: "", reason: "ws closed", rawLength: 0 });
+    };
+
+    const onError = () => {
+      cleanup();
+      resolve({ type: "timeout", payload: "", reason: "ws error", rawLength: 0 });
+    };
 
     const handler = (msg: MessageEvent) => {
       try {
@@ -437,22 +459,32 @@ function waitForNegMessage(
         if (!Array.isArray(data)) return;
 
         if (data[0] === "NEG-MSG" && data[1] === subId) {
-          clearTimeout(timeout);
-          ws.removeEventListener("message", handler);
+          cleanup();
           resolve({ type: "NEG-MSG", payload: data[2] ?? "", reason: "", rawLength: rawLen });
         } else if (data[0] === "NEG-ERR" && data[1] === subId) {
-          clearTimeout(timeout);
-          ws.removeEventListener("message", handler);
+          cleanup();
           resolve({ type: "NEG-ERR", payload: "", reason: String(data[2] ?? ""), rawLength: rawLen });
         }
       } catch { /* ignore parse errors */ }
     };
 
     ws.addEventListener("message", handler);
+    ws.addEventListener("close", onClose);
+    ws.addEventListener("error", onError);
   });
 }
 
 export function printNip77ReconcileReport(report: Nip77ReconcileReport): void {
+  const pad = (s: string, w: number, align: "left" | "right" = "right") =>
+    align === "left" ? s.padEnd(w) : s.padStart(w);
+  const pct = (n: number | null): string =>
+    n != null ? `${(n * 100).toFixed(1)}%` : "N/A";
+  const fmtBytes = (n: number): string => {
+    if (n < 1024) return `${n}B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}KB`;
+    return `${(n / 1024 / 1024).toFixed(1)}MB`;
+  };
+
   console.log(
     `\n=== NIP-77 Reconciliation Report ===`,
   );
@@ -469,11 +501,6 @@ export function printNip77ReconcileReport(report: Nip77ReconcileReport): void {
   // Overlap bucket table
   if (report.overlapBuckets.some((b) => b.relayCount > 0)) {
     console.log(`\n  Savings by overlap bucket:`);
-
-    const pad = (s: string, w: number, align: "left" | "right" = "right") =>
-      align === "left" ? s.padEnd(w) : s.padStart(w);
-    const pct = (n: number | null): string =>
-      n != null ? `${(n * 100).toFixed(1)}%` : "N/A";
 
     const headers = ["Overlap", "Relays", "Savings", "Avg Overlap"];
     const widths = [10, 7, 10, 12];
@@ -505,16 +532,6 @@ export function printNip77ReconcileReport(report: Nip77ReconcileReport): void {
 
   if (supported.length > 0) {
     console.log(`\n  Per-relay detail (${supported.length} supported):`);
-
-    const pad = (s: string, w: number, align: "left" | "right" = "right") =>
-      align === "left" ? s.padEnd(w) : s.padStart(w);
-    const pct = (n: number | null): string =>
-      n != null ? `${(n * 100).toFixed(1)}%` : "N/A";
-    const fmtBytes = (n: number): string => {
-      if (n < 1024) return `${n}B`;
-      if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)}KB`;
-      return `${(n / 1024 / 1024).toFixed(1)}MB`;
-    };
 
     const headers = ["Relay", "Overlap", "Savings", "NEG", "REQ", "Rounds", "Time"];
     const widths = [35, 8, 8, 8, 8, 7, 7];

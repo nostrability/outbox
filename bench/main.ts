@@ -516,9 +516,9 @@ async function runDefault(
   let nip77ProbeResults: ProbeResult[] | undefined;
   if (opts.nip77Probe && opts.verify) {
     const allRelays = [...input.relayToWriters.keys()];
-    console.error(`\n=== NIP-77 Probe: testing ${allRelays.length} relays (concurrency: 10) ===`);
+    console.error(`\n=== NIP-77 Probe: testing ${allRelays.length} relays (concurrency: ${opts.nip77Concurrency}) ===`);
     nip77ProbeResults = await probeRelays(allRelays, {
-      concurrency: 10,
+      concurrency: opts.nip77Concurrency,
       probeNip77: true,
     });
     const supported = nip77ProbeResults.filter((r) => r.nip77Supported).length;
@@ -664,6 +664,7 @@ async function runDefault(
         phase2Result._relayOutcomes,
         {
           concurrency: opts.nip77Concurrency,
+          windowSeconds: opts.verifyWindow,
           probeResults: probeMap.size > 0 ? probeMap : undefined,
         },
       );

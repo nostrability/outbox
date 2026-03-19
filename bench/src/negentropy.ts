@@ -550,7 +550,7 @@ class Negentropy {
 
 function loadInputBuffer(inp) {
   if (typeof inp === "string") inp = hexToUint8Array(inp)
-  else if (__proto__ !== Uint8Array.prototype) inp = new Uint8Array(inp) // node Buffer?
+  else if (!(inp instanceof Uint8Array)) inp = new Uint8Array(inp) // node Buffer?
   return inp
 }
 
