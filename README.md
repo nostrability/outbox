@@ -107,7 +107,7 @@ All values are 6-profile means. See [OUTBOX-REPORT.md § 8](OUTBOX-REPORT.md#8-b
 
 **1. Learning beats static optimization.** Greedy set-cover (Gossip, Applesauce) picks the "best" relays on paper but never learns whether they actually deliver. Thompson Sampling tracks delivery and reaches ~40% at 1yr vs ~16% for greedy. [Report § 8.2](OUTBOX-REPORT.md#82-approximating-real-world-conditions-event-verification)
 
-**2. Dead relay filtering saves your connection budget.** Nearly half of declared relays are offline. NIP-66 filtering removes them, cutting load time by 45%. Recall impact is roughly neutral. [Report § 5.3](OUTBOX-REPORT.md#53-misconfigured-relay-lists)
+**2. Dead relay filtering saves your connection budget.** Nearly half of declared relays are offline. NIP-66 filtering removes them, cutting load time by 45% (protocol-level benchmark — see [Benchmark-recreation.md](Benchmark-recreation.md#nip-66-liveness-comparison) for methodology). Recall impact is roughly neutral. [Report § 5.3](OUTBOX-REPORT.md#53-misconfigured-relay-lists)
 
 **3. Per-author relay diversity beats popularity.** Algorithms that give each author their own relay picks (Filter Decomposition, Welshman stochastic) find 1.5× more events at 1yr than popularity-based selection. [Report § 8.2](OUTBOX-REPORT.md#82-approximating-real-world-conditions-event-verification)
 

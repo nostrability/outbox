@@ -159,6 +159,53 @@ deno task bench <hex> --verify --nip66-filter liveness
 deno task bench <hex> --verify --no-phase2-cache
 ```
 
+### NIP-66 liveness comparison
+
+The `--nip66-filter` flag enables relay liveness filtering before algorithm
+selection. When active, the benchmark fetches kind `30166` relay monitor
+events from Nostr relays (`relaypag.es`, `relay.nostr.watch`,
+`monitorlizard.nostr1.com`), builds an alive-set of relays that monitors
+have recently seen responding, and removes dead relays from each followed
+author's candidate pool before algorithms run.
+
+Two modes are available:
+
+- `--nip66-filter strict` — kind `30166` events only (no HTTP calls)
+- `--nip66-filter liveness` — merges kind `30166` events with the
+  `api.nostr.watch/v1/online` HTTP API for broader coverage (default)
+
+**Important:** These are protocol-level benchmark measurements, not
+client-specific results. Actual improvement in a given client depends on its
+connection pipeline, timeout behavior, and routing strategy.
+
+To reproduce the NIP-66 A/B comparison from
+[NIP66-COMPARISON-REPORT.md](bench/NIP66-COMPARISON-REPORT.md), use the
+included script:
+
+```bash
+# Runs 6 profiles × 2 conditions (with/without NIP-66 filter)
+bash run-nip66-comparison.sh
+
+# Specific profiles or algorithms
+bash run-nip66-comparison.sh --profiles "fiatjaf hodlbod"
+bash run-nip66-comparison.sh --algorithms "greedy,welshman,ndk"
+bash run-nip66-comparison.sh --window 604800   # 7d instead of 1yr
+```
+
+Or manually run the same profile twice and compare:
+
+```bash
+# A: no filter
+deno task bench <hex> --verify --verify-window 31536000 --no-phase2-cache --output both
+
+# B: with NIP-66 filter
+deno task bench <hex> --verify --verify-window 31536000 --nip66-filter liveness --no-phase2-cache --output both
+```
+
+Compare relay success rates, wall-clock time, and event recall between runs.
+See [NIP66-FOLLOW-COUNT-ANALYSIS.md](bench/NIP66-FOLLOW-COUNT-ANALYSIS.md)
+for how benefit scales with follow count.
+
 ### Reproduce report's event retrieval results
 
 fiatjaf's profile across 6 time windows (each takes 10-30 min):

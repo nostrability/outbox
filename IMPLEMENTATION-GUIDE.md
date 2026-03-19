@@ -249,6 +249,103 @@ excluded), or penalty timers (Gossip: 15s-10min per failure reason).
 
 See [README.md § NIP-66 pre-filter](README.md#nip-66-pre-filter) for code.
 
+> **Note:** The impact numbers above are protocol-level benchmark
+> measurements (33 profiles, paired A/B runs), not client-specific results.
+> Actual improvement in a given client depends on its connection pipeline,
+> timeout behavior, and routing strategy. See
+> [Benchmark-recreation.md](Benchmark-recreation.md) and
+> [NIP66-COMPARISON-REPORT.md](bench/NIP66-COMPARISON-REPORT.md) for
+> methodology and the full 33-profile dataset.
+
+#### Where does the liveness data come from?
+
+NIP-66 liveness data is Nostr-native: monitors publish kind `30166`
+[replaceable events](https://github.com/nostr-protocol/nips/blob/master/66.md)
+with the relay URL as the `d` tag, plus RTT metrics and supported NIPs.
+
+The benchmark tool (`bench/src/nip66/fetch.ts`) supports two modes:
+
+- **`strict`** — kind `30166` events only, fetched from monitor relays
+  (`relaypag.es`, `relay.nostr.watch`, `monitorlizard.nostr1.com`). No HTTP
+  calls.
+- **`liveness`** — merges kind `30166` events with the
+  `api.nostr.watch/v1/online` HTTP API. NIP-66 events take priority (richer
+  data with RTT); the HTTP API fills gaps for relays not covered by monitors.
+
+Production integrations differ from the benchmark tool:
+
+- **NDK** (`ndk/core/src/outbox/nip66.ts`): purely event-based. Fetches kind
+  `30166` via `ndk.fetchEvents()`, no HTTP calls at all.
+- **Applesauce** (`applesauce/packages/core/src/helpers/relay-liveness-filter.ts`):
+  classifier only — takes an alive relay set as input and filters candidates.
+  Does not fetch data itself; the caller decides where the alive set comes
+  from.
+
+#### Does this create a dependency on nostr.watch?
+
+No. Kind `30166` is a replaceable event keyed by relay URL (`d` tag). Any
+relay monitor can publish these events — clients query by kind, not by
+pubkey. There is no DNS lock-in or single-provider dependency.
+
+The NIP-66 spec's
+[Risk Mitigation](https://github.com/nostr-protocol/nips/blob/master/66.md)
+section explicitly recommends:
+
+- Querying multiple monitors
+- Web-of-trust filtering on monitor pubkeys
+- Discarding filter results if they would remove an unreasonable proportion
+  of relays
+
+The `strict` benchmark mode and the NDK integration use no HTTP at all.
+
+#### What about Tor / .onion relays?
+
+Two separate concerns:
+
+**1. `.onion` relay URLs** — solved. `.onion` and `.i2p` relays always pass
+through unfiltered because clearnet monitors cannot reach them. This is
+enforced in `bench/src/nip66/filter.ts`, `ndk/core/src/outbox/nip66.ts`, and
+`applesauce/packages/core/src/helpers/relay-liveness-filter.ts`.
+
+**2. Clearnet relays accessed through Tor** — NIP-66 filtering is still
+valuable, and likely *more* valuable than on clearnet. NIP-66 monitors
+operate from clearnet, but the majority of filtered relays (~50% of declared
+relays) are truly dead — server offline, domain expired, relay shut down.
+A dead relay is dead regardless of network path. By filtering them before
+connection, Tor-default clients avoid waiting for Tor-routed timeouts to
+dead servers. Since Tor clients typically use 2-3× longer timeouts (e.g.
+Amethyst triples its timeout for Tor connections: 10s → 30s on WiFi,
+30s → 90s on mobile), the latency savings from NIP-66 filtering are
+**larger** for Tor users than our clearnet benchmarks measured.
+
+**Partial blind spot:** relays that are alive on clearnet but block Tor exit
+nodes. NIP-66 will mark these "alive," but the Tor client can't reach them.
+The size of this population is unknown. The NIP-66 spec supports
+`["n", "tor"]` network tags on kind `30166` events, so a Tor-based monitor
+could publish Tor-specific liveness data — but none exists today.
+
+**Recommendation for Tor-default clients (e.g. Amethyst):** apply NIP-66
+filtering unconditionally. Dead relays are dead on any network path, and the
+timeout savings are amplified by Tor's longer timeouts. Local health
+tracking (exponential backoff on connection failure) handles the Tor-specific
+blind spot at runtime.
+
+#### What safety guardrails exist?
+
+All reference implementations enforce graceful degradation:
+
+| Guardrail | Behavior | Code reference |
+|---|---|---|
+| Empty alive set | No filtering — all relays pass through | `relay-liveness-filter.ts`, `nip66.ts` |
+| Alive set < 100 relays | Skip filtering entirely (catches rogue monitors) | `relay-liveness-filter.ts`, `nip66.ts` |
+| Per-user maxFilterRatio (default 0.8) | If >80% of a user's relays would be removed, keep original set | `relay-liveness-filter.ts` |
+| `.onion` / `.i2p` relays | Always preserved | `relay-liveness-filter.ts`, `filter.ts`, `nip66.ts` |
+| Malformed URLs | Always preserved (avoid silent drops) | `relay-liveness-filter.ts`, `filter.ts` |
+| Stale / missing data | Pass-through, never block connections | `nip66.ts` |
+
+The NIP-66 spec requires: "Clients MUST NOT require `30166` events to
+function. Absence of monitoring data MUST NOT prevent relay connections."
+
 ### 3. Measure actual delivery
 
 **Impact: catches systematic gaps invisible to relay health checks**
